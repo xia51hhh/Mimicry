@@ -1,0 +1,39 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+node_modules
+dist
+dist-ssr
+*.local
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.github/*
+!.github/workflows/
+!.github/workflows/**
+!.github/PULL_REQUEST_TEMPLATE.md
+~/.tauri/*
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+*.pyc
+__pycache__/
+
+# Database
+*.db
+
+# Sidecar build artifacts
+sidecar/build/
+sidecar/dist/
