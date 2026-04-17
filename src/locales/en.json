@@ -1,0 +1,202 @@
+{
+  "app": {
+    "name": "Mimicry",
+    "title": "Mimicry"
+  },
+  "activity": {
+    "workflow": "Workflow",
+    "browser": "Browser",
+    "data": "Data",
+    "schedule": "Schedule",
+    "settings": "Settings"
+  },
+  "sidebar": {
+    "search": "Search... (Ctrl+F)",
+    "blocks": "Block Palette",
+    "packages": "Packages",
+    "recentlyUsed": "Recently Used"
+  },
+  "blockCategories": {
+    "trigger": "Trigger & Control",
+    "browser": "Browser",
+    "interaction": "Interaction",
+    "data": "Data",
+    "advanced": "Advanced"
+  },
+  "blocks": {
+    "Click": "Click",
+    "Type": "Type",
+    "Navigate": "Navigate",
+    "Hover": "Hover",
+    "PressKey": "Press Key",
+    "Scroll": "Scroll",
+    "SelectOption": "Select",
+    "UploadFile": "Upload File",
+    "Clear": "Clear",
+    "Focus": "Focus",
+    "NewTab": "New Tab",
+    "SwitchTab": "Switch Tab",
+    "CloseTab": "Close Tab",
+    "GoBack": "Go Back",
+    "GoForward": "Go Forward",
+    "Reload": "Reload",
+    "HandleDialog": "Handle Dialog",
+    "GetText": "Get Text",
+    "GetAttribute": "Get Attribute",
+    "GetURL": "Get URL",
+    "Screenshot": "Screenshot",
+    "ExtractTable": "Extract Table",
+    "SetVariable": "Set Variable",
+    "Export": "Export Data",
+    "RunScript": "Run Script",
+    "HttpRequest": "HTTP Request",
+    "Log": "Log",
+    "Delay": "Delay",
+    "Comment": "Comment"
+  },
+  "nodeTypes": {
+    "action": "Action",
+    "condition": "Condition",
+    "loop": "Loop",
+    "group": "Group"
+  },
+  "propertyPanel": {
+    "selectNode": "Select a node to view properties",
+    "settings": "Settings",
+    "data": "Data",
+    "actionType": "Action Type",
+    "selector": "Element Selector",
+    "selectorPlaceholder": "#selector or text=...",
+    "inputValue": "Input Value",
+    "inputValuePlaceholder": "Text or {{$var.name}}",
+    "url": "URL",
+    "timeout": "Timeout (ms)",
+    "conditionType": "Condition Type",
+    "matchValue": "Match Value",
+    "loopType": "Loop Type",
+    "loopCount": "Loop Count",
+    "loopSelector": "Element Selector",
+    "loopCondition": "Condition Expression",
+    "loopVariable": "Loop Variable",
+    "maxIterations": "Max Iterations",
+    "groupName": "Group Name",
+    "groupColor": "Color",
+    "errorHandling": "Error Handling",
+    "retryCount": "Retry Count",
+    "note": "Note",
+    "notePlaceholder": "Node description...",
+    "nodeData": "Node Data (JSON)",
+    "matchValuePlaceholder": "Match text or expression",
+    "loopSelectorLabel": "Element Selector"
+  },
+  "conditionTypes": {
+    "exists": "Element Exists",
+    "not_exists": "Element Not Exists",
+    "visible": "Element Visible",
+    "text_contains": "Text Contains",
+    "url_contains": "URL Contains",
+    "expression": "Expression"
+  },
+  "loopTypes": {
+    "count": "Fixed Count",
+    "items": "Iterate Elements",
+    "while": "While Condition"
+  },
+  "errorOptions": {
+    "stop": "Stop Execution",
+    "continue": "Continue",
+    "retry": "Retry"
+  },
+  "toolbar": {
+    "launchBrowser": "Launch Browser",
+    "closeBrowser": "Close Browser",
+    "launching": "Launching...",
+    "connected": "Connected",
+    "disconnected": "Disconnected",
+    "run": "▶ Run",
+    "stop": "⏹ Stop",
+    "record": "⏺ Record",
+    "stopRecord": "⏹ Stop Recording",
+    "toggleSidebar": "Toggle Sidebar",
+    "toggleBottom": "Toggle Bottom Panel",
+    "toggleRight": "Toggle Right Panel",
+    "newWorkflow": "New Workflow"
+  },
+  "shortcut": {
+    "undo": "Undo",
+    "redo": "Redo",
+    "save": "Save",
+    "toggleSidebar": "Toggle Sidebar",
+    "toggleBottom": "Toggle Bottom",
+    "toggleRight": "Toggle Right",
+    "deleteNode": "Delete Node"
+  },
+  "contextMenu": {
+    "copy": "Copy",
+    "paste": "Paste",
+    "disconnect": "Disconnect",
+    "delete": "Delete",
+    "selectAll": "Select All",
+    "fitView": "Fit View"
+  },
+  "bottomPanel": {
+    "json": "JSON",
+    "logs": "Logs",
+    "variables": "Variables",
+    "noLogs": "Run workflow to see logs",
+    "noVariables": "Run workflow to see variables",
+    "varName": "Name",
+    "varValue": "Value",
+    "varType": "Type"
+  },
+  "settings": {
+    "title": "Settings",
+    "appearance": "Appearance",
+    "theme": "Theme",
+    "themeLight": "Light",
+    "themeDark": "Dark",
+    "accentColor": "Accent Color",
+    "language": "Language",
+    "editor": "Editor",
+    "general": "General"
+  },
+  "execution": {
+    "startWorkflow": "Starting workflow execution",
+    "completed": "Execution completed",
+    "failed": "Execution failed",
+    "stopped": "Execution stopped by user",
+    "error": "Execution error",
+    "unknownError": "Unknown error"
+  },
+  "update": {
+    "newVersion": "New version",
+    "available": "available",
+    "downloading": "Downloading",
+    "install": "Install Now",
+    "later": "Later"
+  },
+  "canvas": {
+    "title": "Canvas",
+    "zoomIn": "Zoom In",
+    "zoomOut": "Zoom Out",
+    "fitView": "Fit View",
+    "showMinimap": "Show Minimap",
+    "hideMinimap": "Hide Minimap"
+  },
+  "tabBar": {
+    "undo": "Undo (Ctrl+Z)",
+    "redo": "Redo (Ctrl+Y)",
+    "save": "Save (Ctrl+S)",
+    "toggleSidebar": "Toggle Sidebar (Ctrl+B)",
+    "togglePanel": "Toggle Panel (Ctrl+J)",
+    "toggleAuxSidebar": "Toggle Aux Sidebar (Ctrl+Alt+B)",
+    "minimize": "Minimize",
+    "maximize": "Maximize",
+    "restore": "Restore",
+    "close": "Close"
+  },
+  "group": {
+    "defaultLabel": "Group",
+    "newGroup": "New Group"
+  }
+}

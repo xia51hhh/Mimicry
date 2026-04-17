@@ -3,6 +3,7 @@ export interface WorkflowNode {
   type: "action" | "condition" | "loop" | "group";
   position: { x: number; y: number };
   data: NodeData;
+  selected?: boolean;
 }
 
 export interface ActionData {

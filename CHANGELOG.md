@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+### Fixed
+- **[Critical]** Replace all `any` types with proper interfaces across stores (`browser.ts`, `execution.ts`, `workflow.ts`, `workspace.ts`) and `UpdateNotifier.vue`
+- **[Bug]** `UpdateNotifier.vue` download progress calculation: accumulate chunk bytes instead of showing single-chunk ratio
+- **[Bug]** `execution.ts` node status tracking: assign `currentNodeId` before comparing with previous value, preventing missed transitions
+- **[Bug]** `JsonEditor.vue` debounce timer leak on unmount
+- **[i18n]** Replace all hardcoded Chinese text with `t()` calls in `UpdateNotifier.vue`, `EditorView.vue`, `GroupNode.vue`, `PropertyPanel.vue`, `TabBar.vue`, `execution.ts`
+- **[i18n]** Add missing i18n keys: `update.*`, `canvas.*`, `tabBar.*`, `group.*`, `propertyPanel.matchValuePlaceholder`, `propertyPanel.loopSelectorLabel`
+- **[Minor]** Remove duplicate `:hover` CSS rule in `LoopNode.vue`
+- **[Minor]** Type `appWindow` as `TauriWindow` instead of `any` in `TabBar.vue`
+- **[Minor]** Serialize edge `label` safely in `workflow.ts` `toJSON()` (filter non-string VNode labels)
+
 ## v0.1.0
 
 ### Added

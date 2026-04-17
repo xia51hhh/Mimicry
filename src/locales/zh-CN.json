@@ -1,0 +1,202 @@
+{
+  "app": {
+    "name": "Mimicry",
+    "title": "Mimicry"
+  },
+  "activity": {
+    "workflow": "工作流",
+    "browser": "浏览器",
+    "data": "数据",
+    "schedule": "定时",
+    "settings": "设置"
+  },
+  "sidebar": {
+    "search": "搜索... (Ctrl+F)",
+    "blocks": "节点面板",
+    "packages": "Package 库",
+    "recentlyUsed": "最近使用"
+  },
+  "blockCategories": {
+    "trigger": "触发与控制",
+    "browser": "浏览器操作",
+    "interaction": "页面交互",
+    "data": "数据处理",
+    "advanced": "高级"
+  },
+  "blocks": {
+    "Click": "点击",
+    "Type": "输入",
+    "Navigate": "导航",
+    "Hover": "悬停",
+    "PressKey": "按键",
+    "Scroll": "滚动",
+    "SelectOption": "选择",
+    "UploadFile": "上传文件",
+    "Clear": "清空",
+    "Focus": "聚焦",
+    "NewTab": "新标签页",
+    "SwitchTab": "切换标签",
+    "CloseTab": "关闭标签",
+    "GoBack": "后退",
+    "GoForward": "前进",
+    "Reload": "刷新",
+    "HandleDialog": "处理弹窗",
+    "GetText": "获取文本",
+    "GetAttribute": "获取属性",
+    "GetURL": "获取URL",
+    "Screenshot": "截图",
+    "ExtractTable": "提取表格",
+    "SetVariable": "设置变量",
+    "Export": "导出数据",
+    "RunScript": "运行脚本",
+    "HttpRequest": "HTTP请求",
+    "Log": "日志",
+    "Delay": "延迟",
+    "Comment": "注释"
+  },
+  "nodeTypes": {
+    "action": "动作",
+    "condition": "条件",
+    "loop": "循环",
+    "group": "分组"
+  },
+  "propertyPanel": {
+    "selectNode": "选中节点查看属性",
+    "settings": "设置",
+    "data": "数据",
+    "actionType": "动作类型",
+    "selector": "元素选择器",
+    "selectorPlaceholder": "#selector 或 text=...",
+    "inputValue": "输入值",
+    "inputValuePlaceholder": "要输入的文本或 {{$var.name}}",
+    "url": "URL",
+    "timeout": "超时 (ms)",
+    "conditionType": "条件类型",
+    "matchValue": "匹配值",
+    "loopType": "循环类型",
+    "loopCount": "循环次数",
+    "loopSelector": "元素选择器",
+    "loopCondition": "条件表达式",
+    "loopVariable": "循环变量名",
+    "maxIterations": "最大迭代",
+    "groupName": "分组名称",
+    "groupColor": "颜色",
+    "errorHandling": "错误处理",
+    "retryCount": "重试次数",
+    "note": "备注",
+    "notePlaceholder": "节点说明...",
+    "nodeData": "节点数据 (JSON)",
+    "matchValuePlaceholder": "匹配文本或表达式",
+    "loopSelectorLabel": "元素选择器"
+  },
+  "conditionTypes": {
+    "exists": "元素存在",
+    "not_exists": "元素不存在",
+    "visible": "元素可见",
+    "text_contains": "文本包含",
+    "url_contains": "URL 包含",
+    "expression": "表达式"
+  },
+  "loopTypes": {
+    "count": "固定次数",
+    "items": "遍历元素",
+    "while": "条件循环"
+  },
+  "errorOptions": {
+    "stop": "停止执行",
+    "continue": "继续下一步",
+    "retry": "重试"
+  },
+  "toolbar": {
+    "launchBrowser": "启动浏览器",
+    "closeBrowser": "关闭浏览器",
+    "launching": "启动中...",
+    "connected": "已连接",
+    "disconnected": "未连接",
+    "run": "▶ 运行",
+    "stop": "⏹ 停止",
+    "record": "⏺ 录制",
+    "stopRecord": "⏹ 停止录制",
+    "toggleSidebar": "切换侧边栏",
+    "toggleBottom": "切换底部面板",
+    "toggleRight": "切换右侧面板",
+    "newWorkflow": "新建工作流"
+  },
+  "shortcut": {
+    "undo": "撤销",
+    "redo": "重做",
+    "save": "保存",
+    "toggleSidebar": "切换侧栏",
+    "toggleBottom": "切换底栏",
+    "toggleRight": "切换右侧栏",
+    "deleteNode": "删除节点"
+  },
+  "contextMenu": {
+    "copy": "复制",
+    "paste": "粘贴",
+    "disconnect": "断开连接",
+    "delete": "删除",
+    "selectAll": "全选",
+    "fitView": "适应视图"
+  },
+  "bottomPanel": {
+    "json": "JSON",
+    "logs": "日志",
+    "variables": "变量",
+    "noLogs": "执行工作流后查看日志",
+    "noVariables": "执行工作流后查看变量",
+    "varName": "变量名",
+    "varValue": "值",
+    "varType": "类型"
+  },
+  "settings": {
+    "title": "设置",
+    "appearance": "外观",
+    "theme": "主题",
+    "themeLight": "浅色",
+    "themeDark": "深色",
+    "accentColor": "主题色",
+    "language": "语言",
+    "editor": "编辑器",
+    "general": "常规"
+  },
+  "execution": {
+    "startWorkflow": "开始执行工作流",
+    "completed": "执行完成",
+    "failed": "执行失败",
+    "stopped": "用户停止执行",
+    "error": "执行异常",
+    "unknownError": "未知错误"
+  },
+  "update": {
+    "newVersion": "新版本",
+    "available": "可用",
+    "downloading": "下载中",
+    "install": "立即更新",
+    "later": "稍后"
+  },
+  "canvas": {
+    "title": "画布",
+    "zoomIn": "放大",
+    "zoomOut": "缩小",
+    "fitView": "适应",
+    "showMinimap": "显示缩略图",
+    "hideMinimap": "隐藏缩略图"
+  },
+  "tabBar": {
+    "undo": "撤销 (Ctrl+Z)",
+    "redo": "重做 (Ctrl+Y)",
+    "save": "保存 (Ctrl+S)",
+    "toggleSidebar": "切换主侧栏 (Ctrl+B)",
+    "togglePanel": "切换面板 (Ctrl+J)",
+    "toggleAuxSidebar": "切换辅助侧栏 (Ctrl+Alt+B)",
+    "minimize": "最小化",
+    "maximize": "最大化",
+    "restore": "还原",
+    "close": "关闭"
+  },
+  "group": {
+    "defaultLabel": "分组",
+    "newGroup": "新分组"
+  }
+}

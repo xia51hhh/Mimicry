@@ -2,11 +2,24 @@ import { defineStore } from "pinia";
 import { ref } from "vue";
 import { invoke } from "@tauri-apps/api/core";
 
+export interface RecordedNode {
+  type: string;
+  action: string;
+  selector?: string;
+  value?: string;
+  url?: string;
+  position?: { x: number; y: number };
+}
+
+interface RecordingResult {
+  nodes: RecordedNode[];
+}
+
 export const useBrowserStore = defineStore("browser", () => {
   const connected = ref(false);
   const launching = ref(false);
   const recording = ref(false);
-  const recordedNodes = ref<any[]>([]);
+  const recordedNodes = ref<RecordedNode[]>([]);
 
   async function launch() {
     if (launching.value) return;
@@ -43,7 +56,7 @@ export const useBrowserStore = defineStore("browser", () => {
 
   async function stopRecording() {
     try {
-      const result: any = await invoke("recording_stop");
+      const result = await invoke<RecordingResult>("recording_stop");
       recording.value = false;
       recordedNodes.value = result.nodes || [];
       return recordedNodes.value;
@@ -57,7 +70,7 @@ export const useBrowserStore = defineStore("browser", () => {
   async function pollRecording() {
     if (!recording.value) return [];
     try {
-      const result: any = await invoke("recording_poll");
+      const result = await invoke<RecordingResult>("recording_poll");
       return result.nodes || [];
     } catch (e) {
       console.error("Failed to poll recording:", e);
