@@ -1,6 +1,30 @@
 import { defineStore } from "pinia";
 import { ref, shallowRef } from "vue";
 import { invoke } from "@tauri-apps/api/core";
+import { toBackend } from "../types/action-map";
+
+function convertNodesToBackend(nodes: Record<string, unknown>[]): Record<string, unknown>[] {
+  return nodes.map((n) => {
+    // Flatten Vue Flow node format: { id, type, position, data: { action, ... } }
+    // into executor format: { id, type, action, selector, ... }
+    const data = (n.data as Record<string, unknown>) || {};
+    const flat: Record<string, unknown> = {
+      id: n.id,
+      type: n.type,
+      ...data,
+    };
+    if (typeof flat.action === "string") {
+      flat.action = toBackend(flat.action as string);
+    }
+    if (Array.isArray(data.children)) {
+      flat.children = convertNodesToBackend(data.children as Record<string, unknown>[]);
+    }
+    if (Array.isArray(data.elseChildren)) {
+      flat.elseChildren = convertNodesToBackend(data.elseChildren as Record<string, unknown>[]);
+    }
+    return flat;
+  });
+}
 
 interface ExecutionStatusResult {
   running: boolean;
@@ -119,8 +143,14 @@ export const useExecutionStore = defineStore("execution", () => {
     addLog("info", `execution.start: ${workflowJson.name || "Untitled"}`);
     startPolling();
 
+    // Convert frontend PascalCase action names to backend lowercase
+    const converted = {
+      ...workflowJson,
+      nodes: convertNodesToBackend(workflowJson.nodes as Record<string, unknown>[]),
+    };
+
     try {
-      const result = await invoke<ExecutionResult>("workflow_execute", { workflow: workflowJson });
+      const result = await invoke<ExecutionResult>("workflow_execute", { workflow: converted });
       running.value = false;
       stopPolling();
 

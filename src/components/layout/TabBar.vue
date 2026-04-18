@@ -140,7 +140,7 @@ const menuItems: MenuItem[] = [
     </div>
 
     <!-- Tabs -->
-    <div class="tabs-scroll">
+    <div class="tabs-scroll" data-tauri-drag-region>
       <div
         v-for="tab in workspace.tabs"
         :key="tab.id"
@@ -328,7 +328,7 @@ const menuItems: MenuItem[] = [
   flex: 1;
   overflow-x: auto;
   overflow-y: hidden;
-  -webkit-app-region: no-drag;
+  -webkit-app-region: drag;
 }
 
 .tabs-scroll::-webkit-scrollbar {
@@ -349,6 +349,7 @@ const menuItems: MenuItem[] = [
   transition: all 0.15s;
   flex-shrink: 0;
   max-width: 200px;
+  -webkit-app-region: no-drag;
 }
 
 .tab:hover {

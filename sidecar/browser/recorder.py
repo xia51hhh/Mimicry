@@ -1,6 +1,7 @@
 """Recording engine: inject JS into Camoufox pages to capture user actions."""
 from __future__ import annotations
 from loguru import logger
+from engine.action_map import to_frontend
 
 # JavaScript injected into pages to capture user interactions
 RECORDER_JS = """
@@ -78,13 +79,46 @@ RECORDER_JS = """
     }
   }, true);
 
-  // Scroll (debounced)
+  // Scroll (capture delta via wheel event)
   let scrollTimer;
-  document.addEventListener('scroll', () => {
+  document.addEventListener('wheel', (e) => {
+    const dy = e.deltaY;
+    if (Math.abs(dy) < 10) return;
     clearTimeout(scrollTimer);
     scrollTimer = setTimeout(() => {
-      emit('scroll', { x: window.scrollX, y: window.scrollY });
+      emit('scroll', { deltaY: dy });
     }, 300);
+  }, { capture: true, passive: true });
+
+  // Hover (debounced, only on interactive elements)
+  let hoverTimer;
+  document.addEventListener('mouseover', (e) => {
+    const el = e.target;
+    if (!el || !el.matches('a, button, [role="button"], input, label, [data-hover]')) return;
+    clearTimeout(hoverTimer);
+    hoverTimer = setTimeout(() => {
+      emit('hover', { selector: getSelector(el) });
+    }, 800);
+  }, true);
+  document.addEventListener('mouseout', () => {
+    clearTimeout(hoverTimer);
+  }, true);
+
+  // Keyboard shortcuts (non-input keys)
+  document.addEventListener('keydown', (e) => {
+    const tag = (e.target && e.target.tagName) || '';
+    const isInput = ['INPUT', 'TEXTAREA', 'SELECT'].includes(tag) || (e.target && e.target.isContentEditable);
+    // Only record special keys outside input fields, or Escape/Enter anywhere
+    if (isInput && !['Escape', 'Enter', 'Tab'].includes(e.key)) return;
+    if (['Shift', 'Control', 'Alt', 'Meta'].includes(e.key)) return;
+    let key = '';
+    if (e.ctrlKey) key += 'Control+';
+    if (e.altKey) key += 'Alt+';
+    if (e.shiftKey && e.key.length > 1) key += 'Shift+';
+    if (e.metaKey) key += 'Meta+';
+    key += e.key;
+    const sel = isInput ? getSelector(e.target) : 'body';
+    emit('press_key', { selector: sel, key });
   }, true);
 
   console.log('[Mimicry] Recorder injected');
@@ -130,25 +164,57 @@ class RecordingEngine:
         return new
 
     def _inject_recorder(self) -> None:
-        """Inject recording script into the current page."""
-        page = self._controller._page
-        if page:
+        """Inject recording script into all pages and listen for new tabs."""
+        browser = self._controller._browser
+        if not browser or not browser.contexts:
+            return
+        ctx = browser.contexts[0]
+        # Inject into all existing pages
+        for page in ctx.pages:
+            try:
+                page.evaluate(RECORDER_JS)
+                page.on("load", lambda p=page: self._safe_inject(p))
+            except Exception as e:
+                logger.warning(f"Failed to inject into page: {e}")
+        # Listen for new tabs
+        ctx.on("page", self._on_new_page)
+        logger.debug("Recorder JS injected into %d pages", len(ctx.pages))
+
+    def _on_new_page(self, page) -> None:
+        """Handle new tab opened during recording."""
+        try:
+            page.wait_for_load_state("domcontentloaded")
             page.evaluate(RECORDER_JS)
-            # Also inject on navigation
-            page.on("load", lambda: page.evaluate(RECORDER_JS))
-            logger.debug("Recorder JS injected")
+            page.on("load", lambda p=page: self._safe_inject(p))
+            logger.debug("Recorder JS injected into new tab")
+        except Exception as e:
+            logger.warning(f"Failed to inject into new tab: {e}")
+
+    @staticmethod
+    def _safe_inject(page) -> None:
+        try:
+            page.evaluate(RECORDER_JS)
+        except Exception:
+            pass
 
     def _poll_events(self) -> None:
-        """Pull events from the browser page."""
-        page = self._controller._page
-        if not page:
+        """Pull events from all browser pages."""
+        browser = self._controller._browser
+        if not browser or not browser.contexts:
             return
-        try:
-            raw_events = page.evaluate("window.__mimicryEvents || []")
-            if raw_events and len(raw_events) > len(self._events):
-                self._events = raw_events
-        except Exception as e:
-            logger.warning(f"Failed to poll events: {e}")
+        ctx = browser.contexts[0]
+        all_events = []
+        for page in ctx.pages:
+            try:
+                raw = page.evaluate("window.__mimicryEvents || []")
+                if raw:
+                    all_events.extend(raw)
+            except Exception:
+                pass
+        # Sort by timestamp and deduplicate
+        all_events.sort(key=lambda e: e.get("ts", 0))
+        if len(all_events) > len(self._events):
+            self._events = all_events
 
     @staticmethod
     def events_to_workflow_nodes(events: list[dict]) -> list[dict]:
@@ -202,12 +268,31 @@ class RecordingEngine:
                         "value": event.get("value", ""),
                     })
                 case "scroll":
+                    dy = event.get("deltaY", 300)
                     nodes.append({
                         "type": "action",
                         "action": "scroll",
                         "selector": "window",
-                        "direction": "down",
-                        "amount": event.get("y", 300),
+                        "direction": "down" if dy > 0 else "up",
+                        "amount": abs(dy),
                     })
+                case "hover":
+                    nodes.append({
+                        "type": "action",
+                        "action": "hover",
+                        "selector": event["selector"],
+                    })
+                case "press_key":
+                    nodes.append({
+                        "type": "action",
+                        "action": "press_key",
+                        "selector": event.get("selector", "body"),
+                        "key": event.get("key", ""),
+                    })
+
+        # Convert backend action names to frontend PascalCase
+        for node in nodes:
+            if "action" in node:
+                node["action"] = to_frontend(node["action"])
 
         return nodes

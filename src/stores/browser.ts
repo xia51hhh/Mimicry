@@ -21,8 +21,55 @@ export const useBrowserStore = defineStore("browser", () => {
   const recording = ref(false);
   const recordedNodes = ref<RecordedNode[]>([]);
 
+  // Camoufox 环境状态
+  const camoufoxInstalled = ref(false);
+  const camoufoxVersion = ref<string | null>(null);
+  const camoufoxChecking = ref(false);
+  const camoufoxInstalling = ref(false);
+
+  async function checkCamoufox() {
+    camoufoxChecking.value = true;
+    try {
+      const result = await invoke<{ installed: boolean; version: string | null }>("camoufox_check");
+      camoufoxInstalled.value = result.installed;
+      camoufoxVersion.value = result.version;
+      return result;
+    } catch (e) {
+      console.error("Failed to check camoufox:", e);
+      return { installed: false, version: null };
+    } finally {
+      camoufoxChecking.value = false;
+    }
+  }
+
+  async function installCamoufox() {
+    if (camoufoxInstalling.value) return { success: false, error: "Already installing" };
+    camoufoxInstalling.value = true;
+    try {
+      const result = await invoke<{ success: boolean; version?: string; error?: string }>("camoufox_install");
+      if (result.success) {
+        camoufoxInstalled.value = true;
+        camoufoxVersion.value = result.version ?? null;
+      }
+      return result;
+    } catch (e) {
+      console.error("Failed to install camoufox:", e);
+      return { success: false, error: String(e) };
+    } finally {
+      camoufoxInstalling.value = false;
+    }
+  }
+
   async function launch() {
     if (launching.value) return;
+
+    if (!camoufoxInstalled.value) {
+      const check = await checkCamoufox();
+      if (!check.installed) {
+        return;
+      }
+    }
+
     launching.value = true;
     try {
       await invoke("browser_launch");
@@ -78,8 +125,29 @@ export const useBrowserStore = defineStore("browser", () => {
     }
   }
 
+  async function navigate(url: string) {
+    try {
+      await invoke("browser_navigate", { url });
+    } catch (e) {
+      console.error("Failed to navigate:", e);
+    }
+  }
+
+  async function fetchStatus() {
+    try {
+      const result = await invoke<{ connected: boolean; url: string | null; pages: number }>("browser_status");
+      connected.value = result.connected;
+      return result;
+    } catch (e) {
+      console.error("Failed to get browser status:", e);
+    }
+  }
+
   return {
     connected, launching, recording, recordedNodes,
-    launch, close, startRecording, stopRecording, pollRecording,
+    camoufoxInstalled, camoufoxVersion, camoufoxChecking, camoufoxInstalling,
+    launch, close, navigate, fetchStatus,
+    startRecording, stopRecording, pollRecording,
+    checkCamoufox, installCamoufox,
   };
 });

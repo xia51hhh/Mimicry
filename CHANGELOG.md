@@ -7,7 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Added
+- **Auto-update system**: UpdateNotifier dialog with "Install Now / Remind Later / Skip Version", download progress bar, manual fallback to GitHub releases
+- **Settings About section**: Version display (`@tauri-apps/api/app getVersion`), manual check-for-update button
+- **Camoufox install progress bar**: Real-time streaming via JSON-RPC notifications (Python → Rust Tauri events → Vue listen)
+- **Cross-platform screen detection**: DPI-aware browser window sizing (Windows `SetProcessDPIAware` + `GetDeviceCaps` / macOS `system_profiler` / Linux `xdpyinfo`)
+
 ### Fixed
+- **[Critical]** `camoufox.__version__` is a module object, not a string — caused `TypeError: Object of type module is not JSON serializable` on every `camoufox.check` and `camoufox.install` RPC call. Fixed by using `pip show` for version detection
+- **[Bug]** Browser window exceeding screen size on HiDPI displays — now accounts for DPI scaling factor
+- **[Bug]** TabBar drag region too small — `.tabs-scroll` area now supports window dragging, individual tabs remain clickable
+- **[Bug]** CamoufoxSetup dialog not scrollable / body scroll leak — added `max-height: 80vh; overflow-y: auto` and body scroll lock
 - **[Critical]** Replace all `any` types with proper interfaces across stores (`browser.ts`, `execution.ts`, `workflow.ts`, `workspace.ts`) and `UpdateNotifier.vue`
 - **[Bug]** `UpdateNotifier.vue` download progress calculation: accumulate chunk bytes instead of showing single-chunk ratio
 - **[Bug]** `execution.ts` node status tracking: assign `currentNodeId` before comparing with previous value, preventing missed transitions
@@ -17,6 +27,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **[Minor]** Remove duplicate `:hover` CSS rule in `LoopNode.vue`
 - **[Minor]** Type `appWindow` as `TauriWindow` instead of `any` in `TabBar.vue`
 - **[Minor]** Serialize edge `label` safely in `workflow.ts` `toJSON()` (filter non-string VNode labels)
+
+### Cross-platform Test Matrix (TODO)
+- [ ] **Windows x64** — Auto-update download + install, Camoufox install progress, DPI scaling (100%/125%/150%/200%), TabBar drag
+- [ ] **Windows ARM64** — Same as above
+- [ ] **macOS Intel** — Auto-update (`tauri-plugin-updater` .tar.gz), Camoufox install, screen detection via `system_profiler`
+- [ ] **macOS Apple Silicon** — Same as above
+- [ ] **Linux x64** — Auto-update (AppImage), Camoufox install, screen detection via `xdpyinfo`, Wayland fallback
+- [ ] **Linux ARM64** — Same as above
 
 ## v0.1.0
 

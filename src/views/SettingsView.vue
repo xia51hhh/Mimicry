@@ -1,10 +1,39 @@
 <script setup lang="ts">
+import { ref, inject, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useSettingsStore, ACCENT_COLORS } from '../stores/settings'
-import { Sun, Palette, Languages, Check } from 'lucide-vue-next'
+import { useBrowserStore } from '../stores/browser'
+import { getVersion } from '@tauri-apps/api/app'
+import { Sun, Palette, Languages, Check, Globe, Download, RefreshCw, Info } from 'lucide-vue-next'
+import CamoufoxSetup from '../components/CamoufoxSetup.vue'
 
 const { t } = useI18n()
 const settings = useSettingsStore()
+const browser = useBrowserStore()
+const showCamoufoxSetup = ref(false)
+const appVersion = ref('')
+const updateChecking = ref(false)
+const updateResult = ref<string | null>(null)
+
+const checkForUpdate = inject<(manual?: boolean) => Promise<boolean>>('checkForUpdate')
+
+async function handleCheckUpdate() {
+  updateChecking.value = true
+  updateResult.value = null
+  try {
+    const found = await checkForUpdate?.(true)
+    if (!found) updateResult.value = t('update.upToDate')
+  } catch {
+    updateResult.value = '检查失败'
+  } finally {
+    updateChecking.value = false
+  }
+}
+
+onMounted(async () => {
+  browser.checkCamoufox()
+  appVersion.value = await getVersion()
+})
 </script>
 
 <template>
@@ -87,6 +116,77 @@ const settings = useSettingsStore()
         </div>
       </div>
     </section>
+
+    <!-- Browser Engine -->
+    <section class="settings-section">
+      <h2 class="section-title">{{ t('settings.browser') }}</h2>
+      <div class="setting-row">
+        <div class="setting-info">
+          <Globe :size="16" class="setting-icon" />
+          <span class="setting-label">Camoufox</span>
+        </div>
+        <div class="setting-control">
+          <div class="camoufox-info">
+            <template v-if="browser.camoufoxChecking">
+              <span class="camoufox-badge">{{ t('camoufox.checking') }}</span>
+            </template>
+            <template v-else>
+              <span class="camoufox-badge" :class="{ installed: browser.camoufoxInstalled }">
+                {{ browser.camoufoxInstalled ? t('camoufox.installed') : t('camoufox.notInstalledShort') }}
+              </span>
+            </template>
+            <span v-if="browser.camoufoxVersion" class="camoufox-version">
+              v{{ browser.camoufoxVersion }}
+            </span>
+            <button
+              v-if="!browser.camoufoxInstalled"
+              class="camoufox-install-btn"
+              :disabled="browser.camoufoxInstalling"
+              @click="showCamoufoxSetup = true"
+            >
+              <Download :size="12" />
+              {{ t('camoufox.install') }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- About -->
+    <section class="settings-section">
+      <h2 class="section-title">{{ t('settings.about') }}</h2>
+      <div class="setting-row">
+        <div class="setting-info">
+          <Info :size="16" class="setting-icon" />
+          <span class="setting-label">{{ t('update.currentVersion') }}</span>
+        </div>
+        <div class="setting-control">
+          <span class="version-text">v{{ appVersion }}</span>
+        </div>
+      </div>
+      <div class="setting-row">
+        <div class="setting-info">
+          <RefreshCw :size="16" class="setting-icon" />
+          <span class="setting-label">{{ t('update.checkUpdate') }}</span>
+        </div>
+        <div class="setting-control">
+          <button
+            class="camoufox-install-btn"
+            :disabled="updateChecking"
+            @click="handleCheckUpdate"
+          >
+            <RefreshCw :size="12" :class="{ spinning: updateChecking }" />
+            {{ updateChecking ? t('update.checking') : t('update.checkUpdate') }}
+          </button>
+          <span v-if="updateResult" class="update-result">{{ updateResult }}</span>
+        </div>
+      </div>
+    </section>
+
+    <CamoufoxSetup
+      :visible="showCamoufoxSetup"
+      @close="showCamoufoxSetup = false"
+    />
   </div>
 </template>
 
@@ -263,5 +363,74 @@ const settings = useSettingsStore()
 
 .setting-select:focus {
   border-color: var(--color-primary);
+}
+
+.camoufox-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.camoufox-badge {
+  font-size: 12px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: rgba(239, 68, 68, 0.15);
+  color: #ef4444;
+}
+
+.camoufox-badge.installed {
+  background: rgba(34, 197, 94, 0.15);
+  color: #22c55e;
+}
+
+.camoufox-version {
+  font-size: 12px;
+  color: var(--color-text-muted);
+  font-family: monospace;
+}
+
+.camoufox-install-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 12px;
+  font-size: 12px;
+  background: var(--color-primary);
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+
+.camoufox-install-btn:hover {
+  opacity: 0.9;
+}
+
+.camoufox-install-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.version-text {
+  font-size: 13px;
+  color: var(--color-text);
+  font-family: monospace;
+}
+
+.update-result {
+  font-size: 12px;
+  color: var(--color-text-muted);
+  margin-left: 8px;
+}
+
+.spinning {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
 }
 </style>

@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { VueFlow, useVueFlow } from '@vue-flow/core'
 import { Background } from '@vue-flow/background'
 import '@vue-flow/core/dist/style.css'
 import '@vue-flow/core/dist/theme-default.css'
 import { useWorkflowStore } from '../stores/workflow'
+import { useBrowserStore } from '../stores/browser'
 import ActionNode from '../components/nodes/ActionNode.vue'
 import ConditionNode from '../components/nodes/ConditionNode.vue'
 import LoopNode from '../components/nodes/LoopNode.vue'
@@ -12,17 +13,27 @@ import GroupNode from '../components/nodes/GroupNode.vue'
 import PropertyPanel from '../components/editor/PropertyPanel.vue'
 import BottomPanel from '../components/editor/BottomPanel.vue'
 import ContextMenu from '../components/editor/ContextMenu.vue'
+import CamoufoxSetup from '../components/CamoufoxSetup.vue'
 import type { ContextMenuItem } from '../components/editor/ContextMenu.vue'
 import { useKeyboardShortcuts } from '../composables/useKeyboardShortcuts'
 import { useI18n } from 'vue-i18n'
 
 const { t } = useI18n()
 const store = useWorkflowStore()
+const browser = useBrowserStore()
 const { onConnect, addEdges, onPaneReady, onNodeClick, onPaneClick, onNodeContextMenu, onPaneContextMenu, project, fitView, zoomIn, zoomOut } = useVueFlow()
 
 useKeyboardShortcuts()
 
 const showMinimap = ref(true)
+const showCamoufoxSetup = ref(false)
+
+onMounted(async () => {
+  const result = await browser.checkCamoufox()
+  if (!result.installed) {
+    showCamoufoxSetup.value = true
+  }
+})
 
 // Context menu state
 const contextMenu = ref<{ x: number; y: number; items: ContextMenuItem[]; nodeId?: string } | null>(null)
@@ -225,6 +236,12 @@ function onDrop(event: DragEvent) {
       @zoom-in="zoomIn()"
       @zoom-out="zoomOut()"
       @fit-view="fitView()"
+    />
+
+    <!-- Camoufox Setup Dialog -->
+    <CamoufoxSetup
+      :visible="showCamoufoxSetup"
+      @close="showCamoufoxSetup = false"
     />
   </div>
 </template>

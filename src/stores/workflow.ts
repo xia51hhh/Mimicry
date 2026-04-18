@@ -1,5 +1,6 @@
 import { defineStore } from "pinia";
 import { ref, shallowRef, computed } from "vue";
+import { invoke } from "@tauri-apps/api/core";
 import type { Node, Edge } from "@vue-flow/core";
 import type { RecordedNode } from "./browser";
 
@@ -143,7 +144,8 @@ export const useWorkflowStore = defineStore("workflow", () => {
     };
   }
 
-  function fromJSON(data: { name?: string; nodes?: Array<{ id: string; type?: string; position?: { x: number; y: number }; data?: Record<string, unknown> }>; edges?: Array<{ id: string; source?: string; target?: string; sourceHandle?: string | null; targetHandle?: string | null; label?: string }> }) {
+  function fromJSON(data: { id?: string; name?: string; nodes?: Array<{ id: string; type?: string; position?: { x: number; y: number }; data?: Record<string, unknown> }>; edges?: Array<{ id: string; source?: string; target?: string; sourceHandle?: string | null; targetHandle?: string | null; label?: string }> }) {
+    if (data.id) id.value = data.id;
     if (data.name) name.value = data.name;
     if (data.nodes) {
       nodes.value = data.nodes.map((n) => ({
@@ -165,10 +167,80 @@ export const useWorkflowStore = defineStore("workflow", () => {
     }
   }
 
+  // --- Persistence (Tauri invoke) ---
+
+  interface WorkflowRecord {
+    id: string;
+    name: string;
+    nodes: unknown[];
+    edges: unknown[];
+    createdAt: string;
+    updatedAt: string;
+  }
+
+  const workflowList = shallowRef<WorkflowRecord[]>([]);
+  const loading = ref(false);
+
+  async function fetchList() {
+    loading.value = true;
+    try {
+      workflowList.value = await invoke<WorkflowRecord[]>("workflow_list");
+    } finally {
+      loading.value = false;
+    }
+  }
+
+  async function loadWorkflow(workflowId: string) {
+    const record = await invoke<WorkflowRecord | null>("workflow_get", { id: workflowId });
+    if (record) {
+      fromJSON({
+        id: record.id,
+        name: record.name,
+        nodes: record.nodes as never[],
+        edges: record.edges as never[],
+      });
+    }
+  }
+
+  async function createWorkflow(workflowName: string = "Untitled Workflow") {
+    const record = await invoke<WorkflowRecord>("workflow_create", { name: workflowName });
+    id.value = record.id;
+    name.value = record.name;
+    nodes.value = [];
+    edges.value = [];
+    await fetchList();
+  }
+
+  async function saveWorkflow() {
+    if (!id.value) return;
+    const data = toJSON();
+    const now = new Date().toISOString();
+    await invoke("workflow_save", {
+      workflow: {
+        id: data.id,
+        name: data.name,
+        nodes: data.nodes,
+        edges: data.edges,
+        createdAt: now,
+        updatedAt: now,
+      },
+    });
+    await fetchList();
+  }
+
+  async function deleteWorkflow(workflowId: string) {
+    await invoke("workflow_delete", { id: workflowId });
+    if (id.value === workflowId) {
+      clear();
+    }
+    await fetchList();
+  }
+
   return {
     id, name, nodes, edges,
     selectedNodeId, selectedNode, selectNode, updateNodeData,
     addNode, removeNode, clear, importRecordedNodes, toJSON, fromJSON,
     undo, redo, canUndo, canRedo, pushSnapshot,
+    workflowList, loading, fetchList, loadWorkflow, createWorkflow, saveWorkflow, deleteWorkflow,
   };
 });

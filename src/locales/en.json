@@ -87,7 +87,32 @@
     "notePlaceholder": "Node description...",
     "nodeData": "Node Data (JSON)",
     "matchValuePlaceholder": "Match text or expression",
-    "loopSelectorLabel": "Element Selector"
+    "loopSelectorLabel": "Element Selector",
+    "tabIndex": "Tab Index",
+    "key": "Key",
+    "direction": "Direction",
+    "amount": "Amount (px)",
+    "duration": "Duration",
+    "saveAs": "Save As Variable",
+    "attrName": "Attribute Name",
+    "variableName": "Variable Name",
+    "script": "Script",
+    "method": "Method",
+    "dialogAction": "Dialog Action",
+    "accept": "Accept",
+    "dismiss": "Dismiss",
+    "promptText": "Prompt Text",
+    "promptTextPlaceholder": "Dialog input text (optional)",
+    "filePath": "File Path",
+    "format": "Export Format",
+    "message": "Message",
+    "comment": "Comment",
+    "waitType": "Wait Type",
+    "waitSelector": "Wait for Element",
+    "waitUrl": "Wait for URL",
+    "waitTime": "Wait for Time",
+    "urlContains": "URL Contains",
+    "waitDuration": "Wait Duration"
   },
   "conditionTypes": {
     "exists": "Element Exists",
@@ -158,7 +183,9 @@
     "accentColor": "Accent Color",
     "language": "Language",
     "editor": "Editor",
-    "general": "General"
+    "general": "General",
+    "browser": "Browser Engine",
+    "about": "About"
   },
   "execution": {
     "startWorkflow": "Starting workflow execution",
@@ -169,11 +196,20 @@
     "unknownError": "Unknown error"
   },
   "update": {
-    "newVersion": "New version",
-    "available": "available",
-    "downloading": "Downloading",
+    "title": "Software Update",
+    "manualTitle": "New Version Available",
+    "available": "Version {version} is available. Update now?",
+    "manualDesc": "Version {version} is available, but your system doesn't support auto-update. Please download manually from the Release page.",
+    "downloading": "Downloading update {version}...",
     "install": "Install Now",
-    "later": "Later"
+    "later": "Remind Later",
+    "skipVersion": "Skip This Version",
+    "goDownload": "Go to Download",
+    "close": "Close",
+    "checkUpdate": "Check for Updates",
+    "currentVersion": "Current Version",
+    "upToDate": "You're up to date",
+    "checking": "Checking..."
   },
   "canvas": {
     "title": "Canvas",
@@ -198,5 +234,21 @@
   "group": {
     "defaultLabel": "Group",
     "newGroup": "New Group"
+  },
+  "camoufox": {
+    "notInstalled": "Camoufox Not Installed",
+    "notInstalledDesc": "Mimicry requires Camoufox anti-fingerprint browser for automation tasks. Install now?",
+    "installing": "Installing Camoufox...",
+    "installingDesc": "Downloading and installing Camoufox browser, this may take a few minutes...",
+    "installSuccess": "Camoufox Installed Successfully",
+    "installFailed": "Installation Failed",
+    "install": "Install Now",
+    "cancel": "Later",
+    "retry": "Retry",
+    "version": "Version",
+    "status": "Status",
+    "installed": "Installed",
+    "notInstalledShort": "Not Installed",
+    "checking": "Checking..."
   }
 }

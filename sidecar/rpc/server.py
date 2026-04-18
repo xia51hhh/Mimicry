@@ -1,14 +1,19 @@
 import sys
 import json
+import threading
 from loguru import logger
 from .methods import METHOD_REGISTRY
+
+# Methods that should run in a background thread (non-blocking)
+ASYNC_METHODS = {"workflow.execute"}
 
 
 class JsonRpcServer:
     def __init__(self):
         self.methods = METHOD_REGISTRY.copy()
+        self._write_lock = threading.Lock()
 
-    def handle_request(self, raw: str) -> str:
+    def handle_request(self, raw: str) -> str | None:
         try:
             req = json.loads(raw)
         except json.JSONDecodeError:
@@ -22,12 +27,33 @@ class JsonRpcServer:
         if not handler:
             return json.dumps({"jsonrpc": "2.0", "id": req_id, "error": {"code": -32601, "message": f"Method not found: {method}"}})
 
+        if method in ASYNC_METHODS:
+            # Run in background thread, respond immediately
+            def _run():
+                try:
+                    result = handler(**params) if isinstance(params, dict) else handler(*params)
+                    resp = json.dumps({"jsonrpc": "2.0", "id": req_id, "result": result})
+                except Exception as e:
+                    logger.exception(f"Error in async method {method}")
+                    resp = json.dumps({"jsonrpc": "2.0", "id": req_id, "error": {"code": -32000, "message": str(e)}})
+                self._write(resp)
+
+            threading.Thread(target=_run, daemon=True).start()
+            # Return None = no immediate response; the thread will send it
+            return None
+
         try:
             result = handler(**params) if isinstance(params, dict) else handler(*params)
             return json.dumps({"jsonrpc": "2.0", "id": req_id, "result": result})
         except Exception as e:
             logger.exception(f"Error in method {method}")
             return json.dumps({"jsonrpc": "2.0", "id": req_id, "error": {"code": -32000, "message": str(e)}})
+
+    def _write(self, response: str):
+        """Thread-safe stdout write."""
+        with self._write_lock:
+            sys.stdout.write(response + "\n")
+            sys.stdout.flush()
 
     def run(self):
         logger.info("JSON-RPC server listening on stdio")
@@ -36,5 +62,5 @@ class JsonRpcServer:
             if not line:
                 continue
             response = self.handle_request(line)
-            sys.stdout.write(response + "\n")
-            sys.stdout.flush()
+            if response is not None:
+                self._write(response)

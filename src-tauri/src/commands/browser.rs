@@ -62,3 +62,13 @@ pub async fn workflow_stop_execution(sidecar: State<'_, Mutex<Sidecar>>) -> Resu
 pub async fn workflow_execution_status(sidecar: State<'_, Mutex<Sidecar>>) -> Result<serde_json::Value, AppError> {
     sidecar_call(sidecar, "workflow.execution_status", None).await
 }
+
+#[tauri::command]
+pub async fn camoufox_check(sidecar: State<'_, Mutex<Sidecar>>) -> Result<serde_json::Value, AppError> {
+    sidecar_call(sidecar, "camoufox.check", None).await
+}
+
+#[tauri::command]
+pub async fn camoufox_install(sidecar: State<'_, Mutex<Sidecar>>) -> Result<serde_json::Value, AppError> {
+    sidecar_call(sidecar, "camoufox.install", None).await
+}

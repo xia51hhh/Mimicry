@@ -3,6 +3,7 @@ import json
 from rpc.methods import rpc_method
 from browser.controller import BrowserController
 from browser.recorder import RecordingEngine
+from browser.env_check import CamoufoxEnv
 from engine.executor import WorkflowExecutor
 
 _browser = BrowserController()
@@ -56,6 +57,121 @@ def browser_status():
     return _browser.status()
 
 
+@rpc_method("browser.dblclick")
+def browser_dblclick(selector: str):
+    _browser.dblclick(selector)
+    return {"dblclicked": selector}
+
+
+@rpc_method("browser.hover")
+def browser_hover(selector: str):
+    _browser.hover(selector)
+    return {"hovered": selector}
+
+
+@rpc_method("browser.select_option")
+def browser_select_option(selector: str, value: str):
+    _browser.select_option(selector, value)
+    return {"selected": selector, "value": value}
+
+
+@rpc_method("browser.clear")
+def browser_clear(selector: str):
+    _browser.clear(selector)
+    return {"cleared": selector}
+
+
+@rpc_method("browser.focus")
+def browser_focus(selector: str):
+    _browser.focus(selector)
+    return {"focused": selector}
+
+
+@rpc_method("browser.go_back")
+def browser_go_back():
+    _browser.go_back()
+    return {"navigated": "back"}
+
+
+@rpc_method("browser.go_forward")
+def browser_go_forward():
+    _browser.go_forward()
+    return {"navigated": "forward"}
+
+
+@rpc_method("browser.reload")
+def browser_reload():
+    _browser.reload()
+    return {"reloaded": True}
+
+
+@rpc_method("browser.press_key")
+def browser_press_key(selector: str = "body", key: str = ""):
+    _browser.press_key(selector, key)
+    return {"pressed": key, "selector": selector}
+
+
+@rpc_method("browser.scroll")
+def browser_scroll(selector: str = "window", direction: str = "down", amount: int = 300):
+    _browser.scroll(selector, direction, amount)
+    return {"scrolled": selector, "direction": direction}
+
+
+@rpc_method("browser.evaluate")
+def browser_evaluate(expression: str):
+    return {"result": _browser.evaluate(expression)}
+
+
+@rpc_method("browser.get_text")
+def browser_get_text(selector: str):
+    return {"text": _browser.get_element_text(selector)}
+
+
+@rpc_method("browser.get_attribute")
+def browser_get_attribute(selector: str, attr: str):
+    return {"value": _browser.get_element_attribute(selector, attr)}
+
+
+@rpc_method("browser.get_element_count")
+def browser_get_element_count(selector: str):
+    return {"count": _browser.get_element_count(selector)}
+
+
+@rpc_method("browser.extract_table")
+def browser_extract_table(selector: str):
+    return {"data": _browser.extract_table(selector)}
+
+
+@rpc_method("browser.upload_file")
+def browser_upload_file(selector: str, file_path: str):
+    _browser.upload_file(selector, file_path)
+    return {"uploaded": selector, "file": file_path}
+
+
+@rpc_method("browser.new_tab")
+def browser_new_tab(url: str = ""):
+    _browser.new_tab(url)
+    return _browser.status()
+
+
+@rpc_method("browser.switch_tab")
+def browser_switch_tab(index: int):
+    _browser.switch_tab(index)
+    return _browser.status()
+
+
+@rpc_method("browser.close_tab")
+def browser_close_tab(index: int | None = None):
+    _browser.close_tab(index)
+    return _browser.status()
+
+
+@rpc_method("browser.handle_dialog")
+def browser_handle_dialog(accept: bool = True, text: str = ""):
+    _browser.handle_dialog(accept, text)
+    return {"dialog_handler_set": True}
+
+
 @rpc_method("recording.start")
 def recording_start():
     _recorder.start()
@@ -97,3 +213,16 @@ def workflow_stop():
 @rpc_method("workflow.execution_status")
 def workflow_execution_status():
     return _executor.context.status()
+
+
+# --- Camoufox 环境管理 ---
+
+
+@rpc_method("camoufox.check")
+def camoufox_check():
+    return CamoufoxEnv.check()
+
+
+@rpc_method("camoufox.install")
+def camoufox_install():
+    return CamoufoxEnv.install()

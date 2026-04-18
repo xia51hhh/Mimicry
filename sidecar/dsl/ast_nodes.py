@@ -137,3 +137,66 @@ class Sleep(Node):
 @dataclass
 class Fail(Node):
     message: str = ""
+
+
+@dataclass
+class PressKey(Node):
+    selector: str = ""
+    key: str = ""
+
+
+@dataclass
+class NewTab(Node):
+    url: str = ""
+
+
+@dataclass
+class SwitchTab(Node):
+    tab_index: int = 0
+
+
+@dataclass
+class CloseTab(Node):
+    tab_index: int | None = None
+
+
+@dataclass
+class GetURL(Node):
+    into: str = ""
+
+
+@dataclass
+class Export(Node):
+    format: str = "json"
+    path: str = ""
+
+
+@dataclass
+class RunScript(Node):
+    script: str = ""
+    into: str | None = None
+
+
+@dataclass
+class HttpRequest(Node):
+    url: str = ""
+    method: str = "GET"
+    body: str | None = None
+    into: str | None = None
+
+
+@dataclass
+class Comment(Node):
+    text: str = ""
+
+
+@dataclass
+class HandleDialog(Node):
+    dialog_action: str = "accept"
+    text: str | None = None
+
+
+@dataclass
+class UploadFile(Node):
+    selector: str = ""
+    file_path: str = ""

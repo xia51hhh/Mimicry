@@ -6,6 +6,7 @@ mod error;
 
 pub use error::{AppError, AppResult};
 use ipc::sidecar::Sidecar;
+use tauri::Manager;
 use tokio::sync::Mutex;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -20,6 +21,14 @@ pub fn run() {
         .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(Mutex::new(conn))
         .manage(Mutex::new(Sidecar::new()))
+        .setup(|app| {
+            let handle = app.handle().clone();
+            let sidecar = app.state::<Mutex<Sidecar>>();
+            tauri::async_runtime::block_on(async {
+                sidecar.lock().await.set_app_handle(handle);
+            });
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             commands::browser::browser_launch,
             commands::browser::browser_close,
@@ -31,6 +40,8 @@ pub fn run() {
             commands::browser::workflow_execute,
             commands::browser::workflow_stop_execution,
             commands::browser::workflow_execution_status,
+            commands::browser::camoufox_check,
+            commands::browser::camoufox_install,
             commands::workflow::workflow_list,
             commands::workflow::workflow_get,
             commands::workflow::workflow_create,

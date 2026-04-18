@@ -12,6 +12,7 @@ pub struct Sidecar {
     child: Option<Child>,
     stdin: Option<tokio::process::ChildStdin>,
     reader: Option<Mutex<BufReader<tokio::process::ChildStdout>>>,
+    app_handle: Option<tauri::AppHandle>,
 }
 
 impl Sidecar {
@@ -20,7 +21,12 @@ impl Sidecar {
             child: None,
             stdin: None,
             reader: None,
+            app_handle: None,
         }
+    }
+
+    pub fn set_app_handle(&mut self, handle: tauri::AppHandle) {
+        self.app_handle = Some(handle);
     }
 
     pub async fn start(&mut self, python_path: &str) -> Result<(), AppError> {
@@ -29,11 +35,19 @@ impl Sidecar {
             return Ok(());
         }
 
-        info!("Starting sidecar: {}", python_path);
+        let sidecar_dir = if std::path::Path::new("../sidecar/main.py").exists() {
+            "../sidecar"
+        } else if std::path::Path::new("sidecar/main.py").exists() {
+            "sidecar"
+        } else {
+            return Err(AppError::Sidecar("Cannot find sidecar directory".into()));
+        };
+
+        info!("Starting sidecar: {} in {}", python_path, sidecar_dir);
         let mut child = Command::new(python_path)
             .arg("-u")
             .arg("main.py")
-            .current_dir("sidecar")
+            .current_dir(sidecar_dir)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::inherit())
@@ -91,16 +105,42 @@ impl Sidecar {
         stdin.flush().await.map_err(|e| AppError::Sidecar(format!("Flush failed: {}", e)))?;
 
         let mut reader = reader.lock().await;
-        let mut response_line = String::new();
-        reader.read_line(&mut response_line).await.map_err(|e| AppError::Sidecar(format!("Read failed: {}", e)))?;
+        let timeout_dur = std::time::Duration::from_secs(600);
+        loop {
+            let mut response_line = String::new();
+            let bytes = tokio::time::timeout(timeout_dur, reader.read_line(&mut response_line))
+                .await
+                .map_err(|_| AppError::Sidecar("Sidecar call timed out".into()))?
+                .map_err(|e| AppError::Sidecar(format!("Read failed: {}", e)))?;
 
-        let resp: RpcResponse = serde_json::from_str(&response_line)?;
+            if bytes == 0 {
+                return Err(AppError::Sidecar("Sidecar process exited unexpectedly".into()));
+            }
 
-        if let Some(err) = resp.error {
-            return Err(AppError::Sidecar(format!("[{}] {}", err.code, err.message)));
+            // Parse as generic JSON to check if it's a notification or response
+            let val: serde_json::Value = serde_json::from_str(&response_line)?;
+
+            if val.get("id").is_some() && !val["id"].is_null() {
+                // It's a response
+                let resp: RpcResponse = serde_json::from_value(val)?;
+                if let Some(err) = resp.error {
+                    return Err(AppError::Sidecar(format!("[{}] {}", err.code, err.message)));
+                }
+                return Ok(resp.result.unwrap_or(serde_json::Value::Null));
+            } else if let Some(method) = val.get("method").and_then(|m| m.as_str()) {
+                // It's a notification — forward as Tauri event
+                if let Some(handle) = &self.app_handle {
+                    use tauri::Emitter;
+                    let event_name = format!("sidecar:{}", method);
+                    let params = val.get("params").cloned().unwrap_or(serde_json::Value::Null);
+                    let _ = handle.emit(&event_name, params);
+                }
+                // Continue reading next line
+            } else {
+                // Unknown format, skip
+                continue;
+            }
         }
-
-        Ok(resp.result.unwrap_or(serde_json::Value::Null))
     }
 
     pub async fn stop(&mut self) {

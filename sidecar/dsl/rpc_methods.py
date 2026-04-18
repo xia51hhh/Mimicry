@@ -1,7 +1,7 @@
 """Register DSL-related RPC methods."""
-from ..rpc.methods import rpc_method
-from .parser import parse
-from .compiler import compile_to_json, decompile_from_json
+from rpc.methods import rpc_method
+from dsl.parser import parse
+from dsl.compiler import compile_to_json, decompile_from_json
 
 
 @rpc_method("dsl.parse")

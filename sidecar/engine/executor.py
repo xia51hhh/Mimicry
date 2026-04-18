@@ -1,9 +1,13 @@
 """Workflow execution engine: runs workflow JSON via Camoufox."""
 from __future__ import annotations
+import json
 import re
 import time
+import urllib.request
+import urllib.error
 from loguru import logger
 from browser.controller import BrowserController
+from engine.action_map import to_backend
 
 
 class ExecutionContext:
@@ -111,7 +115,7 @@ class WorkflowExecutor:
                 self._execute_loop(node)
 
     def _execute_action(self, node: dict):
-        action = node.get("action", "")
+        action = to_backend(node.get("action", ""))
         ctrl = self._controller
         ctx = self._ctx
 
@@ -119,34 +123,31 @@ class WorkflowExecutor:
             case "open":
                 ctrl.navigate(ctx.resolve(node["url"]))
             case "back":
-                ctrl._page.go_back()
+                ctrl.go_back()
             case "forward":
-                ctrl._page.go_forward()
+                ctrl.go_forward()
             case "reload":
-                ctrl._page.reload()
+                ctrl.reload()
             case "click":
                 ctrl.click(ctx.resolve(node["selector"]))
             case "dblclick":
-                ctrl._page.dblclick(ctx.resolve(node["selector"]))
+                ctrl.dblclick(ctx.resolve(node["selector"]))
             case "type":
                 ctrl.type_text(ctx.resolve(node["selector"]), ctx.resolve(node.get("value", "")))
             case "clear":
-                ctrl._page.fill(ctx.resolve(node["selector"]), "")
+                ctrl.clear(ctx.resolve(node["selector"]))
             case "select":
-                ctrl._page.select_option(ctx.resolve(node["selector"]), ctx.resolve(node.get("value", "")))
+                ctrl.select_option(ctx.resolve(node["selector"]), ctx.resolve(node.get("value", "")))
             case "hover":
-                ctrl._page.hover(ctx.resolve(node["selector"]))
+                ctrl.hover(ctx.resolve(node["selector"]))
             case "scroll":
                 sel = ctx.resolve(node.get("selector", "window"))
-                amount = node.get("amount", 300)
-                direction = node.get("direction", "down")
-                dy = amount if direction == "down" else -amount
-                if sel == "window":
-                    ctrl._page.evaluate(f"window.scrollBy(0, {dy})")
-                else:
-                    ctrl._page.locator(sel).scroll_into_view_if_needed()
+                ctrl.scroll(sel, node.get("direction", "down"), node.get("amount", 300))
             case "focus":
-                ctrl._page.focus(ctx.resolve(node["selector"]))
+                ctrl.focus(ctx.resolve(node["selector"]))
+            case "press_key":
+                sel = ctx.resolve(node.get("selector", "body"))
+                ctrl.press_key(sel, ctx.resolve(node["key"]))
             case "wait":
                 if node.get("selector"):
                     timeout = _parse_duration(node.get("timeout", "5s")) * 1000
@@ -161,19 +162,21 @@ class WorkflowExecutor:
                         time.sleep(0.2)
                 elif node.get("time"):
                     time.sleep(_parse_duration(node["time"]))
-            case "extract":
+            case "extract_text":
                 sel = ctx.resolve(node["selector"])
-                mode = node.get("extractMode", "text")
                 into = node.get("into", "$_result")
-                if mode == "text":
-                    val = ctrl._page.locator(sel).inner_text()
-                elif mode == "attr":
-                    val = ctrl._page.locator(sel).get_attribute(node.get("attrName", ""))
-                elif mode == "count":
-                    val = ctrl._page.locator(sel).count()
-                else:
-                    val = None
-                ctx.set_var(into, val)
+                ctx.set_var(into, ctrl.get_element_text(sel))
+            case "extract_attr":
+                sel = ctx.resolve(node["selector"])
+                into = node.get("into", "$_result")
+                ctx.set_var(into, ctrl.get_element_attribute(sel, node.get("attrName", "")))
+            case "extract_table":
+                sel = ctx.resolve(node["selector"])
+                into = node.get("into", "$_result")
+                ctx.set_var(into, ctrl.extract_table(sel))
+            case "get_url":
+                into = node.get("into", "$_result")
+                ctx.set_var(into, ctrl.get_url())
             case "set":
                 ctx.set_var(node["variable"], node.get("value"))
             case "screenshot":
@@ -186,6 +189,76 @@ class WorkflowExecutor:
                 time.sleep(_parse_duration(node.get("duration", "1s")))
             case "fail":
                 raise RuntimeError(ctx.resolve(node.get("message", "Workflow failed")))
+            case "new_tab":
+                ctrl.new_tab(ctx.resolve(node.get("url", "")))
+            case "switch_tab":
+                ctrl.switch_tab(node.get("tabIndex", 0))
+            case "close_tab":
+                ctrl.close_tab(node.get("tabIndex"))
+            case "handle_dialog":
+                ctrl.handle_dialog(
+                    accept=node.get("accept", True),
+                    text=ctx.resolve(node.get("text", ""))
+                )
+            case "upload_file":
+                ctrl.upload_file(
+                    ctx.resolve(node["selector"]),
+                    ctx.resolve(node["filePath"])
+                )
+            case "run_script":
+                result = ctrl.evaluate(ctx.resolve(node["script"]))
+                into = node.get("into")
+                if into:
+                    ctx.set_var(into, result)
+            case "http_request":
+                url = ctx.resolve(node["url"])
+                method = node.get("method", "GET").upper()
+                headers = node.get("headers", {})
+                body = ctx.resolve(node["body"]) if node.get("body") else None
+                try:
+                    timeout_val = int(node.get("timeout", 30))
+                except (ValueError, TypeError):
+                    timeout_val = int(_parse_duration(str(node.get("timeout", "30s"))))
+                req = urllib.request.Request(
+                    url, method=method,
+                    data=body.encode("utf-8") if body else None,
+                    headers=headers,
+                )
+                try:
+                    with urllib.request.urlopen(req, timeout=timeout_val) as resp:
+                        resp_body = resp.read().decode("utf-8", errors="replace")
+                        into = node.get("into", "$_result")
+                        try:
+                            ctx.set_var(into, json.loads(resp_body))
+                        except json.JSONDecodeError:
+                            ctx.set_var(into, resp_body)
+                except urllib.error.URLError as e:
+                    raise RuntimeError(f"HTTP request failed: {e}")
+            case "export":
+                fmt = node.get("format", "json")
+                path = ctx.resolve(node.get("path", "export.json"))
+                data = ctx.variables
+                if fmt == "csv":
+                    import csv
+                    import io
+                    buf = io.StringIO()
+                    writer = csv.writer(buf)
+                    for k, v in data.items():
+                        if isinstance(v, list) and v and isinstance(v[0], list):
+                            for row in v:
+                                writer.writerow(row)
+                        else:
+                            writer.writerow([k, v])
+                    with open(path, "w", encoding="utf-8", newline="") as f:
+                        f.write(buf.getvalue())
+                else:
+                    with open(path, "w", encoding="utf-8") as f:
+                        json.dump(data, f, ensure_ascii=False, indent=2)
+                logger.info(f"Exported to {path} ({fmt})")
+            case "comment":
+                pass
+            case _:
+                logger.warning(f"Unknown action: {action}")
 
     def _execute_condition(self, node: dict):
         condition = self._ctx.resolve(node.get("condition", ""))
@@ -204,7 +277,7 @@ class WorkflowExecutor:
         m = re.match(r'exists\s*\(\s*"(.+?)"\s*\)', condition)
         if m:
             try:
-                return ctrl._page.locator(m.group(1)).count() > 0
+                return ctrl.get_element_count(m.group(1)) > 0
             except Exception:
                 return False
 
@@ -212,7 +285,7 @@ class WorkflowExecutor:
         m = re.match(r'visible\s*\(\s*"(.+?)"\s*\)', condition)
         if m:
             try:
-                return ctrl._page.locator(m.group(1)).is_visible()
+                return ctrl.evaluate(f'document.querySelector("{m.group(1)}")?.offsetParent !== null')
             except Exception:
                 return False
 
@@ -225,7 +298,7 @@ class WorkflowExecutor:
         m = re.match(r'text\s*\(\s*"(.+?)"\s*\)\s*==\s*"(.+?)"', condition)
         if m:
             try:
-                actual = ctrl._page.locator(m.group(1)).inner_text()
+                actual = ctrl.get_element_text(m.group(1))
                 return actual == m.group(2)
             except Exception:
                 return False
@@ -263,8 +336,8 @@ class WorkflowExecutor:
             selector = ctx.resolve(node.get("selector", ""))
             var = node.get("variable")
             max_iter = node.get("max", 100)
-            elements = self._controller._page.locator(selector)
-            count = min(elements.count(), max_iter)
+            elements_count = self._controller.get_element_count(selector)
+            count = min(elements_count, max_iter)
             for i in range(count):
                 if not ctx.running:
                     return

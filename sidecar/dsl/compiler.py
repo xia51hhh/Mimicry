@@ -2,6 +2,7 @@
 from __future__ import annotations
 import uuid
 from . import ast_nodes as ast
+from engine.action_map import to_frontend, to_backend
 
 
 def _uid() -> str:
@@ -45,7 +46,8 @@ def _node_to_json(node: ast.Node) -> dict:
                 w["time"] = t
             return w
         case ast.Extract(mode=m, selector=s, attr_name=an, into=i):
-            e: dict = {"id": _uid(), "type": "action", "action": "extract", "extractMode": m, "selector": s, "into": i}
+            action_name = "extract_text" if m == "text" else "extract_attr" if m == "attribute" else "extract_table"
+            e: dict = {"id": _uid(), "type": "action", "action": action_name, "selector": s, "into": i}
             if an:
                 e["attrName"] = an
             return e
@@ -84,17 +86,69 @@ def _node_to_json(node: ast.Node) -> dict:
             return {"id": _uid(), "type": "action", "action": "sleep", "duration": d}
         case ast.Fail(message=m):
             return {"id": _uid(), "type": "action", "action": "fail", "message": m}
+        case ast.PressKey(selector=s, key=k):
+            return {"id": _uid(), "type": "action", "action": "press_key", "selector": s, "key": k}
+        case ast.NewTab(url=u):
+            n = {"id": _uid(), "type": "action", "action": "new_tab"}
+            if u:
+                n["url"] = u
+            return n
+        case ast.SwitchTab(tab_index=i):
+            return {"id": _uid(), "type": "action", "action": "switch_tab", "tabIndex": i}
+        case ast.CloseTab(tab_index=i):
+            n = {"id": _uid(), "type": "action", "action": "close_tab"}
+            if i is not None:
+                n["tabIndex"] = i
+            return n
+        case ast.GetURL(into=i):
+            return {"id": _uid(), "type": "action", "action": "get_url", "into": i}
+        case ast.Export(format=f, path=p):
+            return {"id": _uid(), "type": "action", "action": "export", "format": f, "path": p}
+        case ast.RunScript(script=s, into=i):
+            n = {"id": _uid(), "type": "action", "action": "run_script", "script": s}
+            if i:
+                n["into"] = i
+            return n
+        case ast.HttpRequest(url=u, method=m, body=b, into=i):
+            n = {"id": _uid(), "type": "action", "action": "http_request", "url": u, "method": m}
+            if b:
+                n["body"] = b
+            if i:
+                n["into"] = i
+            return n
+        case ast.Comment(text=t):
+            return {"id": _uid(), "type": "action", "action": "comment", "text": t}
+        case ast.HandleDialog(dialog_action=a, text=t):
+            n = {"id": _uid(), "type": "action", "action": "handle_dialog", "dialogAction": a}
+            if t:
+                n["text"] = t
+            return n
+        case ast.UploadFile(selector=s, file_path=p):
+            return {"id": _uid(), "type": "action", "action": "upload_file", "selector": s, "filePath": p}
         case _:
             raise ValueError(f"Unknown AST node: {type(node).__name__}")
 
 
 def compile_to_json(workflow: ast.Workflow) -> dict:
-    """Convert a Workflow AST to the JSON format used by frontend."""
+    """Convert a Workflow AST to the JSON format used by frontend (PascalCase actions)."""
     nodes = [_node_to_json(n) for n in workflow.body]
+    # Convert backend action names to frontend PascalCase
+    _convert_nodes_to_frontend(nodes)
     return {
         "name": workflow.name,
         "nodes": nodes,
     }
+
+
+def _convert_nodes_to_frontend(nodes: list[dict]) -> None:
+    """In-place convert action names from backend to frontend PascalCase."""
+    for node in nodes:
+        if "action" in node:
+            node["action"] = to_frontend(node["action"])
+        if "children" in node:
+            _convert_nodes_to_frontend(node["children"])
+        if "elseChildren" in node:
+            _convert_nodes_to_frontend(node["elseChildren"])
 
 
 # ── Decompiler: JSON → Pseudocode ──────────────────────────────
@@ -107,7 +161,7 @@ def _json_to_pseudo(node: dict, level: int = 1) -> list[str]:
     """Convert a single JSON node back to pseudocode lines."""
     lines: list[str] = []
     ntype = node.get("type", "action")
-    action = node.get("action", "")
+    action = to_backend(node.get("action", ""))
 
     if ntype == "condition":
         lines.append(_indent(f'IF {node["condition"]} {{', level))
@@ -143,7 +197,7 @@ def _json_to_pseudo(node: dict, level: int = 1) -> list[str]:
     # Action nodes
     match action:
         case "open":
-            lines.append(_indent(f'OPEN "{node["url"]}"', level))
+            lines.append(_indent(f'OPEN "{node.get("url", "")}"', level))
         case "back":
             lines.append(_indent("BACK", level))
         case "forward":
@@ -151,26 +205,26 @@ def _json_to_pseudo(node: dict, level: int = 1) -> list[str]:
         case "reload":
             lines.append(_indent("RELOAD", level))
         case "click":
-            lines.append(_indent(f'CLICK "{node["selector"]}"', level))
+            lines.append(_indent(f'CLICK "{node.get("selector", "")}"', level))
         case "dblclick":
-            lines.append(_indent(f'DBLCLICK "{node["selector"]}"', level))
+            lines.append(_indent(f'DBLCLICK "{node.get("selector", "")}"', level))
         case "type":
-            lines.append(_indent(f'TYPE "{node["selector"]}" "{node.get("value", "")}"', level))
+            lines.append(_indent(f'TYPE "{node.get("selector", "")}" "{node.get("value", "")}"', level))
         case "clear":
-            lines.append(_indent(f'CLEAR "{node["selector"]}"', level))
+            lines.append(_indent(f'CLEAR "{node.get("selector", "")}"', level))
         case "select":
-            lines.append(_indent(f'SELECT "{node["selector"]}" "{node.get("value", "")}"', level))
+            lines.append(_indent(f'SELECT "{node.get("selector", "")}" "{node.get("value", "")}"', level))
         case "hover":
-            lines.append(_indent(f'HOVER "{node["selector"]}"', level))
+            lines.append(_indent(f'HOVER "{node.get("selector", "")}"', level))
         case "scroll":
-            s = f'SCROLL "{node["selector"]}"'
+            s = f'SCROLL "{node.get("selector", "window")}"'
             if node.get("direction"):
                 s += f' direction={node["direction"]}'
             if node.get("amount"):
                 s += f' amount={node["amount"]}'
             lines.append(_indent(s, level))
         case "focus":
-            lines.append(_indent(f'FOCUS "{node["selector"]}"', level))
+            lines.append(_indent(f'FOCUS "{node.get("selector", "")}"', level))
         case "wait":
             parts = ["WAIT"]
             if node.get("selector"):
@@ -182,23 +236,32 @@ def _json_to_pseudo(node: dict, level: int = 1) -> list[str]:
             if node.get("timeout", "5s") != "5s":
                 parts.append(f'timeout={node["timeout"]}')
             lines.append(_indent(" ".join(parts), level))
-        case "extract":
+        case "extract" | "extract_text" | "extract_attr" | "extract_table":
             mode = node.get("extractMode", "text")
+            if action == "extract_text":
+                mode = "text"
+            elif action == "extract_attr":
+                mode = "attr"
+            elif action == "extract_table":
+                mode = "table"
+            sel = node.get("selector", "")
             parts = ["EXTRACT"]
             if mode == "text":
-                parts.append(f'text="{node["selector"]}"')
+                parts.append(f'text="{sel}"')
             elif mode == "attr":
-                parts.append(f'attr="{node["selector"]}" name="{node.get("attrName", "")}"')
+                parts.append(f'attr="{sel}" name="{node.get("attrName", "")}"')
+            elif mode == "table":
+                parts.append(f'table="{sel}"')
             elif mode == "count":
-                parts.append(f'count="{node["selector"]}"')
+                parts.append(f'count="{sel}"')
             parts.append(f'into={node.get("into", "$var")}')
             lines.append(_indent(" ".join(parts), level))
         case "set":
             val = node.get("value", "")
             if isinstance(val, str):
-                lines.append(_indent(f'SET {node["variable"]} = "{val}"', level))
+                lines.append(_indent(f'SET {node.get("variable", "$var")} = "{val}"', level))
             else:
-                lines.append(_indent(f'SET {node["variable"]} = {val}', level))
+                lines.append(_indent(f'SET {node.get("variable", "$var")} = {val}', level))
         case "screenshot":
             lines.append(_indent(f'SCREENSHOT "{node.get("filename", "screenshot.png")}"', level))
         case "log":
@@ -211,6 +274,41 @@ def _json_to_pseudo(node: dict, level: int = 1) -> list[str]:
             lines.append(_indent(f'SLEEP {node.get("duration", "1s")}', level))
         case "fail":
             lines.append(_indent(f'FAIL "{node.get("message", "")}"', level))
+        case "press_key":
+            lines.append(_indent(f'PRESS_KEY "{node.get("selector", "")}" "{node.get("key", "")}"', level))
+        case "new_tab":
+            url = node.get("url", "")
+            lines.append(_indent(f'NEW_TAB "{url}"' if url else "NEW_TAB", level))
+        case "switch_tab":
+            lines.append(_indent(f'SWITCH_TAB {node.get("tabIndex", 0)}', level))
+        case "close_tab":
+            idx = node.get("tabIndex")
+            lines.append(_indent(f'CLOSE_TAB {idx}' if idx is not None else "CLOSE_TAB", level))
+        case "get_url":
+            lines.append(_indent(f'GET_URL into={node.get("into", "$url")}', level))
+        case "export":
+            lines.append(_indent(f'EXPORT format={node.get("format", "json")} path="{node.get("path", "")}"', level))
+        case "run_script":
+            s = f'RUN_SCRIPT "{node.get("script", "")}"'
+            if node.get("into"):
+                s += f' into={node["into"]}'
+            lines.append(_indent(s, level))
+        case "http_request":
+            s = f'HTTP_REQUEST "{node.get("url", "")}" method={node.get("method", "GET")}'
+            if node.get("body"):
+                s += f' body="{node["body"]}"'
+            if node.get("into"):
+                s += f' into={node["into"]}'
+            lines.append(_indent(s, level))
+        case "comment":
+            lines.append(_indent(f'COMMENT "{node.get("text", "")}"', level))
+        case "handle_dialog":
+            s = f'HANDLE_DIALOG action={node.get("dialogAction", "accept")}'
+            if node.get("text"):
+                s += f' text="{node["text"]}"'
+            lines.append(_indent(s, level))
+        case "upload_file":
+            lines.append(_indent(f'UPLOAD_FILE "{node.get("selector", "")}" "{node.get("filePath", "")}"', level))
         case _:
             lines.append(_indent(f'# Unknown action: {action}', level))
     return lines

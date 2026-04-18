@@ -188,6 +188,314 @@ const onErrorOptions = [
             />
           </div>
 
+          <div v-if="editData.action === 'NewTab'" class="field-group">
+            <label class="field-label">URL</label>
+            <input
+              type="text"
+              class="field-input"
+              placeholder="https://..."
+              :value="editData.url"
+              @input="updateField('url', ($event.target as HTMLInputElement).value)"
+            />
+          </div>
+
+          <div v-if="editData.action === 'SwitchTab'" class="field-group">
+            <label class="field-label">{{ t('propertyPanel.tabIndex') }}</label>
+            <input
+              type="number"
+              class="field-input"
+              placeholder="0"
+              :value="editData.tabIndex"
+              @input="updateField('tabIndex', Number(($event.target as HTMLInputElement).value))"
+            />
+          </div>
+
+          <div v-if="editData.action === 'CloseTab'" class="field-group">
+            <label class="field-label">{{ t('propertyPanel.tabIndex') }}</label>
+            <input
+              type="number"
+              class="field-input"
+              placeholder="0"
+              :value="editData.tabIndex"
+              @input="updateField('tabIndex', Number(($event.target as HTMLInputElement).value))"
+            />
+          </div>
+
+          <div v-if="editData.action === 'PressKey'" class="field-group">
+            <label class="field-label">{{ t('propertyPanel.key') }}</label>
+            <input
+              type="text"
+              class="field-input"
+              placeholder="Enter, Tab, Escape..."
+              :value="editData.key"
+              @input="updateField('key', ($event.target as HTMLInputElement).value)"
+            />
+          </div>
+
+          <div v-if="editData.action === 'Scroll'" class="field-group">
+            <label class="field-label">{{ t('propertyPanel.direction') }}</label>
+            <select
+              class="field-input"
+              :value="editData.direction || 'down'"
+              @change="updateField('direction', ($event.target as HTMLSelectElement).value)"
+            >
+              <option value="down">↓ Down</option>
+              <option value="up">↑ Up</option>
+            </select>
+          </div>
+
+          <div v-if="editData.action === 'Scroll'" class="field-group">
+            <label class="field-label">{{ t('propertyPanel.amount') }}</label>
+            <input
+              type="number"
+              class="field-input"
+              placeholder="300"
+              :value="editData.amount || 300"
+              @input="updateField('amount', Number(($event.target as HTMLInputElement).value))"
+            />
+          </div>
+
+          <div v-if="editData.action === 'Delay'" class="field-group">
+            <label class="field-label">{{ t('propertyPanel.duration') }}</label>
+            <input
+              type="text"
+              class="field-input"
+              placeholder="1s, 500ms"
+              :value="editData.duration"
+              @input="updateField('duration', ($event.target as HTMLInputElement).value)"
+            />
+          </div>
+
+          <div v-if="['GetText', 'GetAttribute', 'GetURL', 'ExtractTable'].includes(String(editData.action))" class="field-group">
+            <label class="field-label">{{ t('propertyPanel.saveAs') }}</label>
+            <input
+              type="text"
+              class="field-input"
+              placeholder="$_result"
+              :value="editData.into || '$_result'"
+              @input="updateField('into', ($event.target as HTMLInputElement).value)"
+            />
+          </div>
+
+          <div v-if="editData.action === 'GetAttribute'" class="field-group">
+            <label class="field-label">{{ t('propertyPanel.attrName') }}</label>
+            <input
+              type="text"
+              class="field-input"
+              placeholder="href, src, class..."
+              :value="editData.attrName"
+              @input="updateField('attrName', ($event.target as HTMLInputElement).value)"
+            />
+          </div>
+
+          <div v-if="editData.action === 'SetVariable'" class="field-group">
+            <label class="field-label">{{ t('propertyPanel.variableName') }}</label>
+            <input
+              type="text"
+              class="field-input"
+              placeholder="$myVar"
+              :value="editData.variable"
+              @input="updateField('variable', ($event.target as HTMLInputElement).value)"
+            />
+          </div>
+
+          <div v-if="editData.action === 'SetVariable'" class="field-group">
+            <label class="field-label">{{ t('propertyPanel.inputValue') }}</label>
+            <input
+              type="text"
+              class="field-input"
+              :value="editData.value"
+              @input="updateField('value', ($event.target as HTMLInputElement).value)"
+            />
+          </div>
+
+          <div v-if="editData.action === 'RunScript'" class="field-group">
+            <label class="field-label">{{ t('propertyPanel.script') }}</label>
+            <textarea
+              class="field-input resize-none"
+              rows="4"
+              placeholder="return document.title"
+              :value="editData.script as string"
+              @input="updateField('script', ($event.target as HTMLTextAreaElement).value)"
+            />
+          </div>
+
+          <div v-if="editData.action === 'RunScript'" class="field-group">
+            <label class="field-label">{{ t('propertyPanel.saveAs') }}</label>
+            <input
+              type="text"
+              class="field-input"
+              placeholder="$_result"
+              :value="editData.into"
+              @input="updateField('into', ($event.target as HTMLInputElement).value)"
+            />
+          </div>
+
+          <div v-if="editData.action === 'HttpRequest'" class="field-group">
+            <label class="field-label">URL</label>
+            <input
+              type="text"
+              class="field-input"
+              placeholder="https://api.example.com/data"
+              :value="editData.url"
+              @input="updateField('url', ($event.target as HTMLInputElement).value)"
+            />
+          </div>
+
+          <div v-if="editData.action === 'HttpRequest'" class="field-group">
+            <label class="field-label">{{ t('propertyPanel.method') }}</label>
+            <select
+              class="field-input"
+              :value="editData.method || 'GET'"
+              @change="updateField('method', ($event.target as HTMLSelectElement).value)"
+            >
+              <option value="GET">GET</option>
+              <option value="POST">POST</option>
+              <option value="PUT">PUT</option>
+              <option value="DELETE">DELETE</option>
+            </select>
+          </div>
+
+          <div v-if="editData.action === 'HttpRequest' && ['POST', 'PUT'].includes(String(editData.method))" class="field-group">
+            <label class="field-label">Body</label>
+            <textarea
+              class="field-input resize-none"
+              rows="3"
+              placeholder='{"key": "value"}'
+              :value="editData.body as string"
+              @input="updateField('body', ($event.target as HTMLTextAreaElement).value)"
+            />
+          </div>
+
+          <div v-if="editData.action === 'HttpRequest'" class="field-group">
+            <label class="field-label">{{ t('propertyPanel.saveAs') }}</label>
+            <input
+              type="text"
+              class="field-input"
+              placeholder="$_result"
+              :value="editData.into || '$_result'"
+              @input="updateField('into', ($event.target as HTMLInputElement).value)"
+            />
+          </div>
+
+          <div v-if="editData.action === 'HandleDialog'" class="field-group">
+            <label class="field-label">{{ t('propertyPanel.dialogAction') }}</label>
+            <select
+              class="field-input"
+              :value="editData.accept !== false ? 'accept' : 'dismiss'"
+              @change="updateField('accept', ($event.target as HTMLSelectElement).value === 'accept')"
+            >
+              <option value="accept">{{ t('propertyPanel.accept') }}</option>
+              <option value="dismiss">{{ t('propertyPanel.dismiss') }}</option>
+            </select>
+          </div>
+
+          <div v-if="editData.action === 'HandleDialog'" class="field-group">
+            <label class="field-label">{{ t('propertyPanel.promptText') }}</label>
+            <input
+              type="text"
+              class="field-input"
+              :placeholder="t('propertyPanel.promptTextPlaceholder')"
+              :value="editData.text"
+              @input="updateField('text', ($event.target as HTMLInputElement).value)"
+            />
+          </div>
+
+          <div v-if="editData.action === 'UploadFile'" class="field-group">
+            <label class="field-label">{{ t('propertyPanel.filePath') }}</label>
+            <input
+              type="text"
+              class="field-input"
+              placeholder="C:\files\data.csv"
+              :value="editData.filePath"
+              @input="updateField('filePath', ($event.target as HTMLInputElement).value)"
+            />
+          </div>
+
+          <div v-if="editData.action === 'Export'" class="field-group">
+            <label class="field-label">{{ t('propertyPanel.format') }}</label>
+            <select
+              class="field-input"
+              :value="editData.format || 'json'"
+              @change="updateField('format', ($event.target as HTMLSelectElement).value)"
+            >
+              <option value="json">JSON</option>
+              <option value="csv">CSV</option>
+            </select>
+          </div>
+
+          <div v-if="editData.action === 'Export'" class="field-group">
+            <label class="field-label">{{ t('propertyPanel.filePath') }}</label>
+            <input
+              type="text"
+              class="field-input"
+              placeholder="export.json"
+              :value="editData.path"
+              @input="updateField('path', ($event.target as HTMLInputElement).value)"
+            />
+          </div>
+
+          <div v-if="editData.action === 'Log'" class="field-group">
+            <label class="field-label">{{ t('propertyPanel.message') }}</label>
+            <input
+              type="text"
+              class="field-input"
+              placeholder="$var1 $var2"
+              :value="editData.parts ? (editData.parts as string[]).join(' ') : ''"
+              @input="updateField('parts', ($event.target as HTMLInputElement).value.split(' '))"
+            />
+          </div>
+
+          <div v-if="editData.action === 'Comment'" class="field-group">
+            <label class="field-label">{{ t('propertyPanel.comment') }}</label>
+            <textarea
+              class="field-input resize-none"
+              rows="2"
+              :value="editData.comment as string"
+              @input="updateField('comment', ($event.target as HTMLTextAreaElement).value)"
+            />
+          </div>
+
+          <div v-if="editData.action === 'Wait'" class="field-group">
+            <label class="field-label">{{ t('propertyPanel.waitType') }}</label>
+            <select
+              class="field-input"
+              :value="editData.selector ? 'selector' : editData.url_contains ? 'url' : 'time'"
+              @change="(e) => {
+                const v = (e.target as HTMLSelectElement).value
+                if (v === 'selector') { updateField('url_contains', undefined); updateField('time', undefined) }
+                else if (v === 'url') { updateField('selector', undefined); updateField('time', undefined); updateField('url_contains', editData.url_contains || '') }
+                else { updateField('selector', undefined); updateField('url_contains', undefined); updateField('time', editData.time || '1s') }
+              }"
+            >
+              <option value="selector">{{ t('propertyPanel.waitSelector') }}</option>
+              <option value="url">{{ t('propertyPanel.waitUrl') }}</option>
+              <option value="time">{{ t('propertyPanel.waitTime') }}</option>
+            </select>
+          </div>
+
+          <div v-if="editData.action === 'Wait' && editData.url_contains !== undefined" class="field-group">
+            <label class="field-label">{{ t('propertyPanel.urlContains') }}</label>
+            <input
+              type="text"
+              class="field-input"
+              placeholder="/dashboard"
+              :value="editData.url_contains"
+              @input="updateField('url_contains', ($event.target as HTMLInputElement).value)"
+            />
+          </div>
+
+          <div v-if="editData.action === 'Wait' && editData.time !== undefined" class="field-group">
+            <label class="field-label">{{ t('propertyPanel.waitDuration') }}</label>
+            <input
+              type="text"
+              class="field-input"
+              placeholder="2s, 500ms"
+              :value="editData.time"
+              @input="updateField('time', ($event.target as HTMLInputElement).value)"
+            />
+          </div>
+
           <div class="field-group">
             <label class="field-label">{{ t('propertyPanel.timeout') }}</label>
             <input

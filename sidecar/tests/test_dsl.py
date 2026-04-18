@@ -112,10 +112,10 @@ def test_compile_roundtrip():
     json_out = compile_to_json(wf)
     assert json_out["name"] == "Test"
     assert len(json_out["nodes"]) == 4
-    assert json_out["nodes"][0]["action"] == "open"
-    assert json_out["nodes"][1]["action"] == "click"
-    assert json_out["nodes"][2]["action"] == "type"
-    assert json_out["nodes"][3]["action"] == "wait"
+    assert json_out["nodes"][0]["action"] == "Navigate"
+    assert json_out["nodes"][1]["action"] == "Click"
+    assert json_out["nodes"][2]["action"] == "Type"
+    assert json_out["nodes"][3]["action"] == "Wait"
 
 
 def test_decompile():

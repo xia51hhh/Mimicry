@@ -35,6 +35,9 @@ KEYWORDS = {
     "WAIT", "EXTRACT", "SET",
     "IF", "ELSE", "LOOP",
     "SCREENSHOT", "LOG", "SLEEP", "FAIL",
+    "PRESS_KEY", "NEW_TAB", "SWITCH_TAB", "CLOSE_TAB",
+    "GET_URL", "EXPORT", "RUN_SCRIPT", "HTTP_REQUEST",
+    "COMMENT", "HANDLE_DIALOG", "UPLOAD_FILE",
 }
 
 _TOKEN_PATTERN = re.compile(r"""

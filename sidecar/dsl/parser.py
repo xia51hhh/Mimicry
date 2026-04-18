@@ -175,6 +175,51 @@ class Parser:
             case "FAIL":
                 msg = self._expect(TokenType.STRING).value
                 return ast.Fail(line=line, message=msg)
+            case "PRESS_KEY":
+                sel = self._parse_selector_with_chain()
+                key = self._expect(TokenType.STRING).value
+                return ast.PressKey(line=line, selector=sel, key=key)
+            case "NEW_TAB":
+                url = ""
+                if self._current.type == TokenType.STRING:
+                    url = self._advance().value
+                return ast.NewTab(line=line, url=url)
+            case "SWITCH_TAB":
+                idx_tok = self._current
+                if idx_tok.type == TokenType.NUMBER:
+                    return ast.SwitchTab(line=line, tab_index=int(self._advance().value))
+                raise ParseError("Expected tab index after SWITCH_TAB", line)
+            case "CLOSE_TAB":
+                idx = None
+                if self._current.type == TokenType.NUMBER:
+                    idx = int(self._advance().value)
+                return ast.CloseTab(line=line, tab_index=idx)
+            case "GET_URL":
+                args = self._parse_kv_args()
+                return ast.GetURL(line=line, into=args.get("into", "$url"))
+            case "EXPORT":
+                args = self._parse_kv_args()
+                return ast.Export(line=line, format=args.get("format", "json"), path=args.get("path", ""))
+            case "RUN_SCRIPT":
+                script = self._expect(TokenType.STRING).value
+                args = self._parse_kv_args()
+                return ast.RunScript(line=line, script=script, into=args.get("into"))
+            case "HTTP_REQUEST":
+                url = self._expect(TokenType.STRING).value
+                args = self._parse_kv_args()
+                return ast.HttpRequest(line=line, url=url, method=args.get("method", "GET"),
+                                       body=args.get("body"), into=args.get("into"))
+            case "COMMENT":
+                text = self._expect(TokenType.STRING).value
+                return ast.Comment(line=line, text=text)
+            case "HANDLE_DIALOG":
+                args = self._parse_kv_args()
+                return ast.HandleDialog(line=line, dialog_action=args.get("action", "accept"),
+                                        text=args.get("text"))
+            case "UPLOAD_FILE":
+                sel = self._parse_selector_with_chain()
+                path = self._expect(TokenType.STRING).value
+                return ast.UploadFile(line=line, selector=sel, file_path=path)
             case _:
                 raise ParseError(f"Unknown keyword {kw}", line)
 
@@ -202,7 +247,9 @@ class Parser:
                                attr_name=args.get("name"), into=args.get("into", ""))
         elif "count" in args:
             return ast.Extract(line=line, mode="count", selector=args["count"], into=args.get("into", ""))
-        raise ParseError("EXTRACT requires text=, attr=, or count=", line)
+        elif "table" in args:
+            return ast.Extract(line=line, mode="table", selector=args["table"], into=args.get("into", ""))
+        raise ParseError("EXTRACT requires text=, attr=, count=, or table=", line)
 
     def _parse_set(self, line: int) -> ast.SetVar:
         name_tok = self._expect(TokenType.VARIABLE)
