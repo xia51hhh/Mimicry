@@ -65,6 +65,7 @@ class WorkflowExecutor:
     def __init__(self, controller: BrowserController):
         self._controller = controller
         self._ctx = ExecutionContext()
+        self.progress_callback: callable | None = None
 
     @property
     def context(self) -> ExecutionContext:
@@ -121,6 +122,15 @@ class WorkflowExecutor:
         if settings.get("disabled", False):
             logger.debug(f"Skipping disabled node: {action}")
             return
+
+        if self.progress_callback:
+            self.progress_callback({
+                "step": self._ctx.step_index,
+                "total": self._ctx.total_steps,
+                "action": to_backend(action) if ntype == "action" else action,
+                "nodeId": node.get("id"),
+                "status": "running",
+            })
 
         last_error: Exception | None = None
         attempts = 1 + retry_count

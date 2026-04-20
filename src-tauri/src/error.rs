@@ -20,7 +20,18 @@ impl serde::Serialize for AppError {
     where
         S: serde::Serializer,
     {
-        serializer.serialize_str(&self.to_string())
+        use serde::ser::SerializeMap;
+        let mut map = serializer.serialize_map(Some(3))?;
+        let (kind, message) = match self {
+            AppError::Database(e) => ("database", e.to_string()),
+            AppError::Sidecar(s) => ("sidecar", s.clone()),
+            AppError::Json(e) => ("json", e.to_string()),
+            AppError::Io(e) => ("io", e.to_string()),
+        };
+        map.serialize_entry("kind", kind)?;
+        map.serialize_entry("message", &message)?;
+        map.serialize_entry("display", &self.to_string())?;
+        map.end()
     }
 }
 

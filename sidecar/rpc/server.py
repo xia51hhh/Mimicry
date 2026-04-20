@@ -35,7 +35,7 @@ class JsonRpcServer:
                     resp = json.dumps({"jsonrpc": "2.0", "id": req_id, "result": result})
                 except Exception as e:
                     logger.exception(f"Error in async method {method}")
-                    resp = json.dumps({"jsonrpc": "2.0", "id": req_id, "error": {"code": -32000, "message": str(e)}})
+                    resp = json.dumps({"jsonrpc": "2.0", "id": req_id, "error": {"code": -32000, "message": str(e), "data": {"error_type": type(e).__name__, "method": method}}})
                 self._write(resp)
 
             threading.Thread(target=_run, daemon=True).start()
@@ -47,7 +47,14 @@ class JsonRpcServer:
             return json.dumps({"jsonrpc": "2.0", "id": req_id, "result": result})
         except Exception as e:
             logger.exception(f"Error in method {method}")
-            return json.dumps({"jsonrpc": "2.0", "id": req_id, "error": {"code": -32000, "message": str(e)}})
+            return json.dumps({"jsonrpc": "2.0", "id": req_id, "error": {"code": -32000, "message": str(e), "data": {"error_type": type(e).__name__, "method": method}}})
+
+    def send_notification(self, method: str, params: dict | None = None):
+        """Send a JSON-RPC notification (no id, no response expected)."""
+        msg = {"jsonrpc": "2.0", "method": method}
+        if params is not None:
+            msg["params"] = params
+        self._write(json.dumps(msg))
 
     def _write(self, response: str):
         """Thread-safe stdout write."""

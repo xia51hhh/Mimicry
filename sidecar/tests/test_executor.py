@@ -426,3 +426,28 @@ class TestErrorHandling:
         result = executor.execute(wf)
         assert not result["success"]
         assert "scheme not allowed" in result["error"]
+
+
+class TestProgressCallback:
+    def test_executor_progress_callback(self, executor):
+        """Executor should call progress_callback on each step."""
+        progress_events = []
+
+        def on_progress(event):
+            progress_events.append(event)
+
+        executor.progress_callback = on_progress
+        workflow = {
+            "name": "test",
+            "nodes": [
+                {"action": "Navigate", "url": "https://example.com"},
+                {"action": "Screenshot", "filename": "test.png"},
+            ]
+        }
+        executor.execute(workflow)
+        assert len(progress_events) >= 2
+        assert progress_events[0]["step"] == 0
+        assert progress_events[0]["action"] == "open"
+        assert progress_events[0]["status"] == "running"
+        assert progress_events[1]["step"] == 1
+        assert progress_events[1]["action"] == "screenshot"

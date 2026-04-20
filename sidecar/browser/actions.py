@@ -10,6 +10,13 @@ _browser = BrowserController()
 _recorder = RecordingEngine(_browser)
 _executor = WorkflowExecutor(_browser)
 
+_server = None
+
+
+def set_server(server):
+    global _server
+    _server = server
+
 
 @rpc_method("browser.launch")
 def browser_launch(headless: bool = False, proxy: dict | None = None, profile: dict | None = None):
@@ -201,6 +208,12 @@ def recording_status():
 def workflow_execute(workflow: dict | None = None):
     if not workflow:
         return {"success": False, "error": "No workflow provided"}
+
+    def on_progress(event):
+        if _server:
+            _server.send_notification("workflow.progress", event)
+
+    _executor.progress_callback = on_progress
     return _executor.execute(workflow)
 
 
