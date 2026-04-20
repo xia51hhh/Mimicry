@@ -12,8 +12,8 @@ _executor = WorkflowExecutor(_browser)
 
 
 @rpc_method("browser.launch")
-def browser_launch(headless: bool = False, proxy: dict | None = None):
-    _browser.launch(headless=headless, proxy=proxy)
+def browser_launch(headless: bool = False, proxy: dict | None = None, profile: dict | None = None):
+    _browser.launch(headless=headless, proxy=proxy, profile=profile)
     return _browser.status()
 
 

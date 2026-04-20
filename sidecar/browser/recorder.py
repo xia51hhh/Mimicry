@@ -10,20 +10,30 @@ RECORDER_JS = """
   window.__mimicryRecorder = true;
 
   const events = [];
-  const getSelector = (el) => {
+
+  // Generate the best single-segment selector for an element within its root
+  const bestSegment = (el) => {
     if (el.id) return '#' + CSS.escape(el.id);
-    if (el.name) return el.tagName.toLowerCase() + '[name="' + el.name + '"]';
+    if (el.getAttribute && el.getAttribute('name')) {
+      return el.tagName.toLowerCase() + '[name="' + CSS.escape(el.getAttribute('name')) + '"]';
+    }
     if (el.className && typeof el.className === 'string') {
       const cls = el.className.trim().split(/\\s+/).filter(c => c.length > 0);
       if (cls.length > 0) {
         const sel = el.tagName.toLowerCase() + '.' + cls.map(c => CSS.escape(c)).join('.');
-        if (document.querySelectorAll(sel).length === 1) return sel;
+        const root = el.getRootNode();
+        const scope = root.querySelectorAll ? root : document;
+        if (scope.querySelectorAll(sel).length === 1) return sel;
       }
     }
-    // Fallback: nth-child path
+    return '';
+  };
+
+  // Build a path of tag:nth-of-type segments from el up to (but not including) stopAt
+  const buildPath = (el, stopAt) => {
     const path = [];
     let current = el;
-    while (current && current !== document.body && current !== document.documentElement) {
+    while (current && current !== stopAt && current !== document.documentElement) {
       let seg = current.tagName.toLowerCase();
       const parent = current.parentElement;
       if (parent) {
@@ -37,6 +47,35 @@ RECORDER_JS = """
       current = parent;
     }
     return path.join(' > ');
+  };
+
+  const getSelector = (el) => {
+    // Collect segments across shadow boundaries (deepest first)
+    const segments = [];
+    let current = el;
+
+    while (current) {
+      const root = current.getRootNode();
+      const isShadow = root instanceof ShadowRoot;
+
+      // Try short unique selector first, fallback to full path
+      const short = bestSegment(current);
+      if (short) {
+        segments.unshift(short);
+      } else {
+        const boundary = isShadow ? root.host : document.body;
+        segments.unshift(buildPath(current, boundary));
+      }
+
+      if (isShadow) {
+        // Continue from the shadow host in its parent DOM
+        current = root.host;
+      } else {
+        break;
+      }
+    }
+
+    return segments.join(' >> ');
   };
 
   const emit = (type, detail) => {
@@ -165,10 +204,9 @@ class RecordingEngine:
 
     def _inject_recorder(self) -> None:
         """Inject recording script into all pages and listen for new tabs."""
-        browser = self._controller._browser
-        if not browser or not browser.contexts:
+        ctx = self._controller._context
+        if not ctx:
             return
-        ctx = browser.contexts[0]
         # Inject into all existing pages
         for page in ctx.pages:
             try:
@@ -199,10 +237,9 @@ class RecordingEngine:
 
     def _poll_events(self) -> None:
         """Pull events from all browser pages."""
-        browser = self._controller._browser
-        if not browser or not browser.contexts:
+        ctx = self._controller._context
+        if not ctx:
             return
-        ctx = browser.contexts[0]
         all_events = []
         for page in ctx.pages:
             try:
@@ -212,7 +249,7 @@ class RecordingEngine:
             except Exception:
                 pass
         # Sort by timestamp and deduplicate
-        all_events.sort(key=lambda e: e.get("ts", 0))
+        all_events.sort(key=lambda e: e.get("timestamp", 0))
         if len(all_events) > len(self._events):
             self._events = all_events
 

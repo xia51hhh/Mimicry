@@ -1,10 +1,14 @@
 """Workflow execution engine: runs workflow JSON via Camoufox."""
 from __future__ import annotations
+import csv
+import io
 import json
+import os
 import re
 import time
 import urllib.request
 import urllib.error
+from typing import Any
 from loguru import logger
 from browser.controller import BrowserController
 from engine.action_map import to_backend
@@ -14,7 +18,7 @@ class ExecutionContext:
     """Holds variables and state during workflow execution."""
 
     def __init__(self):
-        self.variables: dict[str, any] = {}
+        self.variables: dict[str, Any] = {}
         self.step_index: int = 0
         self.total_steps: int = 0
         self.running: bool = False
@@ -45,9 +49,11 @@ class ExecutionContext:
         }
 
 
-def _parse_duration(s: str) -> float:
+def _parse_duration(s) -> float:
     """Parse duration string like '2s', '500ms', '1.5s' to seconds."""
-    s = s.strip().lower()
+    if isinstance(s, (int, float)):
+        return float(s) / 1000 if s > 100 else float(s)
+    s = str(s).strip().lower()
     if s.endswith("ms"):
         return float(s[:-2]) / 1000
     if s.endswith("s"):
@@ -106,13 +112,40 @@ class WorkflowExecutor:
         action = node.get("action", "")
         logger.debug(f"Step {self._ctx.step_index}: {ntype}/{action}")
 
-        match ntype:
-            case "action":
-                self._execute_action(node)
-            case "condition":
-                self._execute_condition(node)
-            case "loop":
-                self._execute_loop(node)
+        settings = node.get("settings", {})
+        on_error = settings.get("onError", "stop")
+        retry_on_fail = settings.get("retryOnFail", False)
+        retry_count = settings.get("retryCount", 1) if retry_on_fail else 0
+        retry_interval = settings.get("retryInterval", 1000) / 1000.0
+
+        if settings.get("disabled", False):
+            logger.debug(f"Skipping disabled node: {action}")
+            return
+
+        last_error: Exception | None = None
+        attempts = 1 + retry_count
+        for attempt in range(attempts):
+            try:
+                match ntype:
+                    case "action":
+                        self._execute_action(node)
+                    case "condition":
+                        self._execute_condition(node)
+                    case "loop":
+                        self._execute_loop(node)
+                return  # success
+            except Exception as e:
+                last_error = e
+                if attempt < attempts - 1:
+                    logger.warning(f"Retry {attempt+1}/{retry_count} for {action}: {e}")
+                    time.sleep(retry_interval)
+
+        # All retries exhausted
+        match on_error:
+            case "continue":
+                logger.warning(f"Node {action} failed, continuing: {last_error}")
+            case "stop" | _:
+                raise last_error
 
     def _execute_action(self, node: dict):
         action = to_backend(node.get("action", ""))
@@ -212,6 +245,8 @@ class WorkflowExecutor:
                     ctx.set_var(into, result)
             case "http_request":
                 url = ctx.resolve(node["url"])
+                if not url.startswith(("http://", "https://")):
+                    raise ValueError(f"HTTP request URL scheme not allowed: {url}")
                 method = node.get("method", "GET").upper()
                 headers = node.get("headers", {})
                 body = ctx.resolve(node["body"]) if node.get("body") else None
@@ -236,11 +271,10 @@ class WorkflowExecutor:
                     raise RuntimeError(f"HTTP request failed: {e}")
             case "export":
                 fmt = node.get("format", "json")
-                path = ctx.resolve(node.get("path", "export.json"))
+                raw_path = ctx.resolve(node.get("path", "export.json"))
+                path = os.path.abspath(raw_path)
                 data = ctx.variables
                 if fmt == "csv":
-                    import csv
-                    import io
                     buf = io.StringIO()
                     writer = csv.writer(buf)
                     for k, v in data.items():
@@ -257,6 +291,95 @@ class WorkflowExecutor:
                 logger.info(f"Exported to {path} ({fmt})")
             case "comment":
                 pass
+            case "switch_frame":
+                sel = ctx.resolve(node.get("selector"))
+                ctrl.switch_frame(sel)
+            case "wait_for_page":
+                state = node.get("state", "load")
+                timeout = int(node.get("timeout", 30000))
+                ctrl.wait_for_page(state, timeout=timeout)
+            case "cookie":
+                op = node.get("operation", "get")
+                if op == "get":
+                    name = ctx.resolve(node.get("name", "")) or None
+                    into = node.get("into", "$_result")
+                    ctx.set_var(into, ctrl.get_cookie(name))
+                elif op == "set":
+                    cookies = node.get("cookies", [])
+                    ctrl.set_cookie(cookies)
+                elif op == "delete":
+                    name = ctx.resolve(node.get("name", "")) or None
+                    ctrl.delete_cookie(name)
+            case "element_exists":
+                sel = ctx.resolve(node["selector"])
+                into = node.get("into", "$_result")
+                try:
+                    ctx.set_var(into, ctrl.get_element_count(sel) > 0)
+                except Exception:
+                    ctx.set_var(into, False)
+            case "handle_download":
+                save_path = ctx.resolve(node.get("savePath", "download"))
+                timeout = int(node.get("timeout", 30000))
+                result = ctrl.handle_download(save_path, timeout=timeout)
+                into = node.get("into", "$_result")
+                ctx.set_var(into, result)
+            case "transform":
+                source_var = node.get("source", "$_result")
+                into = node.get("into", "$_result")
+                op = node.get("operation", "identity")
+                data = ctx.get_var(source_var)
+                match op:
+                    case "map":
+                        expr = node.get("expression", "")
+                        if isinstance(data, list):
+                            data = [ctx.resolve(expr.replace("$item", str(item))) for item in data]
+                    case "filter":
+                        expr = node.get("expression", "")
+                        if isinstance(data, list):
+                            data = [item for item in data if item]
+                    case "sort":
+                        reverse = node.get("reverse", False)
+                        if isinstance(data, list):
+                            data = sorted(data, reverse=reverse)
+                    case "flatten":
+                        if isinstance(data, list):
+                            flat = []
+                            for item in data:
+                                if isinstance(item, list):
+                                    flat.extend(item)
+                                else:
+                                    flat.append(item)
+                            data = flat
+                    case "unique":
+                        if isinstance(data, list):
+                            seen = set()
+                            result_list = []
+                            for item in data:
+                                key = str(item)
+                                if key not in seen:
+                                    seen.add(key)
+                                    result_list.append(item)
+                            data = result_list
+                ctx.set_var(into, data)
+            case "execute_workflow":
+                # Sub-workflow execution - requires workflow JSON in node
+                sub_wf = node.get("workflow")
+                if sub_wf:
+                    sub_executor = WorkflowExecutor(ctrl)
+                    result = sub_executor.execute(sub_wf)
+                    into = node.get("into")
+                    if into:
+                        ctx.set_var(into, result)
+                else:
+                    logger.warning("ExecuteWorkflow: no workflow provided")
+            case "stop":
+                logger.info("Stop node reached, halting workflow")
+                ctx.running = False
+            case "loop_breakpoint":
+                raise _LoopBreak()
+            case "wait_connections":
+                # In sequential execution, this is a no-op sync point
+                logger.debug("WaitConnections: sync point (sequential mode)")
             case _:
                 logger.warning(f"Unknown action: {action}")
 
@@ -270,53 +393,8 @@ class WorkflowExecutor:
 
     def _evaluate_condition(self, condition: str) -> bool:
         """Evaluate a condition string against browser state."""
-        ctx = self._ctx
-        ctrl = self._controller
-
-        # exists("selector")
-        m = re.match(r'exists\s*\(\s*"(.+?)"\s*\)', condition)
-        if m:
-            try:
-                return ctrl.get_element_count(m.group(1)) > 0
-            except Exception:
-                return False
-
-        # visible("selector")
-        m = re.match(r'visible\s*\(\s*"(.+?)"\s*\)', condition)
-        if m:
-            try:
-                return ctrl.evaluate(f'document.querySelector("{m.group(1)}")?.offsetParent !== null')
-            except Exception:
-                return False
-
-        # url_contains("path")
-        m = re.match(r'url_contains\s*\(\s*"(.+?)"\s*\)', condition)
-        if m:
-            return m.group(1) in ctrl.get_url()
-
-        # text("selector") == "value"
-        m = re.match(r'text\s*\(\s*"(.+?)"\s*\)\s*==\s*"(.+?)"', condition)
-        if m:
-            try:
-                actual = ctrl.get_element_text(m.group(1))
-                return actual == m.group(2)
-            except Exception:
-                return False
-
-        # $var == "value" or $var == number
-        m = re.match(r'(\$\w+)\s*==\s*"(.+?)"', condition)
-        if m:
-            return str(ctx.get_var(m.group(1), "")) == m.group(2)
-        m = re.match(r'(\$\w+)\s*==\s*(\d+)', condition)
-        if m:
-            return ctx.get_var(m.group(1)) == int(m.group(2))
-
-        # not condition
-        if condition.startswith("not "):
-            return not self._evaluate_condition(condition[4:].strip())
-
-        logger.warning(f"Unknown condition: {condition}")
-        return False
+        from engine.condition_parser import evaluate_condition
+        return evaluate_condition(condition, self._controller, self._ctx)
 
     def _execute_loop(self, node: dict):
         lt = node.get("loopType", "items")
@@ -330,7 +408,10 @@ class WorkflowExecutor:
                     return
                 if var:
                     ctx.set_var(var, i)
-                self._execute_nodes(node.get("children", []))
+                try:
+                    self._execute_nodes(node.get("children", []))
+                except _LoopBreak:
+                    break
 
         elif lt == "items":
             selector = ctx.resolve(node.get("selector", ""))
@@ -342,8 +423,11 @@ class WorkflowExecutor:
                 if not ctx.running:
                     return
                 if var:
-                    ctx.set_var(var, f"{selector} >> :nth-match({selector}, {i+1})")
-                self._execute_nodes(node.get("children", []))
+                    ctx.set_var(var, f":nth-match({selector}, {i+1})")
+                try:
+                    self._execute_nodes(node.get("children", []))
+                except _LoopBreak:
+                    break
 
         elif lt == "while":
             cond = node.get("whileCondition", "")
@@ -352,5 +436,29 @@ class WorkflowExecutor:
             while ctx.running and iteration < max_iter:
                 if not self._evaluate_condition(cond):
                     break
-                self._execute_nodes(node.get("children", []))
+                try:
+                    self._execute_nodes(node.get("children", []))
+                except _LoopBreak:
+                    break
                 iteration += 1
+
+        elif lt == "elements":
+            selector = ctx.resolve(node.get("selector", ""))
+            var = node.get("variable")
+            max_iter = node.get("max", 100)
+            elements_count = self._controller.get_element_count(selector)
+            count = min(elements_count, max_iter)
+            for i in range(count):
+                if not ctx.running:
+                    return
+                if var:
+                    ctx.set_var(var, f":nth-match({selector}, {i+1})")
+                try:
+                    self._execute_nodes(node.get("children", []))
+                except _LoopBreak:
+                    break
+
+
+class _LoopBreak(Exception):
+    """Internal signal for loop breakpoint."""
+    pass

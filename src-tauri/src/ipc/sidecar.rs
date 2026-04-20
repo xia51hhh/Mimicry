@@ -94,6 +94,20 @@ impl Sidecar {
         )))
     }
 
+    fn timeout_for_method(method: &str) -> std::time::Duration {
+        match method {
+            "ping" | "browser.status" | "recording.poll" | "workflow.execution_status"
+                => std::time::Duration::from_secs(5),
+            "browser.close" | "browser.navigate" | "recording.start" | "recording.stop"
+            | "workflow.stop"
+                => std::time::Duration::from_secs(30),
+            "browser.launch" | "camoufox.check"
+                => std::time::Duration::from_secs(60),
+            // workflow.execute, camoufox.install, and anything else
+            _ => std::time::Duration::from_secs(600),
+        }
+    }
+
     pub async fn call(&mut self, method: &str, params: Option<serde_json::Value>) -> Result<serde_json::Value, AppError> {
         let stdin = self.stdin.as_mut().ok_or_else(|| AppError::Sidecar("Sidecar not running".into()))?;
         let reader = self.reader.as_ref().ok_or_else(|| AppError::Sidecar("Sidecar not running".into()))?;
@@ -105,7 +119,7 @@ impl Sidecar {
         stdin.flush().await.map_err(|e| AppError::Sidecar(format!("Flush failed: {}", e)))?;
 
         let mut reader = reader.lock().await;
-        let timeout_dur = std::time::Duration::from_secs(600);
+        let timeout_dur = Self::timeout_for_method(method);
         loop {
             let mut response_line = String::new();
             let bytes = tokio::time::timeout(timeout_dur, reader.read_line(&mut response_line))

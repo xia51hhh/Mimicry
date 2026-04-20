@@ -23,6 +23,7 @@ class BrowserController:
         self._camoufox = None
         self._browser = None
         self._page = None
+        self._persistent = False  # True when using persistent_context
 
     @staticmethod
     def _get_screen_size() -> tuple[int, int]:
@@ -56,7 +57,16 @@ class BrowserController:
     def connected(self) -> bool:
         return self._browser is not None
 
-    def launch(self, headless: bool = False, proxy: dict | None = None):
+    @property
+    def _context(self):
+        """Get the active BrowserContext regardless of launch mode."""
+        if not self._browser:
+            return None
+        if self._persistent:
+            return self._browser  # _browser IS the context
+        return self._browser.contexts[0] if self._browser.contexts else None
+
+    def launch(self, headless: bool = False, proxy: dict | None = None, profile: dict | None = None):
         if self._browser:
             logger.warning("Browser already running")
             return
@@ -66,9 +76,30 @@ class BrowserController:
         except ImportError:
             raise RuntimeError("Camoufox is not installed. Run camoufox.install first.")
 
-        kwargs = {"headless": headless, "geoip": True, "block_webrtc": True}
+        kwargs = {
+            "headless": headless,
+            "humanize": True,
+            "os": "windows",
+            "geoip": True,
+            "block_webrtc": True,
+            "enable_cache": True,
+            "disable_coop": True,
+            "i_know_what_im_doing": True,
+        }
         if proxy:
             kwargs["proxy"] = proxy
+
+        # Apply profile overrides
+        if profile:
+            if profile.get("user_data_dir"):
+                kwargs["persistent_context"] = True
+                kwargs["user_data_dir"] = profile["user_data_dir"]
+            if profile.get("fingerprint"):
+                kwargs["config"] = profile["fingerprint"]
+            if profile.get("proxy"):
+                kwargs["proxy"] = profile["proxy"]
+            if profile.get("os_target"):
+                kwargs["os"] = profile["os_target"]
 
         # Fit browser window to screen (cross-platform, DPI-aware)
         try:
@@ -77,10 +108,19 @@ class BrowserController:
         except Exception:
             pass
 
-        logger.info(f"Launching Camoufox (headless={headless})")
+        self._persistent = kwargs.get("persistent_context", False)
+        logger.info(f"Launching Camoufox (headless={headless}, persistent={self._persistent})")
         self._camoufox = Camoufox(**kwargs)
-        self._browser = self._camoufox.__enter__()
-        self._page = self._browser.new_page()
+        ctx_or_browser = self._camoufox.__enter__()
+
+        if self._persistent:
+            # persistent_context returns a BrowserContext directly
+            self._browser = ctx_or_browser
+            self._page = self._browser.pages[0] if self._browser.pages else self._browser.new_page()
+        else:
+            self._browser = ctx_or_browser
+            self._page = self._browser.new_page()
+
         logger.info("Browser launched")
 
     def close(self):
@@ -89,6 +129,7 @@ class BrowserController:
             self._camoufox = None
             self._browser = None
             self._page = None
+            self._persistent = False
             logger.info("Browser closed")
 
     def navigate(self, url: str):
@@ -113,10 +154,11 @@ class BrowserController:
         return self._page.url if self._page else ""
 
     def status(self) -> dict:
+        ctx = self._context
         return {
             "connected": self.connected,
             "url": self.get_url() if self.connected else None,
-            "pages": len(self._browser.contexts[0].pages) if self._browser and self._browser.contexts else 0,
+            "pages": len(ctx.pages) if ctx else 0,
         }
 
     def dblclick(self, selector: str):
@@ -154,7 +196,7 @@ class BrowserController:
         if selector == "window":
             self._page.evaluate(f"window.scrollBy(0, {dy})")
         else:
-            self._page.locator(selector).scroll_into_view_if_needed()
+            self._page.locator(selector).evaluate(f"el => el.scrollBy(0, {dy})")
 
     def evaluate(self, expression: str):
         return self._page.evaluate(expression)
@@ -168,21 +210,27 @@ class BrowserController:
     def get_element_count(self, selector: str) -> int:
         return self._page.locator(selector).count()
 
+    def is_visible(self, selector: str) -> bool:
+        """Check if an element matching the selector is visible."""
+        return self._page.locator(selector).is_visible()
+
     def upload_file(self, selector: str, file_path: str):
         self._page.locator(selector).set_input_files(file_path)
 
     def new_tab(self, url: str = "") -> None:
-        if not self._browser or not self._browser.contexts:
+        ctx = self._context
+        if not ctx:
             raise RuntimeError("No browser context")
-        page = self._browser.contexts[0].new_page()
+        page = ctx.new_page()
         if url:
             page.goto(url)
         self._page = page
 
     def switch_tab(self, index: int) -> None:
-        if not self._browser or not self._browser.contexts:
+        ctx = self._context
+        if not ctx:
             raise RuntimeError("No browser context")
-        pages = self._browser.contexts[0].pages
+        pages = ctx.pages
         if 0 <= index < len(pages):
             self._page = pages[index]
             self._page.bring_to_front()
@@ -190,9 +238,10 @@ class BrowserController:
             raise ValueError(f"Tab index {index} out of range (0-{len(pages)-1})")
 
     def close_tab(self, index: int | None = None) -> None:
-        if not self._browser or not self._browser.contexts:
+        ctx = self._context
+        if not ctx:
             raise RuntimeError("No browser context")
-        pages = self._browser.contexts[0].pages
+        pages = ctx.pages
         if index is not None:
             if 0 <= index < len(pages):
                 pages[index].close()
@@ -200,7 +249,7 @@ class BrowserController:
                 raise ValueError(f"Tab index {index} out of range")
         else:
             self._page.close()
-        remaining = self._browser.contexts[0].pages
+        remaining = ctx.pages
         self._page = remaining[-1] if remaining else None
 
     def extract_table(self, selector: str) -> list[list[str]]:
@@ -220,3 +269,66 @@ class BrowserController:
             else:
                 dialog.dismiss()
         self._page.once("dialog", handler)
+
+    def switch_frame(self, selector: str | None = None) -> None:
+        """Switch to an iframe by selector, or back to main frame if None."""
+        if selector is None:
+            self._page = self._page.main_frame.page
+        else:
+            frame = self._page.frame_locator(selector)
+            # Store frame locator for subsequent operations
+            self._frame_locator = frame
+
+    def wait_for_page(self, state: str = "load", timeout: int = 30000) -> None:
+        """Wait for page to reach a load state: 'load', 'domcontentloaded', 'networkidle'."""
+        self._page.wait_for_load_state(state, timeout=timeout)
+
+    def get_cookie(self, name: str | None = None) -> list[dict] | dict | None:
+        """Get cookies. If name is provided, return that cookie; otherwise all."""
+        ctx = self._context
+        if not ctx:
+            return []
+        cookies = ctx.cookies()
+        if name:
+            for c in cookies:
+                if c["name"] == name:
+                    return c
+            return None
+        return cookies
+
+    def set_cookie(self, cookies: list[dict]) -> None:
+        """Add cookies to the browser context."""
+        ctx = self._context
+        if not ctx:
+            raise RuntimeError("No browser context")
+        ctx.add_cookies(cookies)
+
+    def delete_cookie(self, name: str | None = None) -> None:
+        """Clear cookies. If name given, clear only matching; otherwise all."""
+        ctx = self._context
+        if not ctx:
+            return
+        if name:
+            ctx.clear_cookies(name=name)
+        else:
+            ctx.clear_cookies()
+
+    def handle_download(self, save_path: str, timeout: int = 30000) -> str:
+        """Wait for a download event and save the file."""
+        import threading
+        download_holder = [None]
+        event = threading.Event()
+
+        def on_download(download):
+            download_holder[0] = download
+            event.set()
+
+        self._page.on("download", on_download)
+        try:
+            if not event.wait(timeout=timeout / 1000):
+                raise TimeoutError(f"No download started within {timeout}ms")
+            download = download_holder[0]
+            download.save_as(save_path)
+            return save_path
+        finally:
+            self._page.remove_listener("download", on_download)

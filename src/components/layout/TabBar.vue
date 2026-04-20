@@ -5,6 +5,7 @@ import { useI18n } from 'vue-i18n'
 import { useWorkspaceStore } from '../../stores/workspace'
 import { useWorkflowStore } from '../../stores/workflow'
 import { usePanelLayout } from '../../composables/usePanel'
+import { useFileOps } from '../../composables/useFileOps'
 import { Plus, X, PanelLeft, PanelBottom, PanelRight, Minus, Square, Maximize2, Undo2, Redo2, Save } from 'lucide-vue-next'
 import MimicryLogo from '../../assets/mimicry-logo.svg'
 
@@ -13,8 +14,10 @@ const router = useRouter()
 const workspace = useWorkspaceStore()
 const workflow = useWorkflowStore()
 const { sidebarCollapsed, bottomCollapsed, rightPanelCollapsed, toggleSidebar, toggleBottom, toggleRightPanel } = usePanelLayout()
+const fileOps = useFileOps()
 
 const menuOpen = ref(false)
+const recentSubmenuOpen = ref(false)
 const isMaximized = ref(false)
 
 // Window control functions (Tauri API)
@@ -28,13 +31,14 @@ onMounted(async () => {
     const { getCurrentWindow } = await import('@tauri-apps/api/window')
     appWindow = getCurrentWindow()
     isMaximized.value = await appWindow.isMaximized()
-    // Listen for resize to track maximize state
     unlistenResize = await appWindow.onResized(async () => {
       isMaximized.value = await appWindow!.isMaximized()
     })
   } catch {
     // Not in Tauri environment (web dev)
   }
+  // Load recent files
+  try { await fileOps.loadRecentFiles() } catch { /* ignore */ }
 })
 
 onUnmounted(() => {
@@ -94,20 +98,30 @@ function onCloseTab(e: MouseEvent, tabId: string) {
 
 function toggleMenu() {
   menuOpen.value = !menuOpen.value
+  recentSubmenuOpen.value = false
 }
 
 function closeMenu() {
   menuOpen.value = false
+  recentSubmenuOpen.value = false
 }
 
 interface MenuItem {
   label: string
   action?: () => void
   separator?: boolean
+  shortcut?: string
+  submenu?: boolean
 }
 
 const menuItems: MenuItem[] = [
   { label: t('app.title'), separator: true },
+  { label: t('fileMenu.open'), shortcut: 'Ctrl+O', action: () => fileOps.openFile() },
+  { label: t('fileMenu.save'), shortcut: 'Ctrl+S', action: () => fileOps.saveFile() },
+  { label: t('fileMenu.saveAs'), shortcut: 'Ctrl+Shift+S', action: () => fileOps.saveFileAs() },
+  { label: '', separator: true },
+  { label: t('fileMenu.recentFiles'), submenu: true },
+  { label: '', separator: true },
   { label: t('sidebar.blocks'), action: () => router.push('/') },
   { label: t('settings.title'), action: () => router.push('/settings') },
 ]
@@ -126,13 +140,44 @@ const menuItems: MenuItem[] = [
       <Transition name="slide">
         <div v-if="menuOpen" class="menu-dropdown">
           <template v-for="(item, idx) in menuItems" :key="idx">
-            <div v-if="item.separator" class="menu-separator" />
+            <div v-if="item.separator && item.label" class="menu-separator-label">{{ item.label }}</div>
+            <div v-else-if="item.separator" class="menu-separator" />
+            <div
+              v-else-if="item.submenu"
+              class="menu-item submenu-trigger"
+              @mouseenter="recentSubmenuOpen = true"
+              @mouseleave="recentSubmenuOpen = false"
+            >
+              <span>{{ item.label }}</span>
+              <span class="submenu-arrow">▶</span>
+              <Transition name="fade">
+                <div v-if="recentSubmenuOpen" class="submenu-dropdown">
+                  <template v-if="fileOps.recentFiles.value.length">
+                    <button
+                      v-for="rf in fileOps.recentFiles.value"
+                      :key="rf.path"
+                      class="menu-item"
+                      :title="rf.path"
+                      @click="() => { fileOps.openRecentFile(rf.path); closeMenu() }"
+                    >
+                      {{ rf.name }}
+                    </button>
+                    <div class="menu-separator" />
+                    <button class="menu-item" @click="() => { fileOps.clearRecent(); closeMenu() }">
+                      {{ t('fileMenu.clearRecent') }}
+                    </button>
+                  </template>
+                  <div v-else class="menu-item disabled">{{ t('fileMenu.noRecent') }}</div>
+                </div>
+              </Transition>
+            </div>
             <button
               v-else
               class="menu-item"
               @click="() => { item.action?.(); closeMenu() }"
             >
-              {{ item.label }}
+              <span>{{ item.label }}</span>
+              <span v-if="item.shortcut" class="menu-shortcut">{{ item.shortcut }}</span>
             </button>
           </template>
         </div>
@@ -186,6 +231,7 @@ const menuItems: MenuItem[] = [
       <button
         class="panel-toggle"
         :title="t('tabBar.save')"
+        @click="fileOps.saveFile()"
       >
         <Save :size="14" :stroke-width="1.5" />
       </button>
@@ -300,8 +346,31 @@ const menuItems: MenuItem[] = [
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
 }
 
+.menu-item:hover:not(.disabled) {
+  background: var(--color-surface-hover);
+}
+
+.menu-separator {
+  height: 1px;
+  margin: 4px 8px;
+  background: var(--color-separator);
+}
+
+.menu-separator-label {
+  padding: 4px 16px 2px;
+  font-size: 11px;
+  color: var(--color-text-muted);
+  font-weight: 600;
+}
+
+.menu-shortcut {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--color-text-muted);
+}
+
 .menu-item {
-  display: block;
+  display: flex;
   width: 100%;
   padding: 6px 16px;
   background: none;
@@ -311,16 +380,43 @@ const menuItems: MenuItem[] = [
   text-align: left;
   cursor: pointer;
   transition: background 0.1s;
+  gap: 8px;
+  align-items: center;
 }
 
-.menu-item:hover {
-  background: var(--color-surface-hover);
+.menu-item.disabled {
+  color: var(--color-text-muted);
+  cursor: default;
 }
 
-.menu-separator {
-  height: 1px;
-  margin: 4px 8px;
-  background: var(--color-separator);
+.submenu-trigger {
+  position: relative;
+}
+
+.submenu-arrow {
+  margin-left: auto;
+  font-size: 9px;
+  color: var(--color-text-muted);
+}
+
+.submenu-dropdown {
+  position: absolute;
+  left: 100%;
+  top: 0;
+  min-width: 220px;
+  max-width: 400px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  padding: 4px 0;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+  z-index: 101;
+}
+
+.submenu-dropdown .menu-item {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .tabs-scroll {

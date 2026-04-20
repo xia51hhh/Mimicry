@@ -35,6 +35,17 @@ export const FRONTEND_TO_BACKEND: Record<string, string> = {
   Comment: "comment",
   HandleDialog: "handle_dialog",
   UploadFile: "upload_file",
+  SwitchFrame: "switch_frame",
+  WaitForPage: "wait_for_page",
+  Cookie: "cookie",
+  ElementExists: "element_exists",
+  LoopElements: "loop_elements",
+  LoopBreakpoint: "loop_breakpoint",
+  WaitConnections: "wait_connections",
+  ExecuteWorkflow: "execute_workflow",
+  HandleDownload: "handle_download",
+  Transform: "transform",
+  Stop: "stop",
 };
 
 export const BACKEND_TO_FRONTEND: Record<string, string> = Object.fromEntries(

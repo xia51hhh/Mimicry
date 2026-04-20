@@ -19,6 +19,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_dialog::init())
         .manage(Mutex::new(conn))
         .manage(Mutex::new(Sidecar::new()))
         .setup(|app| {
@@ -49,6 +50,13 @@ pub fn run() {
             commands::workflow::workflow_delete,
             commands::workflow::workflow_export,
             commands::workflow::workflow_import,
+            commands::file_ops::file_read,
+            commands::file_ops::file_write,
+            commands::file_ops::recent_files_add,
+            commands::file_ops::recent_files_list,
+            commands::file_ops::recent_files_remove,
+            commands::file_ops::recent_files_clear,
+            commands::file_ops::file_write_text,
             commands::system::system_info,
         ])
         .run(tauri::generate_context!())

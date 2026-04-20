@@ -3,12 +3,14 @@ import { useI18n } from 'vue-i18n'
 import { useWorkflowStore } from '../stores/workflow'
 import { usePanelLayout } from './usePanel'
 import { useShortcutToast } from './useShortcutToast'
+import { useFileOps } from './useFileOps'
 
 export function useKeyboardShortcuts() {
   const { t } = useI18n()
   const workflow = useWorkflowStore()
   const { toggleSidebar, toggleBottom, toggleRightPanel } = usePanelLayout()
   const { showToast } = useShortcutToast()
+  const fileOps = useFileOps()
 
   function onKeyDown(e: KeyboardEvent) {
     const ctrl = e.ctrlKey || e.metaKey
@@ -38,11 +40,27 @@ export function useKeyboardShortcuts() {
       return
     }
 
-    // Ctrl+S — Save (prevent default browser save)
-    if (ctrl && key === 's') {
+    // Ctrl+S — Save
+    if (ctrl && !e.shiftKey && key === 's') {
       e.preventDefault()
+      fileOps.saveFile()
       showToast(t('shortcut.save'), 'Ctrl+S')
-      // TODO: implement save to DB
+      return
+    }
+
+    // Ctrl+Shift+S — Save As
+    if (ctrl && e.shiftKey && key === 's') {
+      e.preventDefault()
+      fileOps.saveFileAs()
+      showToast(t('fileMenu.saveAs'), 'Ctrl+Shift+S')
+      return
+    }
+
+    // Ctrl+O — Open File
+    if (ctrl && key === 'o') {
+      e.preventDefault()
+      fileOps.openFile()
+      showToast(t('fileMenu.open'), 'Ctrl+O')
       return
     }
 

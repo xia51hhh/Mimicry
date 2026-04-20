@@ -14,6 +14,12 @@ pub fn init(conn: &Connection) -> rusqlite::Result<()> {
         CREATE TABLE IF NOT EXISTS settings (
             key TEXT PRIMARY KEY,
             value TEXT NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS recent_files (
+            path TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            opened_at TEXT NOT NULL
         );"
     )?;
     Ok(())

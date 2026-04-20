@@ -3,11 +3,17 @@ import { ref, nextTick, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import JsonEditor from './JsonEditor.vue'
 import { useExecutionStore } from '../../stores/execution'
+import { useWorkflowStore } from '../../stores/workflow'
 import { usePanel, usePanelLayout } from '../../composables/usePanel'
+import { useFileOps } from '../../composables/useFileOps'
+import { save } from '@tauri-apps/plugin-dialog'
+import { invoke } from '@tauri-apps/api/core'
 
 const { t } = useI18n()
 
 const execution = useExecutionStore()
+const workflow = useWorkflowStore()
+const fileOps = useFileOps()
 const activeTab = ref<'json' | 'logs' | 'variables'>('json')
 const logContainer = ref<HTMLElement>()
 
@@ -53,6 +59,26 @@ const levelColors: Record<string, string> = {
   error: 'text-red-400',
   debug: 'text-gray-400',
 }
+
+/** Import workflow JSON from clipboard or file */
+async function importJson() {
+  await fileOps.openFile()
+}
+
+/** Export execution logs as text file */
+async function exportLogs() {
+  if (execution.logs.length === 0) return
+  try {
+    const text = execution.logs
+      .map((e) => `[${e.time}] ${e.level.toUpperCase()} ${e.nodeId ? `(${e.nodeId}) ` : ''}${e.message}`)
+      .join('\n')
+    const path = await save({ filters: [{ name: 'Log File', extensions: ['log', 'txt'] }], defaultPath: 'mimicry-execution.log' })
+    if (!path) return
+    await invoke('file_write_text', { path, content: text })
+  } catch (e) {
+    console.error('[DevTools] Export logs failed:', e)
+  }
+}
 </script>
 
 <template>
@@ -81,9 +107,27 @@ const levelColors: Record<string, string> = {
           {{ t('bottomPanel.variables') }}
         </button>
       </div>
-      <button class="collapse-btn" @click="toggleCollapse">
-        {{ collapsed ? '▲' : '▼' }}
-      </button>
+      <div class="flex items-center gap-1">
+        <button class="collapse-btn" @click="toggleCollapse">
+          {{ collapsed ? '▲' : '▼' }}
+        </button>
+        <button
+          v-if="activeTab === 'json'"
+          class="action-btn"
+          :title="t('devTools.importJson')"
+          @click="importJson"
+        >
+          ↓ {{ t('devTools.import') }}
+        </button>
+        <button
+          v-if="activeTab === 'logs' && execution.logs.length > 0"
+          class="action-btn"
+          :title="t('devTools.exportLogs')"
+          @click="exportLogs"
+        >
+          ↑ {{ t('devTools.export') }}
+        </button>
+      </div>
     </div>
 
     <!-- Panel content -->
@@ -200,6 +244,22 @@ const levelColors: Record<string, string> = {
 
 .collapse-btn:hover {
   color: var(--color-text);
+}
+
+.action-btn {
+  padding: 2px 8px;
+  font-size: 10px;
+  color: var(--color-text-muted);
+  background: none;
+  border: 1px solid var(--color-border);
+  border-radius: 3px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.action-btn:hover {
+  color: var(--color-text);
+  background: var(--color-surface-hover);
 }
 
 .panel-content {

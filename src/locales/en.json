@@ -52,7 +52,17 @@
     "HttpRequest": "HTTP Request",
     "Log": "Log",
     "Delay": "Delay",
-    "Comment": "Comment"
+    "Comment": "Comment",
+    "SwitchFrame": "Switch Frame",
+    "WaitForPage": "Wait for Page",
+    "Cookie": "Cookie",
+    "ElementExists": "Element Exists",
+    "HandleDownload": "Handle Download",
+    "Transform": "Transform",
+    "ExecuteWorkflow": "Execute Workflow",
+    "Stop": "Stop",
+    "LoopBreakpoint": "Loop Break",
+    "WaitConnections": "Wait Connections"
   },
   "nodeTypes": {
     "action": "Action",
@@ -125,7 +135,8 @@
   "loopTypes": {
     "count": "Fixed Count",
     "items": "Iterate Elements",
-    "while": "While Condition"
+    "while": "While Condition",
+    "elements": "Loop Elements"
   },
   "errorOptions": {
     "stop": "Stop Execution",
@@ -230,6 +241,20 @@
     "maximize": "Maximize",
     "restore": "Restore",
     "close": "Close"
+  },
+  "fileMenu": {
+    "open": "Open File",
+    "save": "Save",
+    "saveAs": "Save As...",
+    "recentFiles": "Recent Files",
+    "clearRecent": "Clear Recent",
+    "noRecent": "No recent files"
+  },
+  "devTools": {
+    "import": "Import",
+    "export": "Export",
+    "importJson": "Import workflow from JSON file",
+    "exportLogs": "Export execution logs"
   },
   "group": {
     "defaultLabel": "Group",

@@ -52,7 +52,17 @@
     "HttpRequest": "HTTP请求",
     "Log": "日志",
     "Delay": "延迟",
-    "Comment": "注释"
+    "Comment": "注释",
+    "SwitchFrame": "切换框架",
+    "WaitForPage": "等待页面加载",
+    "Cookie": "Cookie操作",
+    "ElementExists": "元素存在检测",
+    "HandleDownload": "处理下载",
+    "Transform": "数据转换",
+    "ExecuteWorkflow": "执行子工作流",
+    "Stop": "停止",
+    "LoopBreakpoint": "循环中断",
+    "WaitConnections": "等待汇合"
   },
   "nodeTypes": {
     "action": "动作",
@@ -125,7 +135,8 @@
   "loopTypes": {
     "count": "固定次数",
     "items": "遍历元素",
-    "while": "条件循环"
+    "while": "条件循环",
+    "elements": "遍历DOM元素"
   },
   "errorOptions": {
     "stop": "停止执行",
@@ -230,6 +241,20 @@
     "maximize": "最大化",
     "restore": "还原",
     "close": "关闭"
+  },
+  "fileMenu": {
+    "open": "打开文件",
+    "save": "保存",
+    "saveAs": "另存为...",
+    "recentFiles": "最近文件",
+    "clearRecent": "清除最近记录",
+    "noRecent": "暂无最近文件"
+  },
+  "devTools": {
+    "import": "导入",
+    "export": "导出",
+    "importJson": "从JSON文件导入工作流",
+    "exportLogs": "导出运行日志"
   },
   "group": {
     "defaultLabel": "分组",

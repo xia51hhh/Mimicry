@@ -20,7 +20,7 @@ export interface ConditionData {
 }
 
 export interface LoopData {
-  loopType: "items" | "count" | "while";
+  loopType: "items" | "count" | "while" | "elements";
   selector?: string;
   count?: number;
   condition?: string;

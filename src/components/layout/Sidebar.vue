@@ -8,6 +8,7 @@ import {
   MousePointerClick, Keyboard, Move, ScrollText, ListChecks, Command,
   FileText, Tag, Camera, Table, Pin, Upload,
   Wrench, Globe, Timer, ClipboardList, MessageSquare,
+  Frame, Loader, Cookie, Search, Download, Shuffle, StopCircle, Play, Waypoints, CornerDownRight,
 } from 'lucide-vue-next'
 import { usePanel } from '../../composables/usePanel'
 
@@ -55,6 +56,11 @@ const blockCategories: { key: string; items: BlockItem[] }[] = [
       { type: 'action', action: 'GoBack', icon: markRaw(ArrowLeft) },
       { type: 'action', action: 'GoForward', icon: markRaw(ArrowRight) },
       { type: 'action', action: 'Reload', icon: markRaw(RotateCw) },
+      { type: 'action', action: 'SwitchFrame', icon: markRaw(Frame) },
+      { type: 'action', action: 'WaitForPage', icon: markRaw(Loader) },
+      { type: 'action', action: 'HandleDialog', icon: markRaw(MessageSquare) },
+      { type: 'action', action: 'HandleDownload', icon: markRaw(Download) },
+      { type: 'action', action: 'Cookie', icon: markRaw(Cookie) },
     ],
   },
   {
@@ -77,6 +83,8 @@ const blockCategories: { key: string; items: BlockItem[] }[] = [
       { type: 'action', action: 'ExtractTable', icon: markRaw(Table) },
       { type: 'action', action: 'SetVariable', icon: markRaw(Pin) },
       { type: 'action', action: 'Export', icon: markRaw(Upload) },
+      { type: 'action', action: 'ElementExists', icon: markRaw(Search) },
+      { type: 'action', action: 'Transform', icon: markRaw(Shuffle) },
     ],
   },
   {
@@ -87,6 +95,10 @@ const blockCategories: { key: string; items: BlockItem[] }[] = [
       { type: 'action', action: 'Delay', icon: markRaw(Timer) },
       { type: 'action', action: 'Log', icon: markRaw(ClipboardList) },
       { type: 'action', action: 'Comment', icon: markRaw(MessageSquare) },
+      { type: 'action', action: 'ExecuteWorkflow', icon: markRaw(Play) },
+      { type: 'action', action: 'Stop', icon: markRaw(StopCircle) },
+      { type: 'action', action: 'LoopBreakpoint', icon: markRaw(CornerDownRight) },
+      { type: 'action', action: 'WaitConnections', icon: markRaw(Waypoints) },
     ],
   },
 ]
