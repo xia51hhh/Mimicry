@@ -1,4 +1,5 @@
 """Tests for WorkflowExecutor — unit tests using mocked BrowserController."""
+import os
 import pytest
 from unittest.mock import MagicMock, patch, PropertyMock
 from engine.executor import WorkflowExecutor, ExecutionContext, _LoopBreak
@@ -67,7 +68,9 @@ class TestBasicActions:
         wf = {"nodes": [{"type": "action", "action": "Screenshot", "filename": "test.png"}]}
         result = executor.execute(wf)
         assert result["success"]
-        mock_ctrl.screenshot.assert_called_once_with("test.png")
+        mock_ctrl.screenshot.assert_called_once()
+        called_path = mock_ctrl.screenshot.call_args[0][0]
+        assert os.path.basename(called_path) == "test.png"
 
     def test_delay(self, executor):
         wf = {"nodes": [{"type": "action", "action": "Delay", "duration": "100ms"}]}

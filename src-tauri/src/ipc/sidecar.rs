@@ -167,10 +167,17 @@ impl Sidecar {
     }
 
     pub async fn is_alive(&mut self) -> bool {
-        if self.child.is_none() {
-            return false;
+        match &mut self.child {
+            Some(child) => {
+                // Check if process is still running without blocking
+                match child.try_wait() {
+                    Ok(None) => true,   // still running
+                    Ok(Some(_)) => false, // exited
+                    Err(_) => false,
+                }
+            }
+            None => false,
         }
-        matches!(self.call("heartbeat", None).await, Ok(_))
     }
 
     pub async fn ensure_alive(&mut self) -> Result<(), AppError> {

@@ -141,6 +141,7 @@ export const useExecutionStore = defineStore("execution", () => {
   }
 
   async function listenProgress() {
+    stopListening(); // Prevent listener leaks from prior calls
     progressUnlisten = await listen<{
       step: number;
       total: number;

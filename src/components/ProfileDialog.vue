@@ -7,25 +7,41 @@ const props = defineProps<{
   profile?: Profile | null;
 }>();
 
+type ProfileForm = {
+  id: string;
+  name: string;
+  os_target: string;
+  fingerprint: Record<string, unknown>;
+  user_data_dir: string;
+  proxy: Profile["proxy"];
+};
+
 const emit = defineEmits<{
   close: [];
-  save: [profile: Omit<Profile, "created_at" | "updated_at">];
+  save: [profile: ProfileForm];
 }>();
 
-const form = ref({
+const form = ref<ProfileForm>({
   id: "",
   name: "",
   os_target: "windows",
-  fingerprint: {} as Record<string, unknown>,
+  fingerprint: {},
   user_data_dir: "",
-  proxy: null as Profile["proxy"],
+  proxy: null,
 });
 
 watch(
   () => props.profile,
   (p) => {
     if (p) {
-      form.value = { ...p };
+      form.value = {
+        id: p.id,
+        name: p.name,
+        os_target: p.os_target,
+        fingerprint: p.fingerprint,
+        user_data_dir: p.user_data_dir,
+        proxy: p.proxy ?? null,
+      };
     } else {
       form.value = {
         id: `profile_${Date.now()}`,

@@ -12,6 +12,7 @@ import os
 import json
 import argparse
 import time
+from html import escape as html_escape
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
@@ -95,20 +96,25 @@ def cmd_export_report(args):
         browser.close()
 
     # Generate HTML report
+    wf_name = html_escape(workflow.get('name', 'unnamed'))
     report = f"""<!DOCTYPE html>
-<html><head><meta charset="utf-8"><title>Mimicry Report - {workflow.get('name', 'unnamed')}</title>
+<html><head><meta charset="utf-8"><title>Mimicry Report - {wf_name}</title>
 <style>body{{font-family:system-ui;max-width:800px;margin:2rem auto;padding:0 1rem}}
 table{{width:100%;border-collapse:collapse}}th,td{{padding:8px;border:1px solid #ddd;text-align:left}}
 .pass{{color:green}}.fail{{color:red}}</style></head>
-<body><h1>Workflow Report: {workflow.get('name', 'unnamed')}</h1>
+<body><h1>Workflow Report: {wf_name}</h1>
 <p class="{'pass' if result.get('success') else 'fail'}">Result: {'PASS' if result.get('success') else 'FAIL'}</p>
 <table><tr><th>Step</th><th>Action</th><th>Status</th></tr>"""
 
     for entry in log_entries:
-        report += f"<tr><td>{entry.get('step', '?')}</td><td>{entry.get('action', '?')}</td><td>{entry.get('status', '?')}</td></tr>"
+        step = html_escape(str(entry.get('step', '?')))
+        action = html_escape(str(entry.get('action', '?')))
+        status = html_escape(str(entry.get('status', '?')))
+        report += f"<tr><td>{step}</td><td>{action}</td><td>{status}</td></tr>"
 
+    variables_json = html_escape(json.dumps(result.get('variables', {}), indent=2, ensure_ascii=False, default=str))
     report += f"""</table>
-<h2>Variables</h2><pre>{json.dumps(result.get('variables', {}), indent=2, ensure_ascii=False, default=str)}</pre>
+<h2>Variables</h2><pre>{variables_json}</pre>
 </body></html>"""
 
     output = args.output or "report.html"

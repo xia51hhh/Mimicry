@@ -3,7 +3,6 @@ import { ref, nextTick, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import JsonEditor from './JsonEditor.vue'
 import { useExecutionStore } from '../../stores/execution'
-import { useWorkflowStore } from '../../stores/workflow'
 import { usePanel, usePanelLayout } from '../../composables/usePanel'
 import { useFileOps } from '../../composables/useFileOps'
 import { save } from '@tauri-apps/plugin-dialog'
@@ -12,7 +11,6 @@ import { invoke } from '@tauri-apps/api/core'
 const { t } = useI18n()
 
 const execution = useExecutionStore()
-const workflow = useWorkflowStore()
 const fileOps = useFileOps()
 const activeTab = ref<'json' | 'logs' | 'variables'>('json')
 const logContainer = ref<HTMLElement>()

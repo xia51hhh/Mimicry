@@ -13,6 +13,17 @@ from loguru import logger
 from browser.controller import BrowserController
 from engine.action_map import to_backend
 
+# Sandbox directory for file outputs (screenshots, exports)
+_SANDBOX_DIR = os.path.abspath(os.getcwd())
+
+
+def _safe_path(raw_path: str) -> str:
+    """Resolve a file path and ensure it stays within the sandbox directory."""
+    resolved = os.path.abspath(raw_path)
+    if not resolved.startswith(_SANDBOX_DIR + os.sep) and resolved != _SANDBOX_DIR:
+        raise ValueError(f"Path traversal blocked: {raw_path!r} resolves outside sandbox")
+    return resolved
+
 
 class ExecutionContext:
     """Holds variables and state during workflow execution."""
@@ -127,6 +138,7 @@ class WorkflowExecutor:
         self._ctx.deserialize(saved_state)
         self._ctx.running = True
         resume_from = self._ctx.step_index
+        self._ctx.step_index = 0
 
         try:
             self._execute_nodes(nodes, skip_until=resume_from)
@@ -146,11 +158,13 @@ class WorkflowExecutor:
         return count
 
     def _execute_nodes(self, nodes: list[dict], skip_until: int = 0):
-        for i, node in enumerate(nodes):
+        for _i, node in enumerate(nodes):
             if not self._ctx.running:
                 return
-            if i < skip_until:
+            if self._ctx.step_index < skip_until:
                 self._ctx.step_index += 1
+                self._ctx.step_index += self._count_nodes(node.get("children", []))
+                self._ctx.step_index += self._count_nodes(node.get("elseChildren", []))
                 continue
             self._execute_node(node)
             self._ctx.step_index += 1
@@ -273,7 +287,7 @@ class WorkflowExecutor:
             case "set":
                 ctx.set_var(node["variable"], node.get("value"))
             case "screenshot":
-                ctrl.screenshot(node.get("filename", "screenshot.png"))
+                ctrl.screenshot(_safe_path(node.get("filename", "screenshot.png")))
             case "log":
                 parts = node.get("parts", [])
                 resolved = [ctx.resolve(p) for p in parts]
@@ -332,7 +346,7 @@ class WorkflowExecutor:
             case "export":
                 fmt = node.get("format", "json")
                 raw_path = ctx.resolve(node.get("path", "export.json"))
-                path = os.path.abspath(raw_path)
+                path = _safe_path(raw_path)
                 data = ctx.variables
                 if fmt == "csv":
                     buf = io.StringIO()

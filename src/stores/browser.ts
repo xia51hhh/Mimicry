@@ -31,6 +31,7 @@ export const useBrowserStore = defineStore("browser", () => {
   let recordingUnlisten: UnlistenFn | null = null;
 
   async function startRecordingPreview() {
+    stopRecordingPreview(); // Prevent listener leaks
     recordingUnlisten = await listen<Record<string, unknown>>("sidecar:recording.event", (event) => {
       const node = event.payload as Record<string, unknown>;
       recordedNodes.value = [...recordedNodes.value, {
