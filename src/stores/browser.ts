@@ -1,6 +1,7 @@
 import { defineStore } from "pinia";
 import { ref } from "vue";
 import { invoke } from "@tauri-apps/api/core";
+import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 
 export interface RecordedNode {
   type: string;
@@ -26,6 +27,28 @@ export const useBrowserStore = defineStore("browser", () => {
   const camoufoxVersion = ref<string | null>(null);
   const camoufoxChecking = ref(false);
   const camoufoxInstalling = ref(false);
+
+  let recordingUnlisten: UnlistenFn | null = null;
+
+  async function startRecordingPreview() {
+    recordingUnlisten = await listen<Record<string, unknown>>("sidecar:recording.event", (event) => {
+      const node = event.payload as Record<string, unknown>;
+      recordedNodes.value = [...recordedNodes.value, {
+        type: "action",
+        action: (node.type as string) || "click",
+        selector: node.selector as string | undefined,
+        value: node.value as string | undefined,
+        url: node.url as string | undefined,
+      }];
+    });
+  }
+
+  function stopRecordingPreview() {
+    if (recordingUnlisten) {
+      recordingUnlisten();
+      recordingUnlisten = null;
+    }
+  }
 
   async function checkCamoufox() {
     camoufoxChecking.value = true;
@@ -96,12 +119,14 @@ export const useBrowserStore = defineStore("browser", () => {
       await invoke("recording_start");
       recording.value = true;
       recordedNodes.value = [];
+      await startRecordingPreview();
     } catch (e) {
       console.error("Failed to start recording:", e);
     }
   }
 
   async function stopRecording() {
+    stopRecordingPreview();
     try {
       const result = await invoke<RecordingResult>("recording_stop");
       recording.value = false;
@@ -148,6 +173,7 @@ export const useBrowserStore = defineStore("browser", () => {
     camoufoxInstalled, camoufoxVersion, camoufoxChecking, camoufoxInstalling,
     launch, close, navigate, fetchStatus,
     startRecording, stopRecording, pollRecording,
+    startRecordingPreview, stopRecordingPreview,
     checkCamoufox, installCamoufox,
   };
 });

@@ -48,6 +48,22 @@ class ExecutionContext:
             "variables": dict(self.variables),
         }
 
+    def serialize(self) -> dict:
+        return {
+            "variables": dict(self.variables),
+            "step_index": self.step_index,
+            "total_steps": self.total_steps,
+            "running": self.running,
+            "error": self.error,
+        }
+
+    def deserialize(self, state: dict):
+        self.variables = dict(state.get("variables", {}))
+        self.step_index = state.get("step_index", 0)
+        self.total_steps = state.get("total_steps", 0)
+        self.running = state.get("running", False)
+        self.error = state.get("error")
+
 
 def _parse_duration(s) -> float:
     """Parse duration string like '2s', '500ms', '1.5s' to seconds."""
@@ -66,6 +82,7 @@ class WorkflowExecutor:
         self._controller = controller
         self._ctx = ExecutionContext()
         self.progress_callback: callable | None = None
+        self.log_callback: callable | None = None
 
     @property
     def context(self) -> ExecutionContext:
@@ -93,6 +110,33 @@ class WorkflowExecutor:
     def stop(self):
         self._ctx.running = False
 
+    def _emit_log(self, level: str, message: str, node_id: str | None = None):
+        if self.log_callback:
+            self.log_callback({
+                "level": level,
+                "message": message,
+                "nodeId": node_id,
+                "step": self._ctx.step_index,
+                "timestamp": time.time(),
+            })
+
+    def resume(self, workflow_json: dict, saved_state: dict) -> dict:
+        """Resume a workflow from a saved execution state."""
+        nodes = workflow_json.get("nodes", [])
+        self._ctx = ExecutionContext()
+        self._ctx.deserialize(saved_state)
+        self._ctx.running = True
+        resume_from = self._ctx.step_index
+
+        try:
+            self._execute_nodes(nodes, skip_until=resume_from)
+            self._ctx.running = False
+            return {"success": True, **self._ctx.status()}
+        except Exception as e:
+            self._ctx.error = str(e)
+            self._ctx.running = False
+            return {"success": False, **self._ctx.status()}
+
     def _count_nodes(self, nodes: list[dict]) -> int:
         count = 0
         for n in nodes:
@@ -101,10 +145,13 @@ class WorkflowExecutor:
             count += self._count_nodes(n.get("elseChildren", []))
         return count
 
-    def _execute_nodes(self, nodes: list[dict]):
-        for node in nodes:
+    def _execute_nodes(self, nodes: list[dict], skip_until: int = 0):
+        for i, node in enumerate(nodes):
             if not self._ctx.running:
                 return
+            if i < skip_until:
+                self._ctx.step_index += 1
+                continue
             self._execute_node(node)
             self._ctx.step_index += 1
 
@@ -136,6 +183,7 @@ class WorkflowExecutor:
         attempts = 1 + retry_count
         for attempt in range(attempts):
             try:
+                self._emit_log("info", f"Executing: {action}", node.get("id"))
                 match ntype:
                     case "action":
                         self._execute_action(node)
@@ -143,6 +191,7 @@ class WorkflowExecutor:
                         self._execute_condition(node)
                     case "loop":
                         self._execute_loop(node)
+                self._emit_log("info", f"Completed: {action}", node.get("id"))
                 return  # success
             except Exception as e:
                 last_error = e
@@ -151,6 +200,7 @@ class WorkflowExecutor:
                     time.sleep(retry_interval)
 
         # All retries exhausted
+        self._emit_log("error", f"Failed: {action}: {last_error}", node.get("id"))
         match on_error:
             case "continue":
                 logger.warning(f"Node {action} failed, continuing: {last_error}")

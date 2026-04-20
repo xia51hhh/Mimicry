@@ -451,3 +451,204 @@ class TestProgressCallback:
         assert progress_events[0]["status"] == "running"
         assert progress_events[1]["step"] == 1
         assert progress_events[1]["action"] == "screenshot"
+
+
+# --- Task 22: Two-phase download handling ---
+
+class TestDownloadTwoPhase:
+    def test_handle_download_pre_registers_listener(self, mock_ctrl):
+        """handle_download uses setup + wait internally."""
+        from browser.controller import BrowserController
+        ctrl = BrowserController.__new__(BrowserController)
+        ctrl._page = MagicMock()
+
+        events = []
+        def mock_on(event_name, handler):
+            events.append(("on", event_name))
+            # Simulate immediate download
+            mock_download = MagicMock()
+            handler(mock_download)
+
+        ctrl._page.on = mock_on
+        ctrl._page.remove_listener = MagicMock()
+
+        result = ctrl.handle_download("/tmp/file.pdf", timeout=5000)
+        assert result == "/tmp/file.pdf"
+        assert ("on", "download") in events
+        ctrl._page.remove_listener.assert_called_once()
+
+    def test_setup_then_wait_download(self, mock_ctrl):
+        """Two-phase: setup_download_listener then wait_for_download."""
+        from browser.controller import BrowserController
+        ctrl = BrowserController.__new__(BrowserController)
+        ctrl._page = MagicMock()
+
+        captured_handler = [None]
+        def mock_on(event_name, handler):
+            captured_handler[0] = handler
+
+        ctrl._page.on = mock_on
+        ctrl._page.remove_listener = MagicMock()
+
+        ctrl.setup_download_listener(timeout=10000)
+        assert ctrl._download_event is not None
+        assert not ctrl._download_event.is_set()
+
+        # Simulate download arriving
+        mock_download = MagicMock()
+        captured_handler[0](mock_download)
+
+        result = ctrl.wait_for_download("/tmp/out.zip")
+        assert result == "/tmp/out.zip"
+        mock_download.save_as.assert_called_once_with("/tmp/out.zip")
+
+
+# --- Task 23: ExecutionContext serialize/deserialize ---
+
+class TestExecutionContextSerialize:
+    def test_execution_context_serialize_deserialize(self):
+        ctx = ExecutionContext()
+        ctx.set_var("$name", "alice")
+        ctx.set_var("$count", 42)
+        ctx.step_index = 5
+        ctx.total_steps = 10
+        ctx.running = True
+
+        state = ctx.serialize()
+        assert state["variables"]["$name"] == "alice"
+        assert state["variables"]["$count"] == 42
+        assert state["step_index"] == 5
+        assert state["total_steps"] == 10
+        assert state["running"] is True
+        assert state["error"] is None
+
+        ctx2 = ExecutionContext()
+        ctx2.deserialize(state)
+        assert ctx2.get_var("$name") == "alice"
+        assert ctx2.get_var("$count") == 42
+        assert ctx2.step_index == 5
+        assert ctx2.total_steps == 10
+        assert ctx2.running is True
+
+    def test_serialize_with_error(self):
+        ctx = ExecutionContext()
+        ctx.error = "something went wrong"
+        state = ctx.serialize()
+        assert state["error"] == "something went wrong"
+
+        ctx2 = ExecutionContext()
+        ctx2.deserialize(state)
+        assert ctx2.error == "something went wrong"
+
+
+# --- Task 24: Executor resume ---
+
+class TestExecutorResume:
+    def test_executor_resume_from_step(self, executor, mock_ctrl):
+        workflow = {
+            "name": "test",
+            "nodes": [
+                {"action": "Navigate", "url": "https://example.com"},
+                {"action": "Click", "selector": "#btn"},
+                {"action": "Screenshot", "filename": "test.png"},
+            ]
+        }
+
+        state = {"variables": {}, "step_index": 1, "total_steps": 3, "running": False, "error": None}
+        result = executor.resume(workflow, state)
+
+        mock_ctrl.navigate.assert_not_called()
+        mock_ctrl.click.assert_called_once()
+        mock_ctrl.screenshot.assert_called_once()
+        assert result["success"] is True
+
+    def test_executor_resume_preserves_variables(self, executor, mock_ctrl):
+        workflow = {
+            "name": "test",
+            "nodes": [
+                {"action": "Navigate", "url": "$url"},
+            ]
+        }
+
+        state = {"variables": {"$url": "https://resumed.com"}, "step_index": 0, "total_steps": 1, "running": False, "error": None}
+        result = executor.resume(workflow, state)
+
+        mock_ctrl.navigate.assert_called_once_with("https://resumed.com")
+        assert result["success"] is True
+
+    def test_executor_resume_handles_error(self, executor, mock_ctrl):
+        mock_ctrl.click.side_effect = RuntimeError("element not found")
+        workflow = {
+            "name": "test",
+            "nodes": [
+                {"action": "Click", "selector": "#missing"},
+            ]
+        }
+
+        state = {"variables": {}, "step_index": 0, "total_steps": 1, "running": False, "error": None}
+        result = executor.resume(workflow, state)
+
+        assert result["success"] is False
+        assert "element not found" in result["error"]
+
+
+# --- Task 25: Structured log events ---
+
+class TestLogEvents:
+    def test_executor_emits_log_events(self, executor, mock_ctrl):
+        log_events = []
+        def on_log(entry):
+            log_events.append(entry)
+
+        executor.log_callback = on_log
+        workflow = {
+            "name": "test",
+            "nodes": [
+                {"action": "Navigate", "url": "https://example.com"},
+            ]
+        }
+        executor.execute(workflow)
+
+        assert len(log_events) >= 2  # at least start + complete
+        entry = log_events[0]
+        assert "level" in entry
+        assert "message" in entry
+        assert "timestamp" in entry
+        assert entry["level"] == "info"
+
+    def test_log_events_on_error(self, executor, mock_ctrl):
+        mock_ctrl.click.side_effect = RuntimeError("click failed")
+        log_events = []
+        executor.log_callback = lambda e: log_events.append(e)
+
+        workflow = {
+            "name": "test",
+            "nodes": [
+                {"action": "Click", "selector": "#btn"},
+            ]
+        }
+        executor.execute(workflow)
+
+        error_logs = [e for e in log_events if e["level"] == "error"]
+        assert len(error_logs) >= 1
+        assert "click failed" in error_logs[0]["message"]
+
+
+def test_selector_quality_score():
+    """Selector quality scoring should rank selectors appropriately."""
+    from browser.recorder import score_selector
+
+    # ID selectors are best
+    assert score_selector("#submit-btn") >= 90
+
+    # Name attribute is good
+    assert score_selector('input[name="email"]') >= 70
+
+    # Class-based is decent
+    assert score_selector("button.primary-action") >= 50
+
+    # Deep nth-of-type is fragile
+    assert score_selector("div > div:nth-of-type(3) > span:nth-of-type(2)") <= 30
+
+    # Shadow DOM combinator
+    assert score_selector('#host >> button.inner') >= 60

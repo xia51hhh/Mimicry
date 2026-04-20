@@ -71,6 +71,7 @@ export const useExecutionStore = defineStore("execution", () => {
 
   let pollTimer: ReturnType<typeof setInterval> | null = null;
   let progressUnlisten: UnlistenFn | null = null;
+  let logUnlisten: UnlistenFn | null = null;
 
   function addLog(level: LogEntry["level"], message: string, nodeId?: string) {
     logs.value.push({
@@ -160,12 +161,32 @@ export const useExecutionStore = defineStore("execution", () => {
 
       addLog("info", `Step ${p.step + 1}/${p.total}: ${p.action}`, p.nodeId);
     });
+
+    logUnlisten = await listen<{
+      level: string;
+      message: string;
+      nodeId?: string;
+      step: number;
+      timestamp: number;
+    }>("sidecar:workflow.log", (event) => {
+      const entry = event.payload;
+      logs.value.push({
+        time: new Date(entry.timestamp * 1000).toLocaleTimeString(),
+        level: (entry.level as LogEntry["level"]) || "info",
+        nodeId: entry.nodeId,
+        message: entry.message,
+      });
+    });
   }
 
   function stopListening() {
     if (progressUnlisten) {
       progressUnlisten();
       progressUnlisten = null;
+    }
+    if (logUnlisten) {
+      logUnlisten();
+      logUnlisten = null;
     }
   }
 

@@ -181,6 +181,10 @@ def browser_handle_dialog(accept: bool = True, text: str = ""):
 
 @rpc_method("recording.start")
 def recording_start():
+    def on_event(event):
+        if _server:
+            _server.send_notification("recording.event", event)
+    _recorder.event_callback = on_event
     _recorder.start()
     return {"recording": True}
 
@@ -213,8 +217,28 @@ def workflow_execute(workflow: dict | None = None):
         if _server:
             _server.send_notification("workflow.progress", event)
 
+    def on_log(entry):
+        if _server:
+            _server.send_notification("workflow.log", entry)
+
     _executor.progress_callback = on_progress
+    _executor.log_callback = on_log
     return _executor.execute(workflow)
+
+
+@rpc_method("workflow.resume")
+def workflow_resume(workflow: dict, state: dict):
+    def on_progress(event):
+        if _server:
+            _server.send_notification("workflow.progress", event)
+
+    def on_log(entry):
+        if _server:
+            _server.send_notification("workflow.log", entry)
+
+    _executor.progress_callback = on_progress
+    _executor.log_callback = on_log
+    return _executor.resume(workflow, state)
 
 
 @rpc_method("workflow.stop")

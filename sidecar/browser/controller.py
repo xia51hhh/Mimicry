@@ -313,22 +313,31 @@ class BrowserController:
         else:
             ctx.clear_cookies()
 
-    def handle_download(self, save_path: str, timeout: int = 30000) -> str:
-        """Wait for a download event and save the file."""
+    def setup_download_listener(self, timeout: int = 30000):
+        """Pre-register download listener. Call before the action that triggers download."""
         import threading
-        download_holder = [None]
-        event = threading.Event()
+        self._download_holder = [None]
+        self._download_event = threading.Event()
+        self._download_timeout = timeout
 
         def on_download(download):
-            download_holder[0] = download
-            event.set()
+            self._download_holder[0] = download
+            self._download_event.set()
 
         self._page.on("download", on_download)
-        try:
-            if not event.wait(timeout=timeout / 1000):
-                raise TimeoutError(f"No download started within {timeout}ms")
-            download = download_holder[0]
-            download.save_as(save_path)
-            return save_path
-        finally:
-            self._page.remove_listener("download", on_download)
+        self._download_handler = on_download
+
+    def wait_for_download(self, save_path: str) -> str:
+        """Wait for the pre-registered download to complete and save it."""
+        timeout = getattr(self, "_download_timeout", 30000)
+        if not self._download_event.wait(timeout=timeout / 1000):
+            raise TimeoutError(f"No download started within {timeout}ms")
+        download = self._download_holder[0]
+        download.save_as(save_path)
+        self._page.remove_listener("download", self._download_handler)
+        return save_path
+
+    def handle_download(self, save_path: str, timeout: int = 30000) -> str:
+        """Backward-compatible: setup + wait."""
+        self.setup_download_listener(timeout)
+        return self.wait_for_download(save_path)

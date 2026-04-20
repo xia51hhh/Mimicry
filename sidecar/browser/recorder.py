@@ -165,12 +165,46 @@ RECORDER_JS = """
 """
 
 
+def score_selector(selector: str) -> int:
+    """Score a CSS selector for quality/stability (0-100).
+    Higher = more stable and readable.
+    """
+    score = 50  # baseline
+
+    # Bonus for ID
+    if selector.startswith("#") and " " not in selector:
+        score += 40
+
+    # Bonus for name attribute
+    if '[name="' in selector:
+        score += 25
+
+    # Bonus for data-testid
+    if "[data-testid" in selector or "[data-test" in selector:
+        score += 35
+
+    # Penalty for nth-of-type (fragile)
+    nth_count = selector.count(":nth-of-type")
+    score -= nth_count * 15
+
+    # Penalty for deep nesting
+    depth = selector.count(" > ") + selector.count(" ")
+    score -= depth * 5
+
+    # Shadow DOM combinator — neutral to slightly positive
+    if " >> " in selector:
+        score += 20
+
+    return max(0, min(100, score))
+
+
 class RecordingEngine:
     def __init__(self, controller):
         self._controller = controller
         self._recording = False
         self._events: list[dict] = []
         self._last_poll_index = 0
+        self.event_callback: callable | None = None
 
     @property
     def is_recording(self) -> bool:
@@ -200,21 +234,32 @@ class RecordingEngine:
         self._poll_events()
         new = self._events[self._last_poll_index:]
         self._last_poll_index = len(self._events)
+        if new and self.event_callback:
+            for event in new:
+                self.event_callback(event)
         return new
 
     def _inject_recorder(self) -> None:
-        """Inject recording script into all pages and listen for new tabs."""
+        """Inject recording script into all pages and frames."""
         ctx = self._controller._context
         if not ctx:
             return
-        # Inject into all existing pages
         for page in ctx.pages:
             try:
                 page.evaluate(RECORDER_JS)
                 page.on("load", lambda p=page: self._safe_inject(p))
+                # Inject into all existing frames
+                for frame in page.frames:
+                    if frame == page.main_frame:
+                        continue
+                    try:
+                        frame.evaluate(RECORDER_JS)
+                    except Exception:
+                        pass
+                # Listen for new frames
+                page.on("frameattached", lambda frame: self._safe_inject_frame(frame))
             except Exception as e:
                 logger.warning(f"Failed to inject into page: {e}")
-        # Listen for new tabs
         ctx.on("page", self._on_new_page)
         logger.debug("Recorder JS injected into %d pages", len(ctx.pages))
 
@@ -235,8 +280,17 @@ class RecordingEngine:
         except Exception:
             pass
 
+    @staticmethod
+    def _safe_inject_frame(frame) -> None:
+        """Inject recorder into a frame after it loads."""
+        try:
+            frame.wait_for_load_state("domcontentloaded", timeout=5000)
+            frame.evaluate(RECORDER_JS)
+        except Exception:
+            pass
+
     def _poll_events(self) -> None:
-        """Pull events from all browser pages."""
+        """Pull events from all browser pages and frames."""
         ctx = self._controller._context
         if not ctx:
             return
@@ -248,6 +302,16 @@ class RecordingEngine:
                     all_events.extend(raw)
             except Exception:
                 pass
+            # Collect from iframes
+            for frame in page.frames:
+                if frame == page.main_frame:
+                    continue
+                try:
+                    raw = frame.evaluate("window.__mimicryEvents || []")
+                    if raw:
+                        all_events.extend(raw)
+                except Exception:
+                    pass
         # Sort by timestamp and deduplicate
         all_events.sort(key=lambda e: e.get("timestamp", 0))
         if len(all_events) > len(self._events):
@@ -326,6 +390,11 @@ class RecordingEngine:
                         "selector": event.get("selector", "body"),
                         "key": event.get("key", ""),
                     })
+
+        # Attach selector quality score
+        for node in nodes:
+            if "selector" in node:
+                node["selectorScore"] = score_selector(node["selector"])
 
         # Convert backend action names to frontend PascalCase
         for node in nodes:
