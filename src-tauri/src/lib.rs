@@ -28,6 +28,23 @@ pub fn run() {
             tauri::async_runtime::block_on(async {
                 sidecar.lock().await.set_app_handle(handle);
             });
+
+            // Heartbeat timer: detect dead sidecar every 30s
+            let handle_for_heartbeat = app.handle().clone();
+            tauri::async_runtime::spawn(async move {
+                loop {
+                    tokio::time::sleep(std::time::Duration::from_secs(30)).await;
+                    let sidecar = handle_for_heartbeat.state::<Mutex<Sidecar>>();
+                    let mut sc = sidecar.lock().await;
+                    if sc.is_alive().await {
+                        continue;
+                    }
+                    tracing::warn!("Sidecar heartbeat missed, stopping dead process");
+                    sc.stop().await;
+                    // Will be restarted on next call via ensure_alive
+                }
+            });
+
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![

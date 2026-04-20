@@ -165,4 +165,19 @@ impl Sidecar {
         self.stdin = None;
         self.reader = None;
     }
+
+    pub async fn is_alive(&mut self) -> bool {
+        if self.child.is_none() {
+            return false;
+        }
+        matches!(self.call("heartbeat", None).await, Ok(_))
+    }
+
+    pub async fn ensure_alive(&mut self) -> Result<(), AppError> {
+        if self.child.is_some() && !self.is_alive().await {
+            tracing::warn!("Sidecar heartbeat failed, restarting...");
+            self.stop().await;
+        }
+        self.ensure_started().await
+    }
 }

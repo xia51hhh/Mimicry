@@ -49,6 +49,16 @@ def test_system_info():
     assert resp["result"]["sidecar"] == "0.1.0"
 
 
+def test_heartbeat_returns_timestamp():
+    """heartbeat method should return current timestamp and uptime."""
+    from rpc.methods import METHOD_REGISTRY
+    result = METHOD_REGISTRY["heartbeat"]()
+    assert "timestamp" in result
+    assert "uptime_seconds" in result
+    assert isinstance(result["timestamp"], float)
+    assert isinstance(result["uptime_seconds"], float)
+
+
 def test_sidecar_startup_time():
     """Sidecar should respond to ping within 2 seconds."""
     start = time.time()

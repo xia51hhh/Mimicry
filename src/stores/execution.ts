@@ -1,6 +1,7 @@
 import { defineStore } from "pinia";
 import { ref, shallowRef } from "vue";
 import { invoke } from "@tauri-apps/api/core";
+import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { toBackend } from "../types/action-map";
 
 function convertNodesToBackend(nodes: Record<string, unknown>[]): Record<string, unknown>[] {
@@ -69,6 +70,7 @@ export const useExecutionStore = defineStore("execution", () => {
   const failedNodeIds = ref<Set<string>>(new Set());
 
   let pollTimer: ReturnType<typeof setInterval> | null = null;
+  let progressUnlisten: UnlistenFn | null = null;
 
   function addLog(level: LogEntry["level"], message: string, nodeId?: string) {
     logs.value.push({
@@ -137,11 +139,42 @@ export const useExecutionStore = defineStore("execution", () => {
     }
   }
 
+  async function listenProgress() {
+    progressUnlisten = await listen<{
+      step: number;
+      total: number;
+      action: string;
+      nodeId?: string;
+      status: string;
+    }>("sidecar:workflow.progress", (event) => {
+      const p = event.payload;
+      const prevNodeId = currentNodeId.value;
+
+      step.value = p.step;
+      total.value = p.total;
+      currentNodeId.value = p.nodeId || null;
+
+      if (prevNodeId && prevNodeId !== currentNodeId.value) {
+        completedNodeIds.value = new Set([...completedNodeIds.value, prevNodeId]);
+      }
+
+      addLog("info", `Step ${p.step + 1}/${p.total}: ${p.action}`, p.nodeId);
+    });
+  }
+
+  function stopListening() {
+    if (progressUnlisten) {
+      progressUnlisten();
+      progressUnlisten = null;
+    }
+  }
+
   async function execute(workflowJson: { name?: string; nodes: unknown[]; edges: unknown[] }) {
     reset();
     running.value = true;
     addLog("info", `execution.start: ${workflowJson.name || "Untitled"}`);
-    startPolling();
+    await listenProgress();
+    startPolling(); // fallback for missed events
 
     // Convert frontend PascalCase action names to backend lowercase
     const converted = {
@@ -153,6 +186,7 @@ export const useExecutionStore = defineStore("execution", () => {
       const result = await invoke<ExecutionResult>("workflow_execute", { workflow: converted });
       running.value = false;
       stopPolling();
+      stopListening();
 
       if (result.success) {
         addLog("info", "execution.success");
@@ -166,6 +200,7 @@ export const useExecutionStore = defineStore("execution", () => {
     } catch (e: unknown) {
       running.value = false;
       stopPolling();
+      stopListening();
       error.value = String(e);
       addLog("error", `execution.exception: ${e}`);
       throw e;
@@ -177,6 +212,7 @@ export const useExecutionStore = defineStore("execution", () => {
       await invoke("workflow_stop_execution");
       running.value = false;
       stopPolling();
+      stopListening();
       addLog("warn", "execution.stopped");
     } catch (e: unknown) {
       addLog("error", `execution.stopFailed: ${e}`);

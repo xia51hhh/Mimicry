@@ -1,6 +1,9 @@
 import platform
+import time
 
 METHOD_REGISTRY: dict[str, callable] = {}
+
+_start_time = time.time()
 
 
 def rpc_method(name: str):
@@ -26,4 +29,12 @@ def system_info():
         "platform": platform.system(),
         "python": platform.python_version(),
         "sidecar": "0.1.0",
+    }
+
+
+@rpc_method("heartbeat")
+def heartbeat():
+    return {
+        "timestamp": time.time(),
+        "uptime_seconds": round(time.time() - _start_time, 1),
     }

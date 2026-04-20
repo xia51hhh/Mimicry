@@ -1,6 +1,7 @@
 use tauri::State;
 use tokio::sync::Mutex;
 use crate::ipc::sidecar::Sidecar;
+use crate::ipc::types::LaunchParams;
 use crate::AppError;
 
 async fn sidecar_call(
@@ -9,13 +10,22 @@ async fn sidecar_call(
     params: Option<serde_json::Value>,
 ) -> Result<serde_json::Value, AppError> {
     let mut sc = sidecar.lock().await;
-    sc.ensure_started().await?;
+    sc.ensure_alive().await?;
     sc.call(method, params).await
 }
 
 #[tauri::command]
-pub async fn browser_launch(sidecar: State<'_, Mutex<Sidecar>>) -> Result<serde_json::Value, AppError> {
-    sidecar_call(sidecar, "browser.launch", None).await
+pub async fn browser_launch(
+    sidecar: State<'_, Mutex<Sidecar>>,
+    headless: Option<bool>,
+    profile: Option<serde_json::Value>,
+) -> Result<serde_json::Value, AppError> {
+    let params = LaunchParams {
+        headless,
+        proxy: None,
+        profile: profile.and_then(|v| serde_json::from_value(v).ok()),
+    };
+    sidecar_call(sidecar, "browser.launch", Some(serde_json::to_value(params)?)).await
 }
 
 #[tauri::command]
