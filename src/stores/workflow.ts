@@ -3,6 +3,7 @@ import { ref, shallowRef, computed } from "vue";
 import { invoke } from "@tauri-apps/api/core";
 import type { Node, Edge } from "@vue-flow/core";
 import type { RecordedNode } from "./browser";
+import dagre from "@dagrejs/dagre";
 
 interface Snapshot {
   nodes: Node[];
@@ -236,11 +237,76 @@ export const useWorkflowStore = defineStore("workflow", () => {
     await fetchList();
   }
 
+  const jsonText = computed(() => JSON.stringify(toJSON(), null, 2));
+
+  function applyJsonText(text: string): { success: boolean; error?: string } {
+    try {
+      const data = JSON.parse(text);
+      if (!data.nodes || !Array.isArray(data.nodes)) {
+        return { success: false, error: "Missing 'nodes' array" };
+      }
+
+      const existingPositions = new Map(
+        nodes.value.map((n) => [n.id, n.position])
+      );
+
+      const newNodes = data.nodes.map((n: Record<string, unknown>) => ({
+        id: n.id as string,
+        type: (n.type as string) || "action",
+        position: (n.position as { x: number; y: number }) || existingPositions.get(n.id as string) || { x: 0, y: 0 },
+        data: (n.data as Record<string, unknown>) || {},
+      }));
+
+      const newEdges = (data.edges || []).map((e: Record<string, unknown>) => ({
+        id: e.id as string,
+        source: (e.source as string) || "",
+        target: (e.target as string) || "",
+        sourceHandle: e.sourceHandle as string | undefined,
+        targetHandle: e.targetHandle as string | undefined,
+        label: e.label as string | undefined,
+      }));
+
+      pushSnapshot();
+      nodes.value = newNodes;
+      edges.value = newEdges;
+      if (data.name) name.value = data.name;
+
+      return { success: true };
+    } catch (e) {
+      return { success: false, error: String(e) };
+    }
+  }
+
+  function autoLayout(direction: "TB" | "LR" = "TB") {
+    pushSnapshot();
+    const g = new dagre.graphlib.Graph();
+    g.setDefaultEdgeLabel(() => ({}));
+    g.setGraph({ rankdir: direction, nodesep: 50, ranksep: 80 });
+
+    nodes.value.forEach((node) => {
+      g.setNode(node.id, { width: 200, height: 60 });
+    });
+    edges.value.forEach((edge) => {
+      g.setEdge(edge.source, edge.target);
+    });
+
+    dagre.layout(g);
+
+    nodes.value = nodes.value.map((node) => {
+      const pos = g.node(node.id);
+      return {
+        ...node,
+        position: { x: pos.x - 100, y: pos.y - 30 },
+      };
+    });
+  }
+
   return {
     id, name, nodes, edges,
     selectedNodeId, selectedNode, selectNode, updateNodeData,
     addNode, removeNode, clear, importRecordedNodes, toJSON, fromJSON,
     undo, redo, canUndo, canRedo, pushSnapshot,
     workflowList, loading, fetchList, loadWorkflow, createWorkflow, saveWorkflow, deleteWorkflow,
+    jsonText, applyJsonText, autoLayout,
   };
 });

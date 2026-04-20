@@ -34,6 +34,7 @@ const emit = defineEmits<{
   (e: 'zoom-in'): void
   (e: 'zoom-out'): void
   (e: 'fit-view'): void
+  (e: 'auto-layout'): void
 }>()
 
 const node = computed(() => store.selectedNode)
@@ -712,6 +713,7 @@ const onErrorOptions = [
           <button class="tool-btn" :title="t('canvas.zoomIn')" @click="emit('zoom-in')">+</button>
           <button class="tool-btn" :title="t('canvas.zoomOut')" @click="emit('zoom-out')">−</button>
           <button class="tool-btn" :title="t('canvas.fitView')" @click="emit('fit-view')">⊞</button>
+          <button class="tool-btn" title="Auto Layout" @click="emit('auto-layout')">⊟</button>
           <button class="tool-btn" :title="showMinimap ? t('canvas.hideMinimap') : t('canvas.showMinimap')" @click="emit('toggle-minimap')">
             {{ showMinimap ? '👁' : '👁‍🗨' }}
           </button>

@@ -54,28 +54,24 @@ onMounted(() => {
     debounceTimer = setTimeout(() => {
       if (!editor) return
       const text = editor.getValue()
-      try {
-        const parsed = JSON.parse(text)
-        isUpdatingFromEditor = true
-        store.fromJSON(parsed)
-        nextTick(() => {
-          isUpdatingFromEditor = false
-        })
+      isUpdatingFromEditor = true
+      const result = store.applyJsonText(text)
+      if (result.success) {
         // Clear markers on valid JSON
         monaco.editor.setModelMarkers(editor.getModel()!, 'json', [])
-      } catch {
-        // Invalid JSON — let Monaco's built-in validation handle it
       }
+      nextTick(() => {
+        isUpdatingFromEditor = false
+      })
     }, 500)
   })
 })
 
 // Store → Editor sync
 watch(
-  () => store.toJSON(),
-  (json) => {
+  () => store.jsonText,
+  (newText) => {
     if (isUpdatingFromEditor || !editor) return
-    const newText = JSON.stringify(json, null, 2)
     const currentText = editor.getValue()
     if (newText !== currentText) {
       isUpdatingFromStore = true
@@ -84,8 +80,7 @@ watch(
       if (pos) editor.setPosition(pos)
       isUpdatingFromStore = false
     }
-  },
-  { deep: true }
+  }
 )
 
 // Theme follow

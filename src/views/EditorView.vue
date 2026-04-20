@@ -236,6 +236,7 @@ function onDrop(event: DragEvent) {
       @zoom-in="zoomIn()"
       @zoom-out="zoomOut()"
       @fit-view="fitView()"
+      @auto-layout="store.autoLayout('TB')"
     />
 
     <!-- Camoufox Setup Dialog -->
