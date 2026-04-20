@@ -60,7 +60,7 @@ export const useBrowserStore = defineStore("browser", () => {
     }
   }
 
-  async function launch() {
+  async function launch(profileId?: string) {
     if (launching.value) return;
 
     if (!camoufoxInstalled.value) {
@@ -72,7 +72,7 @@ export const useBrowserStore = defineStore("browser", () => {
 
     launching.value = true;
     try {
-      await invoke("browser_launch");
+      await invoke("browser_launch", { profileId: profileId || null });
       connected.value = true;
     } catch (e) {
       console.error("Failed to launch browser:", e);

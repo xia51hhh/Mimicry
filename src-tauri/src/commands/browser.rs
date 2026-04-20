@@ -1,7 +1,7 @@
+use rusqlite::Connection;
 use tauri::State;
 use tokio::sync::Mutex;
 use crate::ipc::sidecar::Sidecar;
-use crate::ipc::types::LaunchParams;
 use crate::AppError;
 
 async fn sidecar_call(
@@ -17,15 +17,26 @@ async fn sidecar_call(
 #[tauri::command]
 pub async fn browser_launch(
     sidecar: State<'_, Mutex<Sidecar>>,
-    headless: Option<bool>,
-    profile: Option<serde_json::Value>,
+    conn: State<'_, Mutex<Connection>>,
+    profile_id: Option<String>,
 ) -> Result<serde_json::Value, AppError> {
-    let params = LaunchParams {
-        headless,
-        proxy: None,
-        profile: profile.and_then(|v| serde_json::from_value(v).ok()),
-    };
-    sidecar_call(sidecar, "browser.launch", Some(serde_json::to_value(params)?)).await
+    let mut params = serde_json::json!({});
+
+    if let Some(pid) = profile_id {
+        let db = conn.lock().await;
+        if let Some(profile) = crate::db::profiles::get(&db, &pid)? {
+            params = serde_json::json!({
+                "profile": {
+                    "user_data_dir": profile.user_data_dir,
+                    "fingerprint": profile.fingerprint,
+                    "proxy": profile.proxy,
+                    "os_target": profile.os_target,
+                }
+            });
+        }
+    }
+
+    sidecar_call(sidecar, "browser.launch", Some(params)).await
 }
 
 #[tauri::command]

@@ -20,6 +20,17 @@ pub fn init(conn: &Connection) -> rusqlite::Result<()> {
             path TEXT PRIMARY KEY,
             name TEXT NOT NULL,
             opened_at TEXT NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS profiles (
+            id TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            fingerprint TEXT NOT NULL DEFAULT '{}',
+            user_data_dir TEXT NOT NULL DEFAULT '',
+            proxy TEXT,
+            os_target TEXT NOT NULL DEFAULT 'windows',
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
         );"
     )?;
     Ok(())

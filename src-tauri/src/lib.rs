@@ -75,6 +75,11 @@ pub fn run() {
             commands::file_ops::recent_files_clear,
             commands::file_ops::file_write_text,
             commands::system::system_info,
+            commands::profiles::profile_list,
+            commands::profiles::profile_get,
+            commands::profiles::profile_create,
+            commands::profiles::profile_update,
+            commands::profiles::profile_delete,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
