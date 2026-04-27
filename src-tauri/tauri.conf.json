@@ -39,7 +39,7 @@
   },
   "plugins": {
     "updater": {
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDhEOTIyNTFEM0RCNTRBN0EKUldSNlNyVTlIU1dTalp0ZnQ0THFPbTlIZWx6c0tZSWFYdmVRRWZMdXpLOG9Hd2tkaGRUTmFqNmUK",
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDc1QjMwRDEzRjJDN0UwMwpSV1FEZml3LzBUQmJCM1dtSXExNGk1aWNrRDllYTZYd252RjFZakcwb2hRYnBQVGRxdHhLOVZpbwo=",
       "endpoints": [
         "https://github.com/51hhh/Mimicry/releases/latest/download/latest.json"
       ],

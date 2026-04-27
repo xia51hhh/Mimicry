@@ -33,7 +33,7 @@ pub async fn profile_create(
             .join("profiles")
             .join(&profile.id);
         std::fs::create_dir_all(&profiles_dir)
-            .map_err(|e| AppError::Io(e))?;
+            .map_err(AppError::Io)?;
         profile.user_data_dir = profiles_dir.to_string_lossy().to_string();
     }
     let conn = conn.lock().await;

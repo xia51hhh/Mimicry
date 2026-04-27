@@ -1,171 +1,192 @@
-"""End-to-end block functionality test with real Camoufox browser."""
-import os
-import sys
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+"""End-to-end block functionality test with real Camoufox browser.
 
+Requires a running display server and Camoufox installed.
+Skipped automatically in CI via the 'e2e' marker (see conftest.py).
+"""
+import os
+import pytest
 from browser.controller import BrowserController
 from engine.executor import WorkflowExecutor
 
-ctrl = BrowserController()
-ctrl.launch(headless=False)
-exe = WorkflowExecutor(ctrl)
-results = []
 
-def run_test(name, workflow):
-    r = exe.execute(workflow)
-    status = "PASS" if r["success"] else f"FAIL: {r.get('error','')}"
-    results.append((name, status, r))
-    print(f"  [{status}] {name}")
-    return r
+pytestmark = pytest.mark.e2e
 
-print("=" * 60)
-print("COMPREHENSIVE BLOCK E2E TEST")
-print("=" * 60)
 
-# T1: Navigate + GetURL
-r = run_test("Navigate + GetURL", {
-    "name": "t1", "nodes": [
-        {"id": "1", "type": "action", "action": "Navigate", "url": "https://example.com"},
-        {"id": "2", "type": "action", "action": "GetURL", "into": "$url"},
-    ], "edges": [{"source": "1", "target": "2"}]
-})
-assert "example.com" in r["variables"].get("$url", ""), f"URL mismatch: {r['variables']}"
+@pytest.fixture(scope="module")
+def browser():
+    ctrl = BrowserController()
+    ctrl.launch(headless=False)
+    yield ctrl
+    ctrl.close()
 
-# T2: Wait + GetText + SetVariable
-r = run_test("Wait + GetText + SetVariable", {
-    "name": "t2", "nodes": [
-        {"id": "1", "type": "action", "action": "Wait", "selector": "h1", "timeout": "3s"},
-        {"id": "2", "type": "action", "action": "GetText", "selector": "h1", "into": "$h1"},
-        {"id": "3", "type": "action", "action": "SetVariable", "variable": "$custom", "value": "hello"},
-    ], "edges": [{"source": "1", "target": "2"}, {"source": "2", "target": "3"}]
-})
-assert r["variables"].get("$h1") == "Example Domain"
-assert r["variables"].get("$custom") == "hello"
 
-# T3: RunScript + Delay + Log
-r = run_test("RunScript + Delay + Log", {
-    "name": "t3", "nodes": [
-        {"id": "1", "type": "action", "action": "RunScript", "script": "document.querySelectorAll('p').length", "into": "$pCount"},
-        {"id": "2", "type": "action", "action": "Delay", "duration": "0.3s"},
-        {"id": "3", "type": "action", "action": "Log", "parts": ["paragraph count"]},
-    ], "edges": [{"source": "1", "target": "2"}, {"source": "2", "target": "3"}]
-})
-assert r["variables"].get("$pCount") is not None
+@pytest.fixture(scope="module")
+def executor(browser):
+    return WorkflowExecutor(browser)
 
-# T4: Click + GoBack + GoForward + Reload
-r = run_test("Click + GoBack + GoForward + Reload", {
-    "name": "t4", "nodes": [
-        {"id": "1", "type": "action", "action": "Navigate", "url": "https://example.com"},
-        {"id": "2", "type": "action", "action": "GoBack"},
-        {"id": "3", "type": "action", "action": "GoForward"},
-        {"id": "4", "type": "action", "action": "Reload"},
-    ], "edges": [
-        {"source": "1", "target": "2"}, {"source": "2", "target": "3"},
-        {"source": "3", "target": "4"},
-    ]
-})
 
-# T5: Condition (true branch)
-r = run_test("Condition (true branch)", {
-    "name": "t5", "nodes": [
-        {"id": "1", "type": "action", "action": "SetVariable", "variable": "$x", "value": "10"},
-        {"id": "2", "type": "condition", "condition": 'equals("$x","10")', "children": [
-            {"id": "3", "type": "action", "action": "SetVariable", "variable": "$branch", "value": "true_branch"}
-        ], "elseChildren": [
-            {"id": "4", "type": "action", "action": "SetVariable", "variable": "$branch", "value": "false_branch"}
-        ]},
-    ], "edges": [{"source": "1", "target": "2"}]
-})
-assert r["variables"].get("$branch") == "true_branch"
+class TestNavigationBlocks:
+    def test_navigate_and_get_url(self, executor):
+        r = executor.execute({
+            "name": "t1", "nodes": [
+                {"id": "1", "type": "action", "action": "Navigate", "url": "https://example.com"},
+                {"id": "2", "type": "action", "action": "GetURL", "into": "$url"},
+            ], "edges": [{"source": "1", "target": "2"}]
+        })
+        assert r["success"]
+        assert "example.com" in r["variables"].get("$url", "")
 
-# T6: Loop count
-r = run_test("Loop count (3 iterations)", {
-    "name": "t6", "nodes": [
-        {"id": "1", "type": "action", "action": "SetVariable", "variable": "$sum", "value": "0"},
-        {"id": "2", "type": "loop", "loopType": "count", "count": 3, "variable": "$i", "children": [
-            {"id": "3", "type": "action", "action": "SetVariable", "variable": "$sum", "value": "loop_ran"}
-        ]},
-    ], "edges": [{"source": "1", "target": "2"}]
-})
-assert r["variables"].get("$sum") == "loop_ran"
-assert r["variables"].get("$i") == 2  # last iteration index
+    def test_go_back_forward_reload(self, executor):
+        r = executor.execute({
+            "name": "t4", "nodes": [
+                {"id": "1", "type": "action", "action": "Navigate", "url": "https://example.com"},
+                {"id": "2", "type": "action", "action": "GoBack"},
+                {"id": "3", "type": "action", "action": "GoForward"},
+                {"id": "4", "type": "action", "action": "Reload"},
+            ], "edges": [
+                {"source": "1", "target": "2"}, {"source": "2", "target": "3"},
+                {"source": "3", "target": "4"},
+            ]
+        })
+        assert r["success"]
 
-# T7: Screenshot
-os.makedirs("tests/screenshots", exist_ok=True)
-r = run_test("Screenshot", {
-    "name": "t7", "nodes": [
-        {"id": "1", "type": "action", "action": "Screenshot", "filename": "tests/screenshots/e2e_test.png"},
-    ], "edges": []
-})
-assert os.path.exists("tests/screenshots/e2e_test.png")
 
-# T8: Cookie set + get + delete
-r = run_test("Cookie set/get/delete", {
-    "name": "t8", "nodes": [
-        {"id": "1", "type": "action", "action": "Cookie", "operation": "set",
-         "cookies": [{"name": "test_cookie", "value": "mimicry123", "url": "https://example.com"}]},
-        {"id": "2", "type": "action", "action": "Cookie", "operation": "get", "name": "test_cookie", "into": "$cookie"},
-        {"id": "3", "type": "action", "action": "Cookie", "operation": "delete", "name": "test_cookie"},
-    ], "edges": [{"source": "1", "target": "2"}, {"source": "2", "target": "3"}]
-})
+class TestDataExtraction:
+    def test_wait_get_text_set_variable(self, executor):
+        r = executor.execute({
+            "name": "t2", "nodes": [
+                {"id": "1", "type": "action", "action": "Wait", "selector": "h1", "timeout": "3s"},
+                {"id": "2", "type": "action", "action": "GetText", "selector": "h1", "into": "$h1"},
+                {"id": "3", "type": "action", "action": "SetVariable", "variable": "$custom", "value": "hello"},
+            ], "edges": [{"source": "1", "target": "2"}, {"source": "2", "target": "3"}]
+        })
+        assert r["success"]
+        assert r["variables"].get("$h1") == "Example Domain"
+        assert r["variables"].get("$custom") == "hello"
 
-# T9: ElementExists (true + false)
-r = run_test("ElementExists (true + false)", {
-    "name": "t9", "nodes": [
-        {"id": "1", "type": "action", "action": "ElementExists", "selector": "h1", "into": "$exists"},
-        {"id": "2", "type": "action", "action": "ElementExists", "selector": "#nonexistent_xyz_999", "into": "$notexists"},
-    ], "edges": [{"source": "1", "target": "2"}]
-})
-assert r["variables"].get("$exists") is True
-assert r["variables"].get("$notexists") is False
+    def test_get_attribute(self, executor):
+        r = executor.execute({
+            "name": "t11", "nodes": [
+                {"id": "1", "type": "action", "action": "Navigate", "url": "https://example.com"},
+                {"id": "2", "type": "action", "action": "GetAttribute", "selector": "a", "attrName": "href", "into": "$href"},
+            ], "edges": [{"source": "1", "target": "2"}]
+        })
+        assert r["success"]
+        assert r["variables"].get("$href") is not None
 
-# T10: WaitForPage
-r = run_test("WaitForPage", {
-    "name": "t10", "nodes": [
-        {"id": "1", "type": "action", "action": "WaitForPage", "state": "load", "timeout": 5000},
-    ], "edges": []
-})
+    def test_element_exists_true_and_false(self, executor):
+        r = executor.execute({
+            "name": "t9", "nodes": [
+                {"id": "1", "type": "action", "action": "Navigate", "url": "https://example.com"},
+                {"id": "2", "type": "action", "action": "ElementExists", "selector": "h1", "into": "$exists"},
+                {"id": "3", "type": "action", "action": "ElementExists", "selector": "#nonexistent_xyz_999", "into": "$notexists"},
+            ], "edges": [{"source": "1", "target": "2"}, {"source": "2", "target": "3"}]
+        })
+        assert r["success"]
+        assert r["variables"].get("$exists") is True
+        assert r["variables"].get("$notexists") is False
 
-# T11: GetAttribute
-r = run_test("GetAttribute", {
-    "name": "t11", "nodes": [
-        {"id": "1", "type": "action", "action": "Navigate", "url": "https://example.com"},
-        {"id": "2", "type": "action", "action": "GetAttribute", "selector": "a", "attrName": "href", "into": "$href"},
-    ], "edges": [{"source": "1", "target": "2"}]
-})
-assert r["variables"].get("$href") is not None
 
-# T12: Hover + Focus
-r = run_test("Hover + Focus", {
-    "name": "t12", "nodes": [
-        {"id": "1", "type": "action", "action": "Hover", "selector": "a"},
-        {"id": "2", "type": "action", "action": "Focus", "selector": "a"},
-    ], "edges": [{"source": "1", "target": "2"}]
-})
+class TestScriptAndMisc:
+    def test_run_script_delay_log(self, executor):
+        r = executor.execute({
+            "name": "t3", "nodes": [
+                {"id": "1", "type": "action", "action": "Navigate", "url": "https://example.com"},
+                {"id": "2", "type": "action", "action": "RunScript", "script": "document.querySelectorAll('p').length", "into": "$pCount"},
+                {"id": "3", "type": "action", "action": "Delay", "duration": "0.3s"},
+                {"id": "4", "type": "action", "action": "Log", "parts": ["paragraph count"]},
+            ], "edges": [{"source": "1", "target": "2"}, {"source": "2", "target": "3"}, {"source": "3", "target": "4"}]
+        })
+        assert r["success"]
+        assert r["variables"].get("$pCount") is not None
 
-# T13: Export (JSON)
-r = run_test("Export to JSON", {
-    "name": "t13", "nodes": [
-        {"id": "1", "type": "action", "action": "SetVariable", "variable": "$data", "value": "export_test"},
-        {"id": "2", "type": "action", "action": "Export", "format": "json", "path": "tests/screenshots/export_test.json"},
-    ], "edges": [{"source": "1", "target": "2"}]
-})
-assert os.path.exists("tests/screenshots/export_test.json")
+    def test_screenshot(self, executor):
+        os.makedirs("tests/screenshots", exist_ok=True)
+        r = executor.execute({
+            "name": "t7", "nodes": [
+                {"id": "1", "type": "action", "action": "Screenshot", "filename": "tests/screenshots/e2e_test.png"},
+            ], "edges": []
+        })
+        assert r["success"]
 
-# T14: Comment (no-op)
-r = run_test("Comment (no-op)", {
-    "name": "t14", "nodes": [
-        {"id": "1", "type": "action", "action": "Comment"},
-    ], "edges": []
-})
+    def test_comment_noop(self, executor):
+        r = executor.execute({
+            "name": "t14", "nodes": [
+                {"id": "1", "type": "action", "action": "Comment"},
+            ], "edges": []
+        })
+        assert r["success"]
 
-ctrl.close()
+    def test_hover_and_focus(self, executor):
+        r = executor.execute({
+            "name": "t12", "nodes": [
+                {"id": "1", "type": "action", "action": "Navigate", "url": "https://example.com"},
+                {"id": "2", "type": "action", "action": "Hover", "selector": "a"},
+                {"id": "3", "type": "action", "action": "Focus", "selector": "a"},
+            ], "edges": [{"source": "1", "target": "2"}, {"source": "2", "target": "3"}]
+        })
+        assert r["success"]
 
-print()
-print("=" * 60)
-passed = sum(1 for _, s, _ in results if s == "PASS")
-total = len(results)
-print(f"RESULTS: {passed}/{total} PASSED")
-for name, status, _ in results:
-    print(f"  {status:6s} | {name}")
-print("=" * 60)
+
+class TestControlFlow:
+    def test_condition_true_branch(self, executor):
+        r = executor.execute({
+            "name": "t5", "nodes": [
+                {"id": "1", "type": "action", "action": "SetVariable", "variable": "$x", "value": "10"},
+                {"id": "2", "type": "condition", "condition": 'equals("$x","10")', "children": [
+                    {"id": "3", "type": "action", "action": "SetVariable", "variable": "$branch", "value": "true_branch"}
+                ], "elseChildren": [
+                    {"id": "4", "type": "action", "action": "SetVariable", "variable": "$branch", "value": "false_branch"}
+                ]},
+            ], "edges": [{"source": "1", "target": "2"}]
+        })
+        assert r["success"]
+        assert r["variables"].get("$branch") == "true_branch"
+
+    def test_loop_count(self, executor):
+        r = executor.execute({
+            "name": "t6", "nodes": [
+                {"id": "1", "type": "action", "action": "SetVariable", "variable": "$sum", "value": "0"},
+                {"id": "2", "type": "loop", "loopType": "count", "count": 3, "variable": "$i", "children": [
+                    {"id": "3", "type": "action", "action": "SetVariable", "variable": "$sum", "value": "loop_ran"}
+                ]},
+            ], "edges": [{"source": "1", "target": "2"}]
+        })
+        assert r["success"]
+        assert r["variables"].get("$sum") == "loop_ran"
+        assert r["variables"].get("$i") == 2
+
+
+class TestCookies:
+    def test_cookie_set_get_delete(self, executor):
+        r = executor.execute({
+            "name": "t8", "nodes": [
+                {"id": "1", "type": "action", "action": "Navigate", "url": "https://example.com"},
+                {"id": "2", "type": "action", "action": "Cookie", "operation": "set",
+                 "cookies": [{"name": "test_cookie", "value": "mimicry123", "url": "https://example.com"}]},
+                {"id": "3", "type": "action", "action": "Cookie", "operation": "get", "name": "test_cookie", "into": "$cookie"},
+                {"id": "4", "type": "action", "action": "Cookie", "operation": "delete", "name": "test_cookie"},
+            ], "edges": [{"source": "1", "target": "2"}, {"source": "2", "target": "3"}, {"source": "3", "target": "4"}]
+        })
+        assert r["success"]
+
+
+class TestPageState:
+    def test_wait_for_page(self, executor):
+        r = executor.execute({
+            "name": "t10", "nodes": [
+                {"id": "1", "type": "action", "action": "Navigate", "url": "https://example.com"},
+                {"id": "2", "type": "action", "action": "WaitForPage", "state": "load", "timeout": 5000},
+            ], "edges": [{"source": "1", "target": "2"}]
+        })
+        assert r["success"]
+
+    def test_export_json(self, executor):
+        os.makedirs("tests/screenshots", exist_ok=True)
+        r = executor.execute({
+            "name": "t13", "nodes": [
+                {"id": "1", "type": "action", "action": "SetVariable", "variable": "$data", "value": "export_test"},
+                {"id": "2", "type": "action", "action": "Export", "format": "json", "path": "tests/screenshots/export_test.json"},
+            ], "edges": [{"source": "1", "target": "2"}]
+        })
+        assert r["success"]

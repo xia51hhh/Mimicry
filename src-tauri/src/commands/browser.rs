@@ -93,7 +93,7 @@ pub async fn browser_install(app: AppHandle, sidecar: State<'_, Mutex<Sidecar>>)
     emit_progress(&app, "venv", 0, "");
     if !has_venv {
         let output = tokio::process::Command::new(&python)
-            .args(["-m", "venv", &venv_dir.to_string_lossy().to_string()])
+            .args(["-m", "venv", venv_dir.to_string_lossy().as_ref()])
             .output()
             .await
             .map_err(|e| AppError::Sidecar(format!("Failed to run venv: {}", e)))?;

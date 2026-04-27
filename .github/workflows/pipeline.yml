@@ -134,7 +134,7 @@ jobs:
         working-directory: sidecar
         run: |
           pip install -r requirements-dev.txt
-          python -m pytest tests/ -v
+          python -m pytest tests/ -v -m "not e2e"
 
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable

@@ -62,10 +62,7 @@ def browser_controller():
     ctrl.close()
 
 
-@pytest.mark.skipif(
-    os.environ.get("CI") == "true",
-    reason="Anti-detect tests require a real browser, skip in CI",
-)
+@pytest.mark.e2e
 class TestAntiDetection:
     """Visit detection sites and save screenshots for manual review."""
 
