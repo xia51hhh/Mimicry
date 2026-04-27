@@ -1,3 +1,4 @@
+use std::path::PathBuf;
 use std::process::Stdio;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::process::{Child, Command};
@@ -12,15 +13,19 @@ pub struct Sidecar {
     child: Option<Child>,
     stdin: Option<tokio::process::ChildStdin>,
     reader: Option<Mutex<BufReader<tokio::process::ChildStdout>>>,
+    sidecar_dir: PathBuf,
+    venv_dir: PathBuf,
     app_handle: Option<tauri::AppHandle>,
 }
 
 impl Sidecar {
-    pub fn new() -> Self {
+    pub fn new(sidecar_dir: PathBuf, venv_dir: PathBuf) -> Self {
         Self {
             child: None,
             stdin: None,
             reader: None,
+            sidecar_dir,
+            venv_dir,
             app_handle: None,
         }
     }
@@ -29,33 +34,40 @@ impl Sidecar {
         self.app_handle = Some(handle);
     }
 
+    pub fn sidecar_dir(&self) -> &PathBuf {
+        &self.sidecar_dir
+    }
+
+    pub fn venv_dir(&self) -> &PathBuf {
+        &self.venv_dir
+    }
+
+    /// Get the venv python path if it exists
+    fn venv_python(&self) -> Option<PathBuf> {
+        let p = self.venv_dir.join("bin/python");
+        if p.exists() { Some(p) } else { None }
+    }
+
     pub async fn start(&mut self, python_path: &str) -> Result<(), AppError> {
         if self.child.is_some() {
             info!("Sidecar already running");
             return Ok(());
         }
 
-        let sidecar_dir = if std::path::Path::new("../sidecar/main.py").exists() {
-            "../sidecar"
-        } else if std::path::Path::new("sidecar/main.py").exists() {
-            "sidecar"
-        } else {
-            return Err(AppError::Sidecar("Cannot find sidecar directory".into()));
-        };
-
-        info!("Starting sidecar: {} in {}", python_path, sidecar_dir);
+        info!("Starting sidecar: {} (dir: {:?})", python_path, self.sidecar_dir);
         let mut child = Command::new(python_path)
             .arg("-u")
             .arg("main.py")
-            .current_dir(sidecar_dir)
+            .current_dir(&self.sidecar_dir)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
-            .stderr(Stdio::inherit())
+            .stderr(Stdio::piped())
             .spawn()
             .map_err(|e| AppError::Sidecar(format!("Failed to spawn sidecar: {}", e)))?;
 
         let stdin = child.stdin.take().ok_or_else(|| AppError::Sidecar("No stdin".into()))?;
         let stdout = child.stdout.take().ok_or_else(|| AppError::Sidecar("No stdout".into()))?;
+        let stderr = child.stderr.take();
 
         self.stdin = Some(stdin);
         self.reader = Some(Mutex::new(BufReader::new(stdout)));
@@ -65,7 +77,18 @@ impl Sidecar {
         let resp = match self.call("ping", None).await {
             Ok(resp) => resp,
             Err(err) => {
+                // Collect stderr for better error messages (e.g. ModuleNotFoundError)
+                let stderr_msg = if let Some(mut se) = stderr {
+                    let mut buf = String::new();
+                    let _ = tokio::io::AsyncReadExt::read_to_string(&mut se, &mut buf).await;
+                    buf
+                } else {
+                    String::new()
+                };
                 self.stop().await;
+                if !stderr_msg.is_empty() {
+                    return Err(AppError::Sidecar(stderr_msg.trim().to_string()));
+                }
                 return Err(err);
             }
         };
@@ -78,20 +101,31 @@ impl Sidecar {
             return Ok(());
         }
 
-        let mut last_error = String::new();
-        for python in ["python", "python3"] {
+        // Build candidate list: venv python first, then system pythons
+        let mut candidates: Vec<String> = Vec::new();
+        if let Some(venv_py) = self.venv_python() {
+            candidates.push(venv_py.to_string_lossy().into_owned());
+        }
+        candidates.push("python3".into());
+        candidates.push("python".into());
+
+        let mut errors: Vec<String> = Vec::new();
+        for python in &candidates {
             match self.start(python).await {
                 Ok(_) => return Ok(()),
                 Err(err) => {
-                    last_error = err.to_string();
+                    errors.push(err.to_string());
                 }
             }
         }
 
-        Err(AppError::Sidecar(format!(
-            "Failed to start sidecar with python/python3: {}",
-            last_error
-        )))
+        // Return the most meaningful error (longest, likely has Python traceback)
+        let best_error = errors.iter()
+            .max_by_key(|e| e.len())
+            .cloned()
+            .unwrap_or_default();
+
+        Err(AppError::Sidecar(best_error))
     }
 
     fn timeout_for_method(method: &str) -> std::time::Duration {

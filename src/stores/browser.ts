@@ -16,11 +16,75 @@ interface RecordingResult {
   nodes: RecordedNode[];
 }
 
+export interface InstallProgress {
+  step: "venv" | "pip" | "browser";
+  progress: number;
+  detail: string;
+}
+
+export type SetupPhase =
+  | "idle"
+  | "checking"
+  | "prompt"          // Show install dialog
+  | "need_system_pkg" // Need system package (python3-venv)
+  | "installing"      // Installing in progress
+  | "completed"       // Done
+  | "failed";         // Error
+
 export const useBrowserStore = defineStore("browser", () => {
   const connected = ref(false);
   const launching = ref(false);
   const recording = ref(false);
   const recordedNodes = ref<RecordedNode[]>([]);
+
+  // Setup state
+  const setupPhase = ref<SetupPhase>("idle");
+  const setupError = ref<string | null>(null);
+  const installStep = ref<InstallProgress["step"] | null>(null);
+  const installProgress = ref(0);
+  const installDetail = ref("");
+  const systemPkgName = ref("");
+
+  let unlistenProgress: (() => void) | null = null;
+
+  async function startProgressListener() {
+    if (unlistenProgress) return;
+    unlistenProgress = await listen<InstallProgress>("install-progress", (event) => {
+      installStep.value = event.payload.step;
+      installProgress.value = event.payload.progress;
+      installDetail.value = event.payload.detail;
+      if (event.payload.detail === "need_system_pkg") {
+        setupPhase.value = "need_system_pkg";
+      }
+    });
+  }
+
+  function stopProgressListener() {
+    unlistenProgress?.();
+    unlistenProgress = null;
+  }
+
+  async function checkEnvironment() {
+    setupPhase.value = "checking";
+    try {
+      const result = await invoke<{
+        ready: boolean;
+        hasVenv: boolean;
+        hasDeps: boolean;
+        hasBrowser: boolean;
+      }>("check_environment");
+
+      if (result.ready) {
+        setupPhase.value = "idle";
+        return true;
+      }
+      setupPhase.value = "prompt";
+      return false;
+    } catch {
+      setupPhase.value = "prompt";
+      return false;
+    }
+  }
 
   // Camoufox 环境状态
   const camoufoxInstalled = ref(false);
@@ -95,14 +159,85 @@ export const useBrowserStore = defineStore("browser", () => {
     }
 
     launching.value = true;
+    setupError.value = null;
     try {
       await invoke("browser_launch", { profileId: profileId || null });
       connected.value = true;
-    } catch (e) {
-      console.error("Failed to launch browser:", e);
+      setupPhase.value = "idle";
+    } catch (e: unknown) {
+      const msg = String(e);
+      // Check if environment needs setup
+      if (
+        msg.includes("ModuleNotFoundError") ||
+        msg.includes("No module named") ||
+        msg.includes("ImportError") ||
+        msg.includes("camoufox") ||
+        msg.includes("not found") ||
+        msg.includes("No such file") ||
+        msg.includes("not installed") ||
+        msg.includes("exited unexpectedly") ||
+        msg.includes("Failed to start sidecar") ||
+        msg.includes("Failed to spawn sidecar")
+      ) {
+        setupPhase.value = "prompt";
+      } else {
+        setupError.value = msg;
+      }
     } finally {
       launching.value = false;
     }
+  }
+
+  async function installBrowser() {
+    setupPhase.value = "installing";
+    setupError.value = null;
+    installStep.value = "venv";
+    installProgress.value = 0;
+
+    await startProgressListener();
+    try {
+      await invoke("browser_install");
+      setupPhase.value = "completed";
+    } catch (e: unknown) {
+      const msg = String(e);
+      if (msg.includes("NEED_SYSTEM_PKG:")) {
+        const pkg = msg.split("NEED_SYSTEM_PKG:")[1]?.trim() || "python3-venv";
+        systemPkgName.value = pkg;
+        setupPhase.value = "need_system_pkg";
+      } else {
+        setupError.value = msg;
+        setupPhase.value = "failed";
+      }
+    } finally {
+      stopProgressListener();
+    }
+  }
+
+  async function installSystemPkg(pkg: string) {
+    setupError.value = null;
+    try {
+      await invoke("install_system_pkg", { package: pkg });
+      // System pkg installed, retry full install
+      await installBrowser();
+    } catch (e: unknown) {
+      setupError.value = String(e);
+      setupPhase.value = "need_system_pkg";
+    }
+  }
+
+  async function launchAfterSetup() {
+    setupPhase.value = "idle";
+    await launch();
+  }
+
+  function resetSetup() {
+    setupPhase.value = "idle";
+    setupError.value = null;
+    installStep.value = null;
+    installProgress.value = 0;
+    installDetail.value = "";
+    systemPkgName.value = "";
+    stopProgressListener();
   }
 
   async function close() {
@@ -171,10 +306,13 @@ export const useBrowserStore = defineStore("browser", () => {
 
   return {
     connected, launching, recording, recordedNodes,
+    setupPhase, setupError, installStep, installProgress, installDetail, systemPkgName,
     camoufoxInstalled, camoufoxVersion, camoufoxChecking, camoufoxInstalling,
     launch, close, navigate, fetchStatus,
     startRecording, stopRecording, pollRecording,
     startRecordingPreview, stopRecordingPreview,
+    installBrowser, installSystemPkg, launchAfterSetup,
+    checkEnvironment, resetSetup,
     checkCamoufox, installCamoufox,
   };
 });

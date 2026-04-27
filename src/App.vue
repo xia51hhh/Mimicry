@@ -3,6 +3,7 @@ import { ref, onMounted, provide } from "vue";
 import MainLayout from "./components/layout/MainLayout.vue";
 import UpdateNotifier from "./components/UpdateNotifier.vue";
 import ShortcutToast from "./components/ui/ShortcutToast.vue";
+import SetupDialog from "./components/ui/SetupDialog.vue";
 import { useShortcutToast } from "./composables/useShortcutToast";
 
 const { message, shortcut, visible } = useShortcutToast();
@@ -24,4 +25,5 @@ onMounted(() => {
   <MainLayout />
   <UpdateNotifier ref="updaterRef" />
   <ShortcutToast :message="message" :shortcut="shortcut" :visible="visible" />
+  <SetupDialog />
 </template>

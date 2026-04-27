@@ -6,6 +6,7 @@ import { useBrowserStore } from '../stores/browser'
 import { getVersion } from '@tauri-apps/api/app'
 import { Sun, Palette, Languages, Check, Globe, Download, RefreshCw, Info } from 'lucide-vue-next'
 import CamoufoxSetup from '../components/CamoufoxSetup.vue'
+import ProfileManager from '../components/ProfileManager.vue'
 
 const { t } = useI18n()
 const settings = useSettingsStore()
@@ -150,6 +151,12 @@ onMounted(async () => {
           </div>
         </div>
       </div>
+    </section>
+
+    <!-- Browser Profiles -->
+    <section class="settings-section">
+      <h2 class="section-title">{{ t('settings.browser') }} Profiles</h2>
+      <ProfileManager />
     </section>
 
     <!-- About -->

@@ -6,22 +6,46 @@ mod error;
 
 pub use error::{AppError, AppResult};
 use ipc::sidecar::Sidecar;
+use std::path::PathBuf;
 use tauri::Manager;
 use tokio::sync::Mutex;
+
+fn resolve_sidecar_dir() -> PathBuf {
+    let dev_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .map(|p| p.join("sidecar"));
+    if let Some(ref dir) = dev_dir {
+        if dir.exists() {
+            return dir.clone();
+        }
+    }
+    PathBuf::from("sidecar")
+}
+
+fn resolve_app_data_dir() -> PathBuf {
+    dirs::data_dir()
+        .unwrap_or_else(|| PathBuf::from("."))
+        .join("com.mimicry.app")
+}
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     logger::init();
 
-    let conn = rusqlite::Connection::open("mimicry.db").expect("failed to open database");
+    let db_dir = resolve_app_data_dir();
+    std::fs::create_dir_all(&db_dir).expect("failed to create app data directory");
+    let db_path = db_dir.join("mimicry.db");
+    let conn = rusqlite::Connection::open(&db_path).expect("failed to open database");
     db::schema::init(&conn).expect("failed to init database schema");
+
+    let sidecar = Sidecar::new(resolve_sidecar_dir(), db_dir.join("venv"));
 
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_dialog::init())
         .manage(Mutex::new(conn))
-        .manage(Mutex::new(Sidecar::new()))
+        .manage(Mutex::new(sidecar))
         .setup(|app| {
             let handle = app.handle().clone();
             let sidecar = app.state::<Mutex<Sidecar>>();
@@ -49,6 +73,9 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             commands::browser::browser_launch,
+            commands::browser::browser_install,
+            commands::browser::install_system_pkg,
+            commands::browser::check_environment,
             commands::browser::browser_close,
             commands::browser::browser_navigate,
             commands::browser::browser_status,

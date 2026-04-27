@@ -1,7 +1,8 @@
 import platform
 import time
+from typing import Any, Callable
 
-METHOD_REGISTRY: dict[str, callable] = {}
+METHOD_REGISTRY: dict[str, Callable[..., Any]] = {}
 
 _start_time = time.time()
 

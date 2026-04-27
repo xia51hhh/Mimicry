@@ -9,7 +9,7 @@
     "build": "vue-tsc --noEmit && vite build",
     "preview": "vite preview",
     "tauri": "tauri",
-    "lint": "eslint src/ --ext .vue,.ts,.js",
+    "lint": "eslint src/",
     "format:check": "prettier --check \"src/**/*.{vue,ts,js,css,json}\"",
     "format": "prettier --write \"src/**/*.{vue,ts,js,css,json}\"",
     "typecheck": "vue-tsc --noEmit"

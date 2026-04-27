@@ -37,7 +37,8 @@ impl RpcRequest {
     }
 
     pub fn to_line(&self) -> String {
-        let mut s = serde_json::to_string(self).unwrap();
+        // RpcRequest contains only primitive serializable types; serialization is infallible
+        let mut s = serde_json::to_string(self).expect("RpcRequest serialization is infallible");
         s.push('\n');
         s
     }

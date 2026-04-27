@@ -1,5 +1,13 @@
 use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};
+use tracing::warn;
+
+fn parse_json_or_default(s: &str, field: &str, id: &str) -> serde_json::Value {
+    serde_json::from_str(s).unwrap_or_else(|e| {
+        warn!("Failed to parse {} for workflow {}: {}", field, id, e);
+        serde_json::Value::Array(vec![])
+    })
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -25,13 +33,14 @@ pub fn get(conn: &Connection, id: &str) -> rusqlite::Result<Option<Workflow>> {
     let mut rows = stmt.query(params![id])?;
     match rows.next()? {
         Some(row) => {
+            let id_val: String = row.get(0)?;
             let nodes_str: String = row.get(2)?;
             let edges_str: String = row.get(3)?;
             Ok(Some(Workflow {
-                id: row.get(0)?,
+                id: id_val.clone(),
                 name: row.get(1)?,
-                nodes: serde_json::from_str(&nodes_str).unwrap_or_default(),
-                edges: serde_json::from_str(&edges_str).unwrap_or_default(),
+                nodes: parse_json_or_default(&nodes_str, "nodes", &id_val),
+                edges: parse_json_or_default(&edges_str, "edges", &id_val),
                 created_at: row.get(4)?,
                 updated_at: row.get(5)?,
             }))
@@ -43,13 +52,14 @@ pub fn get(conn: &Connection, id: &str) -> rusqlite::Result<Option<Workflow>> {
 pub fn list(conn: &Connection) -> rusqlite::Result<Vec<Workflow>> {
     let mut stmt = conn.prepare("SELECT id, name, nodes, edges, created_at, updated_at FROM workflows ORDER BY updated_at DESC")?;
     let rows = stmt.query_map([], |row| {
+        let id_val: String = row.get(0)?;
         let nodes_str: String = row.get(2)?;
         let edges_str: String = row.get(3)?;
         Ok(Workflow {
-            id: row.get(0)?,
+            id: id_val.clone(),
             name: row.get(1)?,
-            nodes: serde_json::from_str(&nodes_str).unwrap_or_default(),
-            edges: serde_json::from_str(&edges_str).unwrap_or_default(),
+            nodes: parse_json_or_default(&nodes_str, "nodes", &id_val),
+            edges: parse_json_or_default(&edges_str, "edges", &id_val),
             created_at: row.get(4)?,
             updated_at: row.get(5)?,
         })

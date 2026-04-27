@@ -45,6 +45,30 @@ onUnmounted(() => {
   unlistenResize?.()
 })
 
+function startDrag(e: MouseEvent) {
+  const target = e.target as HTMLElement
+  // Don't drag from interactive elements (buttons)
+  if (target.closest('button')) return
+
+  const startX = e.screenX
+  const startY = e.screenY
+  const threshold = 4
+
+  const onMove = (moveEvent: MouseEvent) => {
+    if (Math.abs(moveEvent.screenX - startX) + Math.abs(moveEvent.screenY - startY) > threshold) {
+      cleanup()
+      appWindow?.startDragging().catch(() => {})
+    }
+  }
+  const onUp = () => cleanup()
+  const cleanup = () => {
+    document.removeEventListener('mousemove', onMove)
+    document.removeEventListener('mouseup', onUp)
+  }
+  document.addEventListener('mousemove', onMove)
+  document.addEventListener('mouseup', onUp)
+}
+
 function minimizeWindow() {
   appWindow?.minimize()
 }
@@ -128,7 +152,7 @@ const menuItems: MenuItem[] = [
 </script>
 
 <template>
-  <div class="tab-bar" data-tauri-drag-region>
+  <div class="tab-bar" data-tauri-drag-region @mousedown.left="startDrag">
     <!-- JB-style app menu button -->
     <div class="menu-area">
       <button class="menu-btn" @click="toggleMenu" :title="t('app.title')">

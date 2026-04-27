@@ -1,3 +1,4 @@
+import asyncio
 import sys
 import json
 from loguru import logger
@@ -7,16 +8,16 @@ logger.add(sys.stderr, level="DEBUG", format="{time:HH:mm:ss} | {level:<7} | {me
 logger.add("mimicry-sidecar.log", rotation="10 MB", retention="3 days", level="DEBUG")
 
 
-def main():
+async def main():
     logger.info("Mimicry sidecar starting")
     # Lazy import: browser/actions imports camoufox which is heavy
     from rpc.server import JsonRpcServer
     import browser.actions  # registers browser RPC methods
-    import dsl.rpc_methods  # registers DSL RPC methods
+    # DSL module is deprecated (ADR-001), do not import dsl.rpc_methods
     server = JsonRpcServer()
     browser.actions.set_server(server)
     server.run()
 
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())

@@ -156,7 +156,10 @@
     "toggleSidebar": "Toggle Sidebar",
     "toggleBottom": "Toggle Bottom Panel",
     "toggleRight": "Toggle Right Panel",
-    "newWorkflow": "New Workflow"
+    "newWorkflow": "New Workflow",
+    "browserNotInstalled": "Browser not installed",
+    "installBrowser": "Auto Install",
+    "installing": "Installing..."
   },
   "shortcut": {
     "undo": "Undo",
@@ -259,6 +262,26 @@
   "group": {
     "defaultLabel": "Group",
     "newGroup": "New Group"
+  },
+  "setup": {
+    "title": "Environment Setup",
+    "notInstalled": "The following components are required for browser automation:",
+    "depPythonVenv": "Python virtual environment (venv)",
+    "depPipPackages": "Python dependencies (camoufox, playwright, loguru)",
+    "depCamoufox": "Camoufox browser (~700MB)",
+    "install": "Start Installation",
+    "cancel": "Cancel",
+    "retry": "Retry",
+    "close": "Close",
+    "stepVenv": "Creating Python virtual environment",
+    "stepPip": "Installing Python dependencies",
+    "stepBrowser": "Downloading Camoufox browser",
+    "completed": "Installation complete!",
+    "failed": "Installation failed",
+    "needSystemPkg": "System package required",
+    "systemPkgHint": "Run the following command in terminal, or click auto-install (authorization required):",
+    "autoInstall": "Auto Install",
+    "manualInstall": "I installed manually, continue"
   },
   "camoufox": {
     "notInstalled": "Camoufox Not Installed",

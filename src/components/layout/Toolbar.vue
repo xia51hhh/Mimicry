@@ -39,6 +39,8 @@ async function runWorkflow() {
     <div class="flex items-center gap-3">
       <span class="text-sm font-semibold">Mimicry</span>
       <span class="text-xs text-[var(--color-text-muted)]">—</span>
+
+      <!-- Browser control -->
       <button
         class="rounded bg-[var(--color-primary)] px-3 py-1 text-xs text-white hover:opacity-90 disabled:opacity-50"
         :disabled="browser.launching"
@@ -46,8 +48,14 @@ async function runWorkflow() {
       >
         {{ browser.launching ? t('toolbar.launching') : browser.connected ? t('toolbar.closeBrowser') : t('toolbar.launchBrowser') }}
       </button>
+
       <span class="text-xs" :class="browser.connected ? 'text-green-400' : 'text-[var(--color-text-muted)]'">
         {{ browser.connected ? t('toolbar.connected') : t('toolbar.disconnected') }}
+      </span>
+
+      <!-- Error display (non-setup errors only) -->
+      <span v-if="browser.setupError && browser.setupPhase === 'idle'" class="text-xs text-[var(--color-error)] max-w-60 truncate" :title="browser.setupError">
+        {{ browser.setupError }}
       </span>
     </div>
     <div class="flex items-center gap-2">

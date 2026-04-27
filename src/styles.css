@@ -32,6 +32,8 @@ html, body, #app {
   background: var(--color-bg);
   color: var(--color-text);
   font-family: Inter, system-ui, -apple-system, sans-serif;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 /* === Vue Flow theme overrides === */
