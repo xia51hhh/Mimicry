@@ -47,6 +47,27 @@ pub fn run() {
         .manage(Mutex::new(conn))
         .manage(Mutex::new(sidecar))
         .setup(|app| {
+            // Fit window to monitor: 70% of logical screen, clamped
+            if let Some(window) = app.get_webview_window("main") {
+                if let Ok(Some(monitor)) = window.primary_monitor() {
+                    let phy = monitor.size();
+                    let scale = monitor.scale_factor();
+                    let logical_w = phy.width as f64 / scale;
+                    let logical_h = phy.height as f64 / scale;
+
+                    let target_w = (logical_w * 0.7).clamp(800.0, 1400.0);
+                    let target_h = (logical_h * 0.7).clamp(600.0, 900.0);
+
+                    tracing::info!(
+                        "Monitor: {}x{} @ {:.1}x, logical: {:.0}x{:.0}, window: {:.0}x{:.0}",
+                        phy.width, phy.height, scale, logical_w, logical_h, target_w, target_h
+                    );
+
+                    let _ = window.set_size(tauri::LogicalSize::new(target_w, target_h));
+                    let _ = window.center();
+                }
+            }
+
             let handle = app.handle().clone();
             let sidecar = app.state::<Mutex<Sidecar>>();
             tauri::async_runtime::block_on(async {
