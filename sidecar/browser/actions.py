@@ -31,8 +31,10 @@ def _get_recorder(session_id: str) -> RecordingEngine:
 def _get_executor(session_id: str) -> WorkflowExecutor:
     with _aux_lock:
         if session_id not in _executors:
-            ctrl = _mgr.get(session_id)
-            _executors[session_id] = WorkflowExecutor(ctrl)
+            _executors[session_id] = WorkflowExecutor(
+                session_manager=_mgr,
+                default_session_id=session_id,
+            )
         return _executors[session_id]
 
 

@@ -326,6 +326,8 @@
     "title": "Active Sessions",
     "empty": "No active sessions",
     "close": "Close Session",
-    "active": "Active"
+    "active": "Active",
+    "target": "Target Session",
+    "inherit": "Default (workflow session)"
   }
 }

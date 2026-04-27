@@ -18,6 +18,11 @@ function convertNodesToBackend(nodes: Record<string, unknown>[]): Record<string,
     if (typeof flat.action === "string") {
       flat.action = toBackend(flat.action as string);
     }
+    // Pass session_id for cross-profile execution (from data.sessionId)
+    if (flat.sessionId) {
+      flat.session_id = flat.sessionId;
+      delete flat.sessionId;
+    }
     if (Array.isArray(data.children)) {
       flat.children = convertNodesToBackend(data.children as Record<string, unknown>[]);
     }

@@ -2,12 +2,14 @@
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useWorkflowStore } from '../../stores/workflow'
+import { useBrowserStore } from '../../stores/browser'
 import { usePanel, usePanelLayout } from '../../composables/usePanel'
 import { ChevronDown } from 'lucide-vue-next'
 import type { Node } from '@vue-flow/core'
 
 const { t } = useI18n()
 const store = useWorkflowStore()
+const browser = useBrowserStore()
 const activeTab = ref<'settings' | 'data'>('settings')
 const canvasToolsCollapsed = ref(false)
 
@@ -90,6 +92,20 @@ const onErrorOptions = [
   { value: 'continue', label: t('errorOptions.continue') },
   { value: 'retry', label: t('errorOptions.retry') },
 ]
+
+const sessionOptions = computed(() =>
+  Array.from(browser.sessions.values()).map(s => ({
+    value: s.sessionId,
+    label: s.profileId ?? s.sessionId,
+  }))
+)
+
+const nodeSessionId = computed(() => editData.value.sessionId as string | undefined)
+
+function updateSessionId(value: string) {
+  if (!node.value) return
+  updateField('sessionId', value || undefined)
+}
 </script>
 
 <template>
@@ -138,6 +154,21 @@ const onErrorOptions = [
 
       <!-- Settings Tab -->
       <div v-if="activeTab === 'settings'" class="panel-body">
+        <!-- Session selector (cross-profile) -->
+        <div v-if="sessionOptions.length > 1" class="field-group">
+          <label class="field-label">{{ t('session.target') }}</label>
+          <select
+            class="field-input"
+            :value="nodeSessionId || ''"
+            @change="updateSessionId(($event.target as HTMLSelectElement).value)"
+          >
+            <option value="">{{ t('session.inherit') }}</option>
+            <option v-for="opt in sessionOptions" :key="opt.value" :value="opt.value">
+              {{ opt.label }}
+            </option>
+          </select>
+        </div>
+
         <!-- Action Node -->
         <template v-if="nodeType === 'action'">
           <div class="field-group">

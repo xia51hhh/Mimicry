@@ -12,11 +12,13 @@ export interface ActionData {
   value?: string;
   url?: string;
   timeout?: number;
+  sessionId?: string;
 }
 
 export interface ConditionData {
   condition: string;
   selector?: string;
+  sessionId?: string;
 }
 
 export interface LoopData {
@@ -26,6 +28,7 @@ export interface LoopData {
   condition?: string;
   variable?: string;
   max?: number;
+  sessionId?: string;
 }
 
 export type NodeData = ActionData | ConditionData | LoopData | Record<string, unknown>;

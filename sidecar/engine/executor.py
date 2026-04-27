@@ -10,7 +10,7 @@ import urllib.request
 import urllib.error
 from typing import Any
 from loguru import logger
-from browser.controller import BrowserController
+from browser.controller import BrowserController, SessionManager
 from engine.action_map import to_backend
 
 # Sandbox directory for file outputs (screenshots, exports)
@@ -89,11 +89,30 @@ def _parse_duration(s) -> float:
 
 
 class WorkflowExecutor:
-    def __init__(self, controller: BrowserController):
+    def __init__(self, controller: BrowserController | None = None, *,
+                 session_manager: SessionManager | None = None,
+                 default_session_id: str = "default"):
         self._controller = controller
+        self._session_manager = session_manager
+        self._default_session_id = default_session_id
         self._ctx = ExecutionContext()
         self.progress_callback: callable | None = None
         self.log_callback: callable | None = None
+
+    def _get_ctrl(self, node: dict | None = None) -> BrowserController:
+        """Resolve BrowserController for a node, supporting per-node session_id."""
+        sid = None
+        if node:
+            sid = node.get("session_id")
+        if sid and self._session_manager:
+            return self._session_manager.get(sid)
+        if sid and not self._session_manager:
+            logger.warning(f"session_id='{sid}' ignored: no SessionManager available")
+        if self._controller:
+            return self._controller
+        if self._session_manager:
+            return self._session_manager.get(self._default_session_id)
+        raise RuntimeError("No browser controller available")
 
     @property
     def context(self) -> ExecutionContext:
@@ -223,7 +242,7 @@ class WorkflowExecutor:
 
     def _execute_action(self, node: dict):
         action = to_backend(node.get("action", ""))
-        ctrl = self._controller
+        ctrl = self._get_ctrl(node)
         ctx = self._ctx
 
         match action:
@@ -439,7 +458,12 @@ class WorkflowExecutor:
                 # Sub-workflow execution - requires workflow JSON in node
                 sub_wf = node.get("workflow")
                 if sub_wf:
-                    sub_executor = WorkflowExecutor(ctrl)
+                    sub_executor = WorkflowExecutor(
+                        session_manager=self._session_manager,
+                        default_session_id=self._default_session_id,
+                    )
+                    if not self._session_manager:
+                        sub_executor._controller = ctrl
                     result = sub_executor.execute(sub_wf)
                     into = node.get("into")
                     if into:
@@ -459,16 +483,16 @@ class WorkflowExecutor:
 
     def _execute_condition(self, node: dict):
         condition = self._ctx.resolve(node.get("condition", ""))
-        result = self._evaluate_condition(condition)
+        result = self._evaluate_condition(condition, node)
         if result:
             self._execute_nodes(node.get("children", []))
         else:
             self._execute_nodes(node.get("elseChildren", []))
 
-    def _evaluate_condition(self, condition: str) -> bool:
+    def _evaluate_condition(self, condition: str, node: dict | None = None) -> bool:
         """Evaluate a condition string against browser state."""
         from engine.condition_parser import evaluate_condition
-        return evaluate_condition(condition, self._controller, self._ctx)
+        return evaluate_condition(condition, self._get_ctrl(node), self._ctx)
 
     def _execute_loop(self, node: dict):
         lt = node.get("loopType", "items")
@@ -491,7 +515,7 @@ class WorkflowExecutor:
             selector = ctx.resolve(node.get("selector", ""))
             var = node.get("variable")
             max_iter = node.get("max", 100)
-            elements_count = self._controller.get_element_count(selector)
+            elements_count = self._get_ctrl(node).get_element_count(selector)
             count = min(elements_count, max_iter)
             for i in range(count):
                 if not ctx.running:
@@ -508,7 +532,7 @@ class WorkflowExecutor:
             max_iter = node.get("max", 100)
             iteration = 0
             while ctx.running and iteration < max_iter:
-                if not self._evaluate_condition(cond):
+                if not self._evaluate_condition(cond, node):
                     break
                 try:
                     self._execute_nodes(node.get("children", []))
@@ -520,7 +544,7 @@ class WorkflowExecutor:
             selector = ctx.resolve(node.get("selector", ""))
             var = node.get("variable")
             max_iter = node.get("max", 100)
-            elements_count = self._controller.get_element_count(selector)
+            elements_count = self._get_ctrl(node).get_element_count(selector)
             count = min(elements_count, max_iter)
             for i in range(count):
                 if not ctx.running:
