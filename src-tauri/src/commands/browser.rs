@@ -4,14 +4,19 @@ use tokio::sync::Mutex;
 use crate::ipc::sidecar::Sidecar;
 use crate::AppError;
 
+/// Acquire IO handles (briefly locking Sidecar), then release the lock and perform the RPC call.
 async fn sidecar_call(
     sidecar: State<'_, Mutex<Sidecar>>,
     method: &str,
     params: Option<serde_json::Value>,
 ) -> Result<serde_json::Value, AppError> {
-    let mut sc = sidecar.lock().await;
-    sc.ensure_alive().await?;
-    sc.call(method, params).await
+    let io = {
+        let mut sc = sidecar.lock().await;
+        sc.ensure_alive().await?;
+        sc.io()?
+        // Sidecar Mutex released here
+    };
+    io.call(method, params).await
 }
 
 fn find_python() -> Result<String, AppError> {
@@ -50,21 +55,32 @@ pub async fn browser_launch(
     session_id: Option<String>,
 ) -> Result<serde_json::Value, AppError> {
     let sid = session_id.or_else(|| profile_id.clone()).unwrap_or_else(|| "default".into());
+    tracing::info!("browser_launch called: session_id={}, profile_id={:?}", sid, profile_id);
+
     let mut params = serde_json::json!({"session_id": sid});
 
     if let Some(pid) = profile_id {
         let db = conn.lock().await;
         if let Some(profile) = crate::db::profiles::get(&db, &pid)? {
+            tracing::info!("Profile loaded: id={}, user_data_dir={:?}", pid, profile.user_data_dir);
             params["profile"] = serde_json::json!({
                 "user_data_dir": profile.user_data_dir,
                 "fingerprint": profile.fingerprint,
                 "proxy": profile.proxy,
                 "os_target": profile.os_target,
             });
+        } else {
+            tracing::warn!("Profile not found: {}", pid);
         }
     }
 
-    sidecar_call(sidecar, "browser.launch", Some(params)).await
+    tracing::info!("Calling sidecar browser.launch with params: {}", params);
+    let result = sidecar_call(sidecar, "browser.launch", Some(params)).await;
+    match &result {
+        Ok(v) => tracing::info!("browser.launch success: {}", v),
+        Err(e) => tracing::error!("browser.launch failed: {}", e),
+    }
+    result
 }
 
 #[tauri::command]

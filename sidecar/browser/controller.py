@@ -73,7 +73,8 @@ class BrowserController:
 
         try:
             from camoufox.sync_api import Camoufox
-        except ImportError:
+        except ImportError as e:
+            logger.error(f"Camoufox import failed: {e}")
             raise RuntimeError("Camoufox is not installed. Run camoufox.install first.")
 
         kwargs = {
@@ -91,6 +92,7 @@ class BrowserController:
 
         # Apply profile overrides
         if profile:
+            logger.info(f"Applying profile overrides: {list(profile.keys())}")
             if profile.get("user_data_dir"):
                 kwargs["persistent_context"] = True
                 kwargs["user_data_dir"] = profile["user_data_dir"]
@@ -105,13 +107,22 @@ class BrowserController:
         try:
             w, h = self._get_screen_size()
             kwargs["window"] = (max(w - 100, 800), max(h - 150, 600))
-        except Exception:
-            pass
+            logger.debug(f"Screen size: {w}x{h}, window: {kwargs['window']}")
+        except Exception as e:
+            logger.warning(f"Failed to detect screen size: {e}")
 
         self._persistent = kwargs.get("persistent_context", False)
-        logger.info(f"Launching Camoufox (headless={headless}, persistent={self._persistent})")
-        self._camoufox = Camoufox(**kwargs)
-        ctx_or_browser = self._camoufox.__enter__()
+        # Log kwargs without potentially large config values
+        safe_log = {k: v for k, v in kwargs.items() if k != "config"}
+        logger.info(f"Launching Camoufox: {safe_log}")
+
+        try:
+            self._camoufox = Camoufox(**kwargs)
+            ctx_or_browser = self._camoufox.__enter__()
+        except Exception as e:
+            logger.error(f"Camoufox launch failed: {type(e).__name__}: {e}")
+            self._camoufox = None
+            raise
 
         if self._persistent:
             # persistent_context returns a BrowserContext directly

@@ -3,12 +3,23 @@ import sys
 import json
 from loguru import logger
 
+# Server reference for thread-safe stdout writes
+_server = None
+
+
+def set_server(server):
+    global _server
+    _server = server
+
 
 def _send_notification(method: str, params: dict):
-    """Send a JSON-RPC notification (no id) to stdout."""
-    msg = json.dumps({"jsonrpc": "2.0", "method": method, "params": params})
-    sys.stdout.write(msg + "\n")
-    sys.stdout.flush()
+    """Send a JSON-RPC notification via server (thread-safe) or direct stdout (fallback)."""
+    if _server:
+        _server.send_notification(method, params)
+    else:
+        msg = json.dumps({"jsonrpc": "2.0", "method": method, "params": params})
+        sys.stdout.write(msg + "\n")
+        sys.stdout.flush()
 
 
 class CamoufoxEnv:

@@ -1,4 +1,3 @@
-import asyncio
 import sys
 import json
 from loguru import logger
@@ -8,7 +7,7 @@ logger.add(sys.stderr, level="DEBUG", format="{time:HH:mm:ss} | {level:<7} | {me
 logger.add("mimicry-sidecar.log", rotation="10 MB", retention="3 days", level="DEBUG")
 
 
-async def main():
+def main():
     logger.info("Mimicry sidecar starting")
     # Lazy import: browser/actions imports camoufox which is heavy
     from rpc.server import JsonRpcServer
@@ -20,4 +19,4 @@ async def main():
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    main()

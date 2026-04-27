@@ -1,5 +1,6 @@
 use std::path::PathBuf;
 use std::process::Stdio;
+use std::sync::Arc;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::process::{Child, Command};
 use tokio::sync::Mutex;
@@ -8,11 +9,19 @@ use tracing::info;
 use super::jsonrpc::{RpcRequest, RpcResponse};
 use crate::AppError;
 
+/// Cloneable IO handles extracted from a running sidecar process.
+/// These can be held independently of the main Sidecar Mutex.
+#[derive(Clone)]
+pub struct SidecarIo {
+    stdin: Arc<Mutex<tokio::process::ChildStdin>>,
+    reader: Arc<Mutex<BufReader<tokio::process::ChildStdout>>>,
+    app_handle: Option<tauri::AppHandle>,
+}
+
 pub struct Sidecar {
     #[allow(dead_code)]
     child: Option<Child>,
-    stdin: Option<tokio::process::ChildStdin>,
-    reader: Option<Mutex<BufReader<tokio::process::ChildStdout>>>,
+    io: Option<SidecarIo>,
     sidecar_dir: PathBuf,
     venv_dir: PathBuf,
     app_handle: Option<tauri::AppHandle>,
@@ -22,8 +31,7 @@ impl Sidecar {
     pub fn new(sidecar_dir: PathBuf, venv_dir: PathBuf) -> Self {
         Self {
             child: None,
-            stdin: None,
-            reader: None,
+            io: None,
             sidecar_dir,
             venv_dir,
             app_handle: None,
@@ -40,6 +48,11 @@ impl Sidecar {
 
     pub fn venv_dir(&self) -> &PathBuf {
         &self.venv_dir
+    }
+
+    /// Get cloneable IO handles for making RPC calls without holding the Sidecar Mutex.
+    pub fn io(&self) -> Result<SidecarIo, AppError> {
+        self.io.clone().ok_or_else(|| AppError::Sidecar("Sidecar not running".into()))
     }
 
     /// Get the venv python path if it exists
@@ -69,12 +82,16 @@ impl Sidecar {
         let stdout = child.stdout.take().ok_or_else(|| AppError::Sidecar("No stdout".into()))?;
         let stderr = child.stderr.take();
 
-        self.stdin = Some(stdin);
-        self.reader = Some(Mutex::new(BufReader::new(stdout)));
+        let io = SidecarIo {
+            stdin: Arc::new(Mutex::new(stdin)),
+            reader: Arc::new(Mutex::new(BufReader::new(stdout))),
+            app_handle: self.app_handle.clone(),
+        };
+        self.io = Some(io.clone());
         self.child = Some(child);
 
         // Verify with ping
-        let resp = match self.call("ping", None).await {
+        let resp = match SidecarIo::call(&io, "ping", None).await {
             Ok(resp) => resp,
             Err(err) => {
                 // Collect stderr for better error messages (e.g. ModuleNotFoundError)
@@ -128,6 +145,38 @@ impl Sidecar {
         Err(AppError::Sidecar(best_error))
     }
 
+    pub async fn stop(&mut self) {
+        if let Some(mut child) = self.child.take() {
+            let _ = child.kill().await;
+            info!("Sidecar stopped");
+        }
+        self.io = None;
+    }
+
+    pub async fn is_alive(&mut self) -> bool {
+        match &mut self.child {
+            Some(child) => {
+                // Check if process is still running without blocking
+                match child.try_wait() {
+                    Ok(None) => true,   // still running
+                    Ok(Some(_)) => false, // exited
+                    Err(_) => false,
+                }
+            }
+            None => false,
+        }
+    }
+
+    pub async fn ensure_alive(&mut self) -> Result<(), AppError> {
+        if self.child.is_some() && !self.is_alive().await {
+            tracing::warn!("Sidecar heartbeat failed, restarting...");
+            self.stop().await;
+        }
+        self.ensure_started().await
+    }
+}
+
+impl SidecarIo {
     fn timeout_for_method(method: &str) -> std::time::Duration {
         match method {
             "ping" | "browser.status" | "recording.poll" | "workflow.execution_status"
@@ -142,17 +191,20 @@ impl Sidecar {
         }
     }
 
-    pub async fn call(&mut self, method: &str, params: Option<serde_json::Value>) -> Result<serde_json::Value, AppError> {
-        let stdin = self.stdin.as_mut().ok_or_else(|| AppError::Sidecar("Sidecar not running".into()))?;
-        let reader = self.reader.as_ref().ok_or_else(|| AppError::Sidecar("Sidecar not running".into()))?;
-
+    pub async fn call(&self, method: &str, params: Option<serde_json::Value>) -> Result<serde_json::Value, AppError> {
         let req = RpcRequest::new(method, params);
         let line = req.to_line();
+        tracing::debug!("RPC >> {}", line.trim());
 
-        stdin.write_all(line.as_bytes()).await.map_err(|e| AppError::Sidecar(format!("Write failed: {}", e)))?;
-        stdin.flush().await.map_err(|e| AppError::Sidecar(format!("Flush failed: {}", e)))?;
+        // Write request — brief lock on stdin
+        {
+            let mut stdin = self.stdin.lock().await;
+            stdin.write_all(line.as_bytes()).await.map_err(|e| AppError::Sidecar(format!("Write failed: {}", e)))?;
+            stdin.flush().await.map_err(|e| AppError::Sidecar(format!("Flush failed: {}", e)))?;
+        }
 
-        let mut reader = reader.lock().await;
+        // Read response — holds reader lock until we get a matching response
+        let mut reader = self.reader.lock().await;
         let timeout_dur = Self::timeout_for_method(method);
         loop {
             let mut response_line = String::new();
@@ -162,8 +214,11 @@ impl Sidecar {
                 .map_err(|e| AppError::Sidecar(format!("Read failed: {}", e)))?;
 
             if bytes == 0 {
+                tracing::error!("RPC: sidecar process exited (EOF on stdout)");
                 return Err(AppError::Sidecar("Sidecar process exited unexpectedly".into()));
             }
+
+            tracing::debug!("RPC << {}", response_line.trim());
 
             // Parse as generic JSON to check if it's a notification or response
             let val: serde_json::Value = serde_json::from_str(&response_line)?;
@@ -189,36 +244,5 @@ impl Sidecar {
                 continue;
             }
         }
-    }
-
-    pub async fn stop(&mut self) {
-        if let Some(mut child) = self.child.take() {
-            let _ = child.kill().await;
-            info!("Sidecar stopped");
-        }
-        self.stdin = None;
-        self.reader = None;
-    }
-
-    pub async fn is_alive(&mut self) -> bool {
-        match &mut self.child {
-            Some(child) => {
-                // Check if process is still running without blocking
-                match child.try_wait() {
-                    Ok(None) => true,   // still running
-                    Ok(Some(_)) => false, // exited
-                    Err(_) => false,
-                }
-            }
-            None => false,
-        }
-    }
-
-    pub async fn ensure_alive(&mut self) -> Result<(), AppError> {
-        if self.child.is_some() && !self.is_alive().await {
-            tracing::warn!("Sidecar heartbeat failed, restarting...");
-            self.stop().await;
-        }
-        self.ensure_started().await
     }
 }

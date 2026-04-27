@@ -25,6 +25,7 @@ class JsonRpcServer:
 
         handler = self.methods.get(method)
         if not handler:
+            logger.warning(f"RPC method not found: {method}")
             return json.dumps({"jsonrpc": "2.0", "id": req_id, "error": {"code": -32601, "message": f"Method not found: {method}"}})
 
         if method in ASYNC_METHODS:

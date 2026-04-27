@@ -1,5 +1,6 @@
 import json
 import threading
+from loguru import logger
 
 from rpc.methods import rpc_method
 from browser.controller import SessionManager
@@ -18,6 +19,9 @@ _server = None
 def set_server(server):
     global _server
     _server = server
+    # Propagate server to env_check for thread-safe notifications
+    from browser.env_check import set_server as env_set_server
+    env_set_server(server)
 
 
 def _get_recorder(session_id: str) -> RecordingEngine:
@@ -41,8 +45,11 @@ def _get_executor(session_id: str) -> WorkflowExecutor:
 @rpc_method("browser.launch")
 def browser_launch(session_id: str = "default", headless: bool = False,
                    proxy: dict | None = None, profile: dict | None = None):
+    logger.info(f"browser.launch: session_id={session_id}, headless={headless}, profile_keys={list(profile.keys()) if profile else None}")
     ctrl = _mgr.create(session_id, headless=headless, proxy=proxy, profile=profile)
-    return {"session_id": session_id, **ctrl.status()}
+    status = ctrl.status()
+    logger.info(f"browser.launch success: {status}")
+    return {"session_id": session_id, **status}
 
 
 @rpc_method("browser.close")
