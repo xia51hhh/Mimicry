@@ -3,7 +3,7 @@ import { ref, shallowRef } from "vue";
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { toBackend } from "../types/action-map";
-import { errorMessage } from "../types/ipc";
+import { errorMessage, SidecarEvent } from "../types/ipc";
 
 function convertNodesToBackend(nodes: Record<string, unknown>[]): Record<string, unknown>[] {
   return nodes.map((n) => {
@@ -154,7 +154,7 @@ export const useExecutionStore = defineStore("execution", () => {
       action: string;
       nodeId?: string;
       status: string;
-    }>("sidecar:workflow/progress", (event) => {
+    }>(SidecarEvent.WorkflowProgress, (event) => {
       const p = event.payload;
       const prevNodeId = currentNodeId.value;
 
@@ -175,7 +175,7 @@ export const useExecutionStore = defineStore("execution", () => {
       nodeId?: string;
       step: number;
       timestamp: number;
-    }>("sidecar:workflow/log", (event) => {
+    }>(SidecarEvent.WorkflowLog, (event) => {
       const entry = event.payload;
       logs.value.push({
         time: new Date(entry.timestamp * 1000).toLocaleTimeString(),

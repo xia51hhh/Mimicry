@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, watch, onUnmounted } from 'vue'
 import { listen, type UnlistenFn } from '@tauri-apps/api/event'
+import { SidecarEvent } from '../types/ipc'
 import { useI18n } from 'vue-i18n'
 import { useBrowserStore } from '../stores/browser'
 import { Download, CheckCircle, XCircle } from 'lucide-vue-next'
@@ -30,7 +31,7 @@ let unlisten: UnlistenFn | null = null
 
 async function startListening() {
   unlisten = await listen<{ stage: string; progress: number; message: string }>(
-    'sidecar:camoufox/progress',
+    SidecarEvent.CamoufoxProgress,
     (event) => {
       installProgress.value = event.payload.progress
       installMessage.value = event.payload.message

@@ -2,7 +2,7 @@ import { defineStore } from "pinia";
 import { ref, computed } from "vue";
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
-import { errorMessage } from "../types/ipc";
+import { errorMessage, SidecarEvent } from "../types/ipc";
 
 export interface RecordedNode {
   type: string;
@@ -117,7 +117,7 @@ export const useBrowserStore = defineStore("browser", () => {
 
   async function startRecordingPreview() {
     stopRecordingPreview(); // Prevent listener leaks
-    recordingUnlisten = await listen<Record<string, unknown>>("sidecar:recording/event", (event) => {
+    recordingUnlisten = await listen<Record<string, unknown>>(SidecarEvent.RecordingEvent, (event) => {
       const node = event.payload as Record<string, unknown>;
       // Filter events by active session
       if (node.session_id && node.session_id !== activeSessionId.value) return;

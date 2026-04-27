@@ -244,7 +244,11 @@ impl SidecarIo {
                     continue;
                 }
                 if let Some(err) = resp.error {
-                    return Err(AppError::Sidecar(format!("[{}] {}", err.code, err.message)));
+                    let error_type = err.data
+                        .as_ref()
+                        .and_then(|d| d.error_type.as_deref())
+                        .unwrap_or("Unknown");
+                    return Err(AppError::Sidecar(format!("[{}:{}] {}", err.code, error_type, err.message)));
                 }
                 return Ok(resp.result.unwrap_or(serde_json::Value::Null));
             } else if let Some(method) = val.get("method").and_then(|m| m.as_str()) {

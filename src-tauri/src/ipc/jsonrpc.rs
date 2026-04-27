@@ -24,6 +24,14 @@ pub struct RpcResponse {
 pub struct RpcError {
     pub code: i64,
     pub message: String,
+    pub data: Option<RpcErrorData>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct RpcErrorData {
+    pub error_type: Option<String>,
+    #[allow(dead_code)]
+    pub method: Option<String>,
 }
 
 impl RpcRequest {
