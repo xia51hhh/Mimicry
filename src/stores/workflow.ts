@@ -3,6 +3,7 @@ import { ref, shallowRef, computed } from "vue";
 import { invoke } from "@tauri-apps/api/core";
 import type { Node, Edge } from "@vue-flow/core";
 import type { RecordedNode } from "./browser";
+import { errorMessage } from "../types/ipc";
 import dagre from "@dagrejs/dagre";
 
 interface Snapshot {
@@ -273,7 +274,7 @@ export const useWorkflowStore = defineStore("workflow", () => {
 
       return { success: true };
     } catch (e) {
-      return { success: false, error: String(e) };
+      return { success: false, error: errorMessage(e) };
     }
   }
 

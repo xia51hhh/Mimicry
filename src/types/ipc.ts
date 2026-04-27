@@ -21,3 +21,9 @@ export interface BrowserStatus {
   pages: number;
   url?: string;
 }
+
+/** Extract readable message from Tauri AppError (serialized as {kind,message,display}) or any thrown value */
+export function errorMessage(e: unknown): string {
+  if (e && typeof e === "object" && "message" in e) return String((e as Record<string, unknown>).message);
+  return String(e);
+}

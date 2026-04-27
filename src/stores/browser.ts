@@ -2,6 +2,7 @@ import { defineStore } from "pinia";
 import { ref } from "vue";
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
+import { errorMessage } from "../types/ipc";
 
 export interface RecordedNode {
   type: string;
@@ -96,7 +97,7 @@ export const useBrowserStore = defineStore("browser", () => {
 
   async function startRecordingPreview() {
     stopRecordingPreview(); // Prevent listener leaks
-    recordingUnlisten = await listen<Record<string, unknown>>("sidecar:recording.event", (event) => {
+    recordingUnlisten = await listen<Record<string, unknown>>("sidecar:recording/event", (event) => {
       const node = event.payload as Record<string, unknown>;
       recordedNodes.value = [...recordedNodes.value, {
         type: "action",
@@ -142,7 +143,7 @@ export const useBrowserStore = defineStore("browser", () => {
       return result;
     } catch (e) {
       console.error("Failed to install camoufox:", e);
-      return { success: false, error: String(e) };
+      return { success: false, error: errorMessage(e) };
     } finally {
       camoufoxInstalling.value = false;
     }
@@ -165,7 +166,7 @@ export const useBrowserStore = defineStore("browser", () => {
       connected.value = true;
       setupPhase.value = "idle";
     } catch (e: unknown) {
-      const msg = String(e);
+      const msg = errorMessage(e);
       // Check if environment needs setup
       if (
         msg.includes("ModuleNotFoundError") ||
@@ -199,7 +200,7 @@ export const useBrowserStore = defineStore("browser", () => {
       await invoke("browser_install");
       setupPhase.value = "completed";
     } catch (e: unknown) {
-      const msg = String(e);
+      const msg = errorMessage(e);
       if (msg.includes("NEED_SYSTEM_PKG:")) {
         const pkg = msg.split("NEED_SYSTEM_PKG:")[1]?.trim() || "python3-venv";
         systemPkgName.value = pkg;
@@ -220,7 +221,7 @@ export const useBrowserStore = defineStore("browser", () => {
       // System pkg installed, retry full install
       await installBrowser();
     } catch (e: unknown) {
-      setupError.value = String(e);
+      setupError.value = errorMessage(e);
       setupPhase.value = "need_system_pkg";
     }
   }

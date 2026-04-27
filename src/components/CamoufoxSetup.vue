@@ -30,7 +30,7 @@ let unlisten: UnlistenFn | null = null
 
 async function startListening() {
   unlisten = await listen<{ stage: string; progress: number; message: string }>(
-    'sidecar:camoufox.progress',
+    'sidecar:camoufox/progress',
     (event) => {
       installProgress.value = event.payload.progress
       installMessage.value = event.payload.message

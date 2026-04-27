@@ -179,7 +179,7 @@ impl Sidecar {
                 // It's a notification — forward as Tauri event
                 if let Some(handle) = &self.app_handle {
                     use tauri::Emitter;
-                    let event_name = format!("sidecar:{}", method);
+                    let event_name = format!("sidecar:{}", method.replace('.', "/"));
                     let params = val.get("params").cloned().unwrap_or(serde_json::Value::Null);
                     let _ = handle.emit(&event_name, params);
                 }
