@@ -1,0 +1,3 @@
+{"_example": "Fill with {\"file\": \"<path>\", \"reason\": \"<why>\"}. Put spec/research files only — no code paths. Run `python3 .trellis/scripts/get_context.py --mode packages` to list available specs. Delete this line once real entries are added."}
+{"file": ".trellis/spec/frontend/index.md", "reason": "Frontend documentation language and project conventions"}
+{"file": ".trellis/tasks/04-27-readme-positioning/research/clippy-readme-reference.md", "reason": "Clippy README structure reference"}

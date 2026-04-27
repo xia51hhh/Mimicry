@@ -1,6 +1,8 @@
 # Mimicry 架构概览
 
-> **状态**: Draft | **最后更新**: 2026-04-17
+> **状态**: Partial | **最后更新**: 2026-04-27
+
+> 现实边界：Tauri shell、Vue 前端、SQLite、Rust ↔ Python JSON-RPC、Camoufox 控制器、录制和执行器已有实现；执行日志持久化、完整 PyInstaller 嵌入和部分高级 workflow 语义仍在完善。
 
 ---
 
@@ -136,11 +138,13 @@ JSON-RPC 2.0 over stdio：
 
 使用 SQLite（rusqlite）存储：
 
-| 表 | 内容 |
-|----|------|
-| `workflows` | 工作流元数据 + JSON 内容 |
-| `settings` | 应用配置（键值对） |
-| `execution_logs` | 执行历史记录 |
+| 表 | 内容 | 状态 |
+|----|------|------|
+| `workflows` | 工作流元数据 + JSON 内容 | Implemented |
+| `settings` | 应用配置（键值对） | Implemented |
+| `recent_files` | 最近打开文件记录 | Implemented |
+| `profiles` | 浏览器 Profile 配置和隔离数据目录 | Implemented |
+| `execution_logs` | 执行历史记录 | Planned |
 
 ---
 
@@ -149,7 +153,7 @@ JSON-RPC 2.0 over stdio：
 ```
 开发模式:  cargo tauri dev
 构建产物:  cargo tauri build
-Sidecar:   PyInstaller → 单文件可执行文件 → 嵌入 Tauri 资源
+Sidecar:   开发期使用 Python 环境；PyInstaller 单文件打包已有 groundwork，完整嵌入仍在完善
 ```
 
 ---

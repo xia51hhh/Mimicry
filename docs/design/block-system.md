@@ -1,6 +1,8 @@
 # Block 体系设计
 
-> **状态**: Draft | **最后更新**: 2026-04-17
+> **状态**: Partial | **最后更新**: 2026-04-27
+
+> 现实边界：canonical node schema 已开始围绕 `kind + action + data + settings` 落地，前端导入/导出和 Python executor 已支持 canonical / legacy 兼容；完整 graph execution、Package IO 和 selector self-healing 仍是后续任务。
 
 ---
 
@@ -93,12 +95,15 @@ Block 分类
 
 ## Block JSON Schema
 
+> **Status (2026-04-27)**: Canonical schema is being standardized around `kind + action + data + settings`. Legacy workflow JSON may still contain Vue Flow-style `type` plus `data.action`; import/execution code should normalize both shapes during migration.
+
 每个 Block 节点在工作流 JSON 中的结构：
 
 ```json
 {
   "id": "node_abc123",
-  "type": "interaction/Click",
+  "kind": "action",
+  "action": "Click",
   "position": { "x": 350, "y": 200 },
   "data": {
     "selector": "#submit-btn",
@@ -119,6 +124,52 @@ Block 分类
   }
 }
 ```
+
+### 字段说明
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `id` | `string` | 节点唯一 ID |
+| `kind` | `action \| condition \| loop \| group` | 运行时语义类别；Vue Flow 组件渲染也可使用该值作为 UI node type |
+| `action` | `string` | `kind = action` 时的动作名，例如 `Navigate` / `Click` / `SetVariable` |
+| `position` | `{ x, y }` | 画布位置 |
+| `data` | `object` | Block 特定配置，不再承载运行时类别本身 |
+| `settings` | `object` | 通用错误处理、重试、禁用、备注等配置 |
+| `runtime` | `object` | 运行期绑定信息，例如 `{ "sessionId": "profile-a" }` |
+
+### 兼容说明
+
+历史数据可能仍使用以下形态：
+
+```json
+{
+  "id": "node_abc123",
+  "type": "action",
+  "position": { "x": 350, "y": 200 },
+  "data": {
+    "action": "Click",
+    "selector": "#submit-btn"
+  }
+}
+```
+
+迁移期规则：
+
+1. 前端导出应输出 canonical schema。
+2. 前端导入应接受 canonical schema 和 legacy Vue Flow schema。
+3. Python executor 应在执行前 normalize canonical / legacy 节点。
+4. `type` 只作为 Vue Flow UI 渲染概念保留，不再作为跨层运行时 Block 类型规范。
+
+### Action 映射源头
+
+`shared/action-map.json` 是前端 PascalCase action 与 Python backend action 名称的共享源头：
+
+- TypeScript 映射：`src/types/action-map.ts`
+- Python 映射：`sidecar/engine/action_map.py`
+- 同步脚本：`scripts/sync-action-map.py`
+- Python 同步测试：`sidecar/tests/test_action_map.py`
+
+新增或重命名 action 时，应先修改 `shared/action-map.json`，再用同步脚本生成 TS/Python 映射，并运行 action map 测试。
 
 ### data 字段（Block 特定配置）
 
