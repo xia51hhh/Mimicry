@@ -23,8 +23,19 @@ pub async fn profile_get(
 #[tauri::command]
 pub async fn profile_create(
     conn: State<'_, Mutex<Connection>>,
-    profile: Profile,
+    mut profile: Profile,
 ) -> Result<Profile, AppError> {
+    // Auto-assign user_data_dir if empty
+    if profile.user_data_dir.is_empty() {
+        let profiles_dir = dirs::data_dir()
+            .unwrap_or_else(|| std::path::PathBuf::from("."))
+            .join("com.mimicry.app")
+            .join("profiles")
+            .join(&profile.id);
+        std::fs::create_dir_all(&profiles_dir)
+            .map_err(|e| AppError::Io(e))?;
+        profile.user_data_dir = profiles_dir.to_string_lossy().to_string();
+    }
     let conn = conn.lock().await;
     profiles::create(&conn, &profile)?;
     Ok(profile)
@@ -46,6 +57,15 @@ pub async fn profile_delete(
     id: String,
 ) -> Result<(), AppError> {
     let conn = conn.lock().await;
+    // Clean up user_data_dir if it exists under our managed path
+    if let Some(profile) = profiles::get(&conn, &id)? {
+        if !profile.user_data_dir.is_empty() {
+            let path = std::path::Path::new(&profile.user_data_dir);
+            if path.exists() && profile.user_data_dir.contains("com.mimicry.app") {
+                let _ = std::fs::remove_dir_all(path);
+            }
+        }
+    }
     profiles::delete(&conn, &id)?;
     Ok(())
 }

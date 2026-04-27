@@ -298,5 +298,28 @@
     "installed": "已安装",
     "notInstalledShort": "未安装",
     "checking": "检测中..."
+  },
+  "profile": {
+    "title": "浏览器配置",
+    "create": "新建配置",
+    "edit": "编辑配置",
+    "delete": "删除",
+    "save": "保存",
+    "cancel": "取消",
+    "name": "名称",
+    "namePlaceholder": "输入配置名称",
+    "nameRequired": "名称不能为空",
+    "osTarget": "目标系统",
+    "proxy": "代理",
+    "proxyServer": "代理地址 (如 http://host:port)",
+    "proxyUser": "用户名 (可选)",
+    "proxyPass": "密码 (可选)",
+    "dataDir": "数据目录",
+    "loading": "加载中...",
+    "empty": "暂无配置，点击 + 创建",
+    "deleteConfirm": "确定要删除该配置吗？浏览器数据将一并清除。",
+    "launch": "启动",
+    "selectProfile": "选择配置",
+    "defaultProfile": "默认 (无配置)"
   }
 }

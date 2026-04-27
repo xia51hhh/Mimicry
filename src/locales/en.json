@@ -298,5 +298,28 @@
     "installed": "Installed",
     "notInstalledShort": "Not Installed",
     "checking": "Checking..."
+  },
+  "profile": {
+    "title": "Browser Profiles",
+    "create": "New Profile",
+    "edit": "Edit Profile",
+    "delete": "Delete",
+    "save": "Save",
+    "cancel": "Cancel",
+    "name": "Name",
+    "namePlaceholder": "Enter profile name",
+    "nameRequired": "Name is required",
+    "osTarget": "OS Target",
+    "proxy": "Proxy",
+    "proxyServer": "Proxy address (e.g. http://host:port)",
+    "proxyUser": "Username (optional)",
+    "proxyPass": "Password (optional)",
+    "dataDir": "Data Directory",
+    "loading": "Loading...",
+    "empty": "No profiles yet. Click + to create one.",
+    "deleteConfirm": "Delete this profile? Browser data will also be removed.",
+    "launch": "Launch",
+    "selectProfile": "Select Profile",
+    "defaultProfile": "Default (no profile)"
   }
 }

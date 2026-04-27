@@ -11,6 +11,7 @@ import {
   Frame, Loader, Cookie, Search, Download, Shuffle, StopCircle, Play, Waypoints, CornerDownRight,
 } from 'lucide-vue-next'
 import { usePanel } from '../../composables/usePanel'
+import ProfileManager from '../ProfileManager.vue'
 
 const { t } = useI18n()
 
@@ -143,7 +144,8 @@ function onDragStart(e: DragEvent, item: { type: string; action?: string }) {
     :style="{ width: sidebarWidth + 'px' }"
   >
     <div class="sidebar-content">
-      <!-- Header -->
+      <!-- Workflow Blocks Panel -->
+      <template v-if="activeId === 'workflow'">
       <div class="sidebar-header">
         <span class="text-sm font-semibold">{{ t('sidebar.blocks') }}</span>
       </div>
@@ -183,6 +185,10 @@ function onDragStart(e: DragEvent, item: { type: string; action?: string }) {
           </div>
         </div>
       </div>
+      </template>
+
+      <!-- Browser Profiles Panel -->
+      <ProfileManager v-else-if="activeId === 'browser'" />
     </div>
 
     <!-- Resize handle -->
