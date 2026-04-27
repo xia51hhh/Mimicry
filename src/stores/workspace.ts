@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
+import type { Workflow } from '../types/workflow'
 
 export interface WorkspaceTab {
   id: string
@@ -9,11 +10,7 @@ export interface WorkspaceTab {
 }
 
 /** Per-tab serialized workflow snapshot */
-export interface TabWorkflowData {
-  name: string
-  nodes: Array<{ id: string; type: string; position: { x: number; y: number }; data: Record<string, unknown> }>
-  edges: Array<{ id: string; source: string; target: string; sourceHandle?: string | null; targetHandle?: string | null; label?: string }>
-}
+export type TabWorkflowData = Workflow
 
 export const useWorkspaceStore = defineStore('workspace', () => {
   const tabs = ref<WorkspaceTab[]>([
@@ -44,7 +41,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
       workflowId: null,
     })
     // Initialize empty workflow data for new tab
-    tabDataMap.value[id] = { name: name || 'Untitled Workflow', nodes: [], edges: [] }
+    tabDataMap.value[id] = { id: `wf_${Date.now()}`, name: name || 'Untitled Workflow', nodes: [], edges: [] }
     activeTabId.value = id
     return id
   }

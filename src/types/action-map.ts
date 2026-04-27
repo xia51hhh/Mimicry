@@ -1,6 +1,7 @@
 /**
  * Bidirectional mapping between frontend PascalCase and backend lowercase action names.
- * Must stay in sync with sidecar/engine/action_map.py
+ * AUTO-GENERATED from shared/action-map.json — do not edit manually.
+ * Run `python3 scripts/sync-action-map.py --fix` after changing the shared map.
  */
 
 export const FRONTEND_TO_BACKEND: Record<string, string> = {

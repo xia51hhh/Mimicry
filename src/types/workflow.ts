@@ -1,7 +1,40 @@
+export type WorkflowNodeKind = "action" | "condition" | "loop" | "group";
+
+export interface WorkflowPosition {
+  x: number;
+  y: number;
+}
+
+export interface WorkflowNodeSettings {
+  onError?: "inherit" | "stop" | "continue" | "retry" | "fallback";
+  retryOnFail?: boolean;
+  retryCount?: number;
+  retryInterval?: number;
+  note?: string;
+  disabled?: boolean;
+  [key: string]: unknown;
+}
+
+export interface WorkflowNodeRuntime {
+  sessionId?: string;
+  [key: string]: unknown;
+}
+
+export interface CanonicalWorkflowNode {
+  id: string;
+  kind: WorkflowNodeKind;
+  action?: string;
+  position: WorkflowPosition;
+  data: Record<string, unknown>;
+  settings?: WorkflowNodeSettings;
+  runtime?: WorkflowNodeRuntime;
+  selected?: boolean;
+}
+
 export interface WorkflowNode {
   id: string;
-  type: "action" | "condition" | "loop" | "group";
-  position: { x: number; y: number };
+  type: WorkflowNodeKind;
+  position: WorkflowPosition;
   data: NodeData;
   selected?: boolean;
 }
@@ -37,14 +70,25 @@ export interface WorkflowEdge {
   id: string;
   source: string;
   target: string;
+  sourceHandle?: string | null;
+  targetHandle?: string | null;
+  label?: string;
+}
+
+export interface CanonicalWorkflowEdge {
+  id: string;
+  source: string;
+  target: string;
+  sourceHandle?: string | null;
+  targetHandle?: string | null;
   label?: string;
 }
 
 export interface Workflow {
   id: string;
   name: string;
-  nodes: WorkflowNode[];
-  edges: WorkflowEdge[];
-  createdAt: string;
-  updatedAt: string;
+  nodes: CanonicalWorkflowNode[];
+  edges: CanonicalWorkflowEdge[];
+  createdAt?: string;
+  updatedAt?: string;
 }

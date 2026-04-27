@@ -5,14 +5,24 @@ import type { Node, Edge } from "@vue-flow/core";
 import type { RecordedNode } from "./browser";
 import { errorMessage } from "../types/ipc";
 import dagre from "@dagrejs/dagre";
+import {
+  canonicalEdgesToVueEdges,
+  canonicalNodesToVueNodes,
+  toCanonicalWorkflow,
+} from "../utils/workflowSchema";
 
 interface Snapshot {
   nodes: Node[];
   edges: Edge[];
 }
 
+function generateWorkflowId(): string {
+  return `wf_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+}
+
 export const useWorkflowStore = defineStore("workflow", () => {
-  const id = ref<string | null>(null);
+  const id = ref<string>(generateWorkflowId());
+  const persisted = ref(false);
   const name = ref("Untitled Workflow");
   const nodes = shallowRef<Node[]>([]);
   const edges = shallowRef<Edge[]>([]);
@@ -87,7 +97,8 @@ export const useWorkflowStore = defineStore("workflow", () => {
   }
 
   function clear() {
-    id.value = null;
+    id.value = generateWorkflowId();
+    persisted.value = false;
     name.value = "Untitled Workflow";
     nodes.value = [];
     edges.value = [];
@@ -126,46 +137,22 @@ export const useWorkflowStore = defineStore("workflow", () => {
   }
 
   function toJSON() {
-    return {
+    return toCanonicalWorkflow({
       id: id.value,
       name: name.value,
-      nodes: nodes.value.map((n) => ({
-        id: n.id,
-        type: n.type || "action",
-        position: n.position,
-        data: n.data,
-      })),
-      edges: edges.value.map((e) => ({
-        id: e.id,
-        source: e.source,
-        target: e.target,
-        sourceHandle: e.sourceHandle,
-        targetHandle: e.targetHandle,
-        label: typeof e.label === 'string' ? e.label : undefined,
-      })),
-    };
+      nodes: nodes.value,
+      edges: edges.value,
+    });
   }
 
-  function fromJSON(data: { id?: string; name?: string; nodes?: Array<{ id: string; type?: string; position?: { x: number; y: number }; data?: Record<string, unknown> }>; edges?: Array<{ id: string; source?: string; target?: string; sourceHandle?: string | null; targetHandle?: string | null; label?: string }> }) {
+  function fromJSON(data: { id?: string; name?: string; nodes?: unknown[]; edges?: unknown[] }) {
     if (data.id) id.value = data.id;
     if (data.name) name.value = data.name;
     if (data.nodes) {
-      nodes.value = data.nodes.map((n) => ({
-        id: n.id,
-        type: n.type || "action",
-        position: n.position || { x: 0, y: 0 },
-        data: n.data || {},
-      }));
+      nodes.value = canonicalNodesToVueNodes(data.nodes);
     }
     if (data.edges) {
-      edges.value = data.edges.map((e) => ({
-        id: e.id,
-        source: e.source || '',
-        target: e.target || '',
-        sourceHandle: e.sourceHandle,
-        targetHandle: e.targetHandle,
-        label: e.label,
-      }));
+      edges.value = canonicalEdgesToVueEdges(data.edges);
     }
   }
 
@@ -201,6 +188,7 @@ export const useWorkflowStore = defineStore("workflow", () => {
         nodes: record.nodes as never[],
         edges: record.edges as never[],
       });
+      persisted.value = true;
     }
   }
 
@@ -210,11 +198,12 @@ export const useWorkflowStore = defineStore("workflow", () => {
     name.value = record.name;
     nodes.value = [];
     edges.value = [];
+    persisted.value = true;
     await fetchList();
   }
 
   async function saveWorkflow() {
-    if (!id.value) return;
+    if (!persisted.value) return;
     const data = toJSON();
     const now = new Date().toISOString();
     await invoke("workflow_save", {
@@ -251,21 +240,12 @@ export const useWorkflowStore = defineStore("workflow", () => {
         nodes.value.map((n) => [n.id, n.position])
       );
 
-      const newNodes = data.nodes.map((n: Record<string, unknown>) => ({
-        id: n.id as string,
-        type: (n.type as string) || "action",
-        position: (n.position as { x: number; y: number }) || existingPositions.get(n.id as string) || { x: 0, y: 0 },
-        data: (n.data as Record<string, unknown>) || {},
+      const newNodes = canonicalNodesToVueNodes(data.nodes).map((node) => ({
+        ...node,
+        position: node.position || existingPositions.get(node.id) || { x: 0, y: 0 },
       }));
 
-      const newEdges = (data.edges || []).map((e: Record<string, unknown>) => ({
-        id: e.id as string,
-        source: (e.source as string) || "",
-        target: (e.target as string) || "",
-        sourceHandle: e.sourceHandle as string | undefined,
-        targetHandle: e.targetHandle as string | undefined,
-        label: e.label as string | undefined,
-      }));
+      const newEdges = canonicalEdgesToVueEdges(data.edges || []);
 
       pushSnapshot();
       nodes.value = newNodes;
@@ -303,7 +283,7 @@ export const useWorkflowStore = defineStore("workflow", () => {
   }
 
   return {
-    id, name, nodes, edges,
+    id, name, nodes, edges, persisted,
     selectedNodeId, selectedNode, selectNode, updateNodeData,
     addNode, removeNode, clear, importRecordedNodes, toJSON, fromJSON,
     undo, redo, canUndo, canRedo, pushSnapshot,

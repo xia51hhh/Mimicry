@@ -7,20 +7,31 @@ import { errorMessage, SidecarEvent } from "../types/ipc";
 
 function convertNodesToBackend(nodes: Record<string, unknown>[]): Record<string, unknown>[] {
   return nodes.map((n) => {
-    // Flatten Vue Flow node format: { id, type, position, data: { action, ... } }
-    // into executor format: { id, type, action, selector, ... }
+    // Flatten both canonical workflow nodes:
+    // { id, kind, action, data, settings, runtime }
+    // and legacy Vue Flow nodes:
+    // { id, type, position, data: { action, ... } }
+    // into executor format: { id, type, action, selector, ... }.
     const data = (n.data as Record<string, unknown>) || {};
+    const runtime = (n.runtime as Record<string, unknown>) || {};
     const flat: Record<string, unknown> = {
       id: n.id,
-      type: n.type,
+      type: n.kind ?? n.type,
       ...data,
     };
+    if (typeof n.action === "string") {
+      flat.action = n.action;
+    }
+    if (n.settings && typeof n.settings === "object") {
+      flat.settings = n.settings;
+    }
     if (typeof flat.action === "string") {
       flat.action = toBackend(flat.action as string);
     }
     // Pass session_id for cross-profile execution (from data.sessionId)
-    if (flat.sessionId) {
-      flat.session_id = flat.sessionId;
+    const sessionId = flat.sessionId ?? flat.session_id ?? runtime.sessionId;
+    if (sessionId) {
+      flat.session_id = sessionId;
       delete flat.sessionId;
     }
     if (Array.isArray(data.children)) {
@@ -129,7 +140,7 @@ export const useExecutionStore = defineStore("execution", () => {
           addLog("info", "execution.completed");
         }
       }
-    } catch (e) {
+    } catch {
       // Sidecar might not be ready yet
     }
   }
