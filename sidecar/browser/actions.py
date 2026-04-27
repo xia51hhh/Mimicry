@@ -15,6 +15,10 @@ _aux_lock = threading.Lock()
 
 _server = None
 
+# Ensure browser sessions are cleaned up on exit
+import atexit
+atexit.register(lambda: _mgr.destroy_all())
+
 
 def set_server(server):
     global _server
@@ -319,3 +323,18 @@ def camoufox_check():
 @rpc_method("camoufox.install")
 def camoufox_install():
     return CamoufoxEnv.install()
+
+
+@rpc_method("shutdown")
+def shutdown():
+    """Graceful shutdown: destroy all browser sessions, then exit."""
+    logger.info("Shutdown requested, cleaning up...")
+    _mgr.destroy_all()
+    with _aux_lock:
+        _recorders.clear()
+        _executors.clear()
+    logger.info("Cleanup done, exiting")
+    # Schedule exit after response is sent
+    import threading
+    threading.Timer(0.1, lambda: __import__('os')._exit(0)).start()
+    return {"shutdown": True}

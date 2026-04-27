@@ -146,9 +146,21 @@ impl Sidecar {
     }
 
     pub async fn stop(&mut self) {
+        // Try graceful shutdown first
+        if let Some(ref io) = self.io {
+            match tokio::time::timeout(
+                std::time::Duration::from_secs(3),
+                io.call("shutdown", None),
+            ).await {
+                Ok(Ok(_)) => info!("Sidecar shutdown gracefully"),
+                Ok(Err(e)) => tracing::debug!("Sidecar shutdown RPC failed: {}", e),
+                Err(_) => tracing::debug!("Sidecar shutdown timed out"),
+            }
+        }
+        // Force kill if still running
         if let Some(mut child) = self.child.take() {
             let _ = child.kill().await;
-            info!("Sidecar stopped");
+            info!("Sidecar process killed");
         }
         self.io = None;
     }
@@ -193,8 +205,9 @@ impl SidecarIo {
 
     pub async fn call(&self, method: &str, params: Option<serde_json::Value>) -> Result<serde_json::Value, AppError> {
         let req = RpcRequest::new(method, params);
+        let req_id = req.id;
         let line = req.to_line();
-        tracing::debug!("RPC >> {}", line.trim());
+        tracing::debug!("RPC [{}] >> {}", req_id, line.trim());
 
         // Write request — brief lock on stdin
         {
@@ -214,18 +227,22 @@ impl SidecarIo {
                 .map_err(|e| AppError::Sidecar(format!("Read failed: {}", e)))?;
 
             if bytes == 0 {
-                tracing::error!("RPC: sidecar process exited (EOF on stdout)");
+                tracing::error!("RPC [{}]: sidecar process exited (EOF on stdout)", req_id);
                 return Err(AppError::Sidecar("Sidecar process exited unexpectedly".into()));
             }
 
-            tracing::debug!("RPC << {}", response_line.trim());
+            tracing::debug!("RPC [{}] << {}", req_id, response_line.trim());
 
             // Parse as generic JSON to check if it's a notification or response
             let val: serde_json::Value = serde_json::from_str(&response_line)?;
 
             if val.get("id").is_some() && !val["id"].is_null() {
-                // It's a response
+                // It's a response — verify id matches our request
                 let resp: RpcResponse = serde_json::from_value(val)?;
+                if resp.id != req_id {
+                    tracing::warn!("RPC id mismatch: expected {}, got {} — skipping", req_id, resp.id);
+                    continue;
+                }
                 if let Some(err) = resp.error {
                     return Err(AppError::Sidecar(format!("[{}] {}", err.code, err.message)));
                 }
