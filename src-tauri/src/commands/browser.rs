@@ -47,19 +47,19 @@ pub async fn browser_launch(
     sidecar: State<'_, Mutex<Sidecar>>,
     conn: State<'_, Mutex<Connection>>,
     profile_id: Option<String>,
+    session_id: Option<String>,
 ) -> Result<serde_json::Value, AppError> {
-    let mut params = serde_json::json!({});
+    let sid = session_id.or_else(|| profile_id.clone()).unwrap_or_else(|| "default".into());
+    let mut params = serde_json::json!({"session_id": sid});
 
     if let Some(pid) = profile_id {
         let db = conn.lock().await;
         if let Some(profile) = crate::db::profiles::get(&db, &pid)? {
-            params = serde_json::json!({
-                "profile": {
-                    "user_data_dir": profile.user_data_dir,
-                    "fingerprint": profile.fingerprint,
-                    "proxy": profile.proxy,
-                    "os_target": profile.os_target,
-                }
+            params["profile"] = serde_json::json!({
+                "user_data_dir": profile.user_data_dir,
+                "fingerprint": profile.fingerprint,
+                "proxy": profile.proxy,
+                "os_target": profile.os_target,
             });
         }
     }
@@ -242,48 +242,62 @@ pub async fn check_environment(sidecar: State<'_, Mutex<Sidecar>>) -> Result<ser
 }
 
 #[tauri::command]
-pub async fn browser_close(sidecar: State<'_, Mutex<Sidecar>>) -> Result<serde_json::Value, AppError> {
-    sidecar_call(sidecar, "browser.close", None).await
+pub async fn browser_close(sidecar: State<'_, Mutex<Sidecar>>, session_id: Option<String>) -> Result<serde_json::Value, AppError> {
+    let sid = session_id.unwrap_or_else(|| "default".into());
+    sidecar_call(sidecar, "browser.close", Some(serde_json::json!({"session_id": sid}))).await
 }
 
 #[tauri::command]
-pub async fn browser_navigate(sidecar: State<'_, Mutex<Sidecar>>, url: String) -> Result<serde_json::Value, AppError> {
-    sidecar_call(sidecar, "browser.navigate", Some(serde_json::json!({"url": url}))).await
+pub async fn browser_navigate(sidecar: State<'_, Mutex<Sidecar>>, url: String, session_id: Option<String>) -> Result<serde_json::Value, AppError> {
+    let sid = session_id.unwrap_or_else(|| "default".into());
+    sidecar_call(sidecar, "browser.navigate", Some(serde_json::json!({"url": url, "session_id": sid}))).await
 }
 
 #[tauri::command]
-pub async fn browser_status(sidecar: State<'_, Mutex<Sidecar>>) -> Result<serde_json::Value, AppError> {
-    sidecar_call(sidecar, "browser.status", None).await
+pub async fn browser_status(sidecar: State<'_, Mutex<Sidecar>>, session_id: Option<String>) -> Result<serde_json::Value, AppError> {
+    let sid = session_id.unwrap_or_else(|| "default".into());
+    sidecar_call(sidecar, "browser.status", Some(serde_json::json!({"session_id": sid}))).await
 }
 
 #[tauri::command]
-pub async fn recording_start(sidecar: State<'_, Mutex<Sidecar>>) -> Result<serde_json::Value, AppError> {
-    sidecar_call(sidecar, "recording.start", None).await
+pub async fn browser_list_sessions(sidecar: State<'_, Mutex<Sidecar>>) -> Result<serde_json::Value, AppError> {
+    sidecar_call(sidecar, "browser.list_sessions", None).await
 }
 
 #[tauri::command]
-pub async fn recording_stop(sidecar: State<'_, Mutex<Sidecar>>) -> Result<serde_json::Value, AppError> {
-    sidecar_call(sidecar, "recording.stop", None).await
+pub async fn recording_start(sidecar: State<'_, Mutex<Sidecar>>, session_id: Option<String>) -> Result<serde_json::Value, AppError> {
+    let sid = session_id.unwrap_or_else(|| "default".into());
+    sidecar_call(sidecar, "recording.start", Some(serde_json::json!({"session_id": sid}))).await
 }
 
 #[tauri::command]
-pub async fn recording_poll(sidecar: State<'_, Mutex<Sidecar>>) -> Result<serde_json::Value, AppError> {
-    sidecar_call(sidecar, "recording.poll", None).await
+pub async fn recording_stop(sidecar: State<'_, Mutex<Sidecar>>, session_id: Option<String>) -> Result<serde_json::Value, AppError> {
+    let sid = session_id.unwrap_or_else(|| "default".into());
+    sidecar_call(sidecar, "recording.stop", Some(serde_json::json!({"session_id": sid}))).await
 }
 
 #[tauri::command]
-pub async fn workflow_execute(sidecar: State<'_, Mutex<Sidecar>>, workflow: serde_json::Value) -> Result<serde_json::Value, AppError> {
-    sidecar_call(sidecar, "workflow.execute", Some(serde_json::json!({"workflow": workflow}))).await
+pub async fn recording_poll(sidecar: State<'_, Mutex<Sidecar>>, session_id: Option<String>) -> Result<serde_json::Value, AppError> {
+    let sid = session_id.unwrap_or_else(|| "default".into());
+    sidecar_call(sidecar, "recording.poll", Some(serde_json::json!({"session_id": sid}))).await
 }
 
 #[tauri::command]
-pub async fn workflow_stop_execution(sidecar: State<'_, Mutex<Sidecar>>) -> Result<serde_json::Value, AppError> {
-    sidecar_call(sidecar, "workflow.stop", None).await
+pub async fn workflow_execute(sidecar: State<'_, Mutex<Sidecar>>, workflow: serde_json::Value, session_id: Option<String>) -> Result<serde_json::Value, AppError> {
+    let sid = session_id.unwrap_or_else(|| "default".into());
+    sidecar_call(sidecar, "workflow.execute", Some(serde_json::json!({"workflow": workflow, "session_id": sid}))).await
 }
 
 #[tauri::command]
-pub async fn workflow_execution_status(sidecar: State<'_, Mutex<Sidecar>>) -> Result<serde_json::Value, AppError> {
-    sidecar_call(sidecar, "workflow.execution_status", None).await
+pub async fn workflow_stop_execution(sidecar: State<'_, Mutex<Sidecar>>, session_id: Option<String>) -> Result<serde_json::Value, AppError> {
+    let sid = session_id.unwrap_or_else(|| "default".into());
+    sidecar_call(sidecar, "workflow.stop", Some(serde_json::json!({"session_id": sid}))).await
+}
+
+#[tauri::command]
+pub async fn workflow_execution_status(sidecar: State<'_, Mutex<Sidecar>>, session_id: Option<String>) -> Result<serde_json::Value, AppError> {
+    let sid = session_id.unwrap_or_else(|| "default".into());
+    sidecar_call(sidecar, "workflow.execution_status", Some(serde_json::json!({"session_id": sid}))).await
 }
 
 #[tauri::command]

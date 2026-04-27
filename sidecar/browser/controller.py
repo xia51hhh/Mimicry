@@ -341,3 +341,49 @@ class BrowserController:
         """Backward-compatible: setup + wait."""
         self.setup_download_listener(timeout)
         return self.wait_for_download(save_path)
+
+
+class SessionManager:
+    """Manages multiple BrowserController instances keyed by session_id."""
+
+    def __init__(self):
+        self._sessions: dict[str, BrowserController] = {}
+        import threading
+        self._lock = threading.Lock()
+
+    def create(self, session_id: str, **kwargs) -> BrowserController:
+        with self._lock:
+            if session_id in self._sessions:
+                raise RuntimeError(f"Session '{session_id}' already exists")
+            ctrl = BrowserController()
+            ctrl.launch(**kwargs)
+            self._sessions[session_id] = ctrl
+            logger.info(f"Session created: {session_id}")
+            return ctrl
+
+    def get(self, session_id: str) -> BrowserController:
+        with self._lock:
+            ctrl = self._sessions.get(session_id)
+        if not ctrl:
+            raise RuntimeError(f"Session '{session_id}' not found")
+        return ctrl
+
+    def destroy(self, session_id: str) -> None:
+        with self._lock:
+            ctrl = self._sessions.pop(session_id, None)
+        if ctrl:
+            ctrl.close()
+            logger.info(f"Session destroyed: {session_id}")
+
+    def list_sessions(self) -> list[dict]:
+        with self._lock:
+            return [
+                {"session_id": sid, **ctrl.status()}
+                for sid, ctrl in self._sessions.items()
+            ]
+
+    def destroy_all(self) -> None:
+        with self._lock:
+            ids = list(self._sessions.keys())
+        for sid in ids:
+            self.destroy(sid)

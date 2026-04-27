@@ -321,5 +321,11 @@
     "launch": "Launch",
     "selectProfile": "Select Profile",
     "defaultProfile": "Default (no profile)"
+  },
+  "session": {
+    "title": "Active Sessions",
+    "empty": "No active sessions",
+    "close": "Close Session",
+    "active": "Active"
   }
 }

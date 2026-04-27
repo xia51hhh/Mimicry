@@ -321,5 +321,11 @@
     "launch": "启动",
     "selectProfile": "选择配置",
     "defaultProfile": "默认 (无配置)"
+  },
+  "session": {
+    "title": "活动会话",
+    "empty": "暂无活动会话",
+    "close": "关闭会话",
+    "active": "活动中"
   }
 }

@@ -1,10 +1,10 @@
 <script setup lang="ts">
-import { onMounted, ref } from "vue";
+import { onMounted, ref, computed } from "vue";
 import { useI18n } from "vue-i18n";
 import { useProfileStore, type Profile } from "../stores/profiles";
 import { useBrowserStore } from "../stores/browser";
 import ProfileDialog from "./ProfileDialog.vue";
-import { Plus, Pencil, Trash2, Monitor, Apple, Terminal, Play } from "lucide-vue-next";
+import { Plus, Pencil, Trash2, Monitor, Apple, Terminal, Play, X as XIcon } from "lucide-vue-next";
 
 const { t } = useI18n();
 const store = useProfileStore();
@@ -14,6 +14,8 @@ const editingProfile = ref<Profile | null>(null);
 const deleteConfirmId = ref<string | null>(null);
 
 onMounted(() => store.fetchAll());
+
+const sessionList = computed(() => Array.from(browser.sessions.values()));
 
 function onCreate() {
   editingProfile.value = null;
@@ -65,12 +67,38 @@ function getOsIcon(os: string) {
     <div class="default-launch">
       <button
         class="btn-default-launch"
-        :disabled="browser.launching || browser.connected"
+        :disabled="browser.launching"
         @click="browser.launch()"
       >
         <Play :size="14" />
         <span>{{ t('profile.defaultProfile') }}</span>
       </button>
+    </div>
+
+    <!-- Active sessions -->
+    <div v-if="sessionList.length > 0" class="session-section">
+      <div class="session-header">
+        <span class="header-label">{{ t('session.title') }}</span>
+      </div>
+      <div class="session-list">
+        <div
+          v-for="s in sessionList"
+          :key="s.sessionId"
+          class="session-item"
+          :class="{ active: s.sessionId === browser.activeSessionId }"
+          @click="browser.setActiveSession(s.sessionId)"
+        >
+          <span class="session-dot" />
+          <span class="session-name">{{ s.profileId ?? s.sessionId }}</span>
+          <button
+            class="btn-icon-xs btn-danger"
+            :title="t('session.close')"
+            @click.stop="browser.close(s.sessionId)"
+          >
+            <XIcon :size="12" />
+          </button>
+        </div>
+      </div>
     </div>
 
     <div v-if="store.loading" class="loading-state">
@@ -366,5 +394,53 @@ function getOsIcon(os: string) {
 
 .btn-icon-xs.btn-launch:hover {
   background: color-mix(in srgb, var(--color-primary) 15%, transparent);
+}
+
+/* Active sessions */
+.session-section {
+  border-bottom: 1px solid var(--color-border);
+}
+
+.session-header {
+  padding: 8px 14px 4px;
+}
+
+.session-list {
+  padding: 0 6px 6px;
+}
+
+.session-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.session-item:hover {
+  background: var(--color-surface-hover);
+}
+
+.session-item.active {
+  background: color-mix(in srgb, var(--color-primary) 10%, transparent);
+}
+
+.session-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--color-success, #4caf50);
+  flex-shrink: 0;
+}
+
+.session-name {
+  flex: 1;
+  font-size: 12px;
+  color: var(--color-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 </style>

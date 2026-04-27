@@ -1,5 +1,5 @@
 import { defineStore } from "pinia";
-import { ref } from "vue";
+import { ref, computed } from "vue";
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { errorMessage } from "../types/ipc";
@@ -32,10 +32,30 @@ export type SetupPhase =
   | "completed"       // Done
   | "failed";         // Error
 
+export interface BrowserSession {
+  sessionId: string;
+  profileId?: string;
+  connected: boolean;
+  recording: boolean;
+  url: string | null;
+  pages: number;
+}
+
 export const useBrowserStore = defineStore("browser", () => {
-  const connected = ref(false);
+  // Multi-session state
+  const sessions = ref<Map<string, BrowserSession>>(new Map());
+  const activeSessionId = ref<string | null>(null);
+
+  // Backward-compatible computed
+  const connected = computed(() => {
+    if (!activeSessionId.value) return false;
+    return sessions.value.get(activeSessionId.value)?.connected ?? false;
+  });
   const launching = ref(false);
-  const recording = ref(false);
+  const recording = computed(() => {
+    if (!activeSessionId.value) return false;
+    return sessions.value.get(activeSessionId.value)?.recording ?? false;
+  });
   const recordedNodes = ref<RecordedNode[]>([]);
 
   // Setup state
@@ -99,6 +119,8 @@ export const useBrowserStore = defineStore("browser", () => {
     stopRecordingPreview(); // Prevent listener leaks
     recordingUnlisten = await listen<Record<string, unknown>>("sidecar:recording/event", (event) => {
       const node = event.payload as Record<string, unknown>;
+      // Filter events by active session
+      if (node.session_id && node.session_id !== activeSessionId.value) return;
       recordedNodes.value = [...recordedNodes.value, {
         type: "action",
         action: (node.type as string) || "click",
@@ -149,7 +171,7 @@ export const useBrowserStore = defineStore("browser", () => {
     }
   }
 
-  async function launch(profileId?: string) {
+  async function launch(profileId?: string, sessionId?: string) {
     if (launching.value) return;
 
     if (!camoufoxInstalled.value) {
@@ -162,8 +184,21 @@ export const useBrowserStore = defineStore("browser", () => {
     launching.value = true;
     setupError.value = null;
     try {
-      await invoke("browser_launch", { profileId: profileId || null });
-      connected.value = true;
+      const result = await invoke<{ session_id: string }>("browser_launch", {
+        profileId: profileId || null,
+        sessionId: sessionId || null,
+      });
+      const sid = result.session_id ?? sessionId ?? profileId ?? "default";
+      const session: BrowserSession = {
+        sessionId: sid,
+        profileId: profileId ?? undefined,
+        connected: true,
+        recording: false,
+        url: null,
+        pages: 0,
+      };
+      sessions.value = new Map(sessions.value).set(sid, session);
+      if (!activeSessionId.value) activeSessionId.value = sid;
       setupPhase.value = "idle";
     } catch (e: unknown) {
       const msg = errorMessage(e);
@@ -241,20 +276,35 @@ export const useBrowserStore = defineStore("browser", () => {
     stopProgressListener();
   }
 
-  async function close() {
+  async function close(sessionId?: string) {
+    const sid = sessionId ?? activeSessionId.value;
     try {
-      await invoke("browser_close");
-      connected.value = false;
-      recording.value = false;
+      await invoke("browser_close", { sessionId: sid });
+      if (sid) {
+        const next = new Map(sessions.value);
+        next.delete(sid);
+        sessions.value = next;
+        if (activeSessionId.value === sid) {
+          activeSessionId.value = next.size > 0 ? next.keys().next().value ?? null : null;
+        }
+      }
     } catch (e) {
       console.error("Failed to close browser:", e);
     }
   }
 
-  async function startRecording() {
+  async function startRecording(sessionId?: string) {
+    const sid = sessionId ?? activeSessionId.value;
     try {
-      await invoke("recording_start");
-      recording.value = true;
+      await invoke("recording_start", { sessionId: sid });
+      if (sid) {
+        const s = sessions.value.get(sid);
+        if (s) {
+          const next = new Map(sessions.value);
+          next.set(sid, { ...s, recording: true });
+          sessions.value = next;
+        }
+      }
       recordedNodes.value = [];
       await startRecordingPreview();
     } catch (e) {
@@ -262,24 +312,32 @@ export const useBrowserStore = defineStore("browser", () => {
     }
   }
 
-  async function stopRecording() {
+  async function stopRecording(sessionId?: string) {
     stopRecordingPreview();
+    const sid = sessionId ?? activeSessionId.value;
     try {
-      const result = await invoke<RecordingResult>("recording_stop");
-      recording.value = false;
+      const result = await invoke<RecordingResult>("recording_stop", { sessionId: sid });
+      if (sid) {
+        const s = sessions.value.get(sid);
+        if (s) {
+          const next = new Map(sessions.value);
+          next.set(sid, { ...s, recording: false });
+          sessions.value = next;
+        }
+      }
       recordedNodes.value = result.nodes || [];
       return recordedNodes.value;
     } catch (e) {
       console.error("Failed to stop recording:", e);
-      recording.value = false;
       return [];
     }
   }
 
-  async function pollRecording() {
+  async function pollRecording(sessionId?: string) {
     if (!recording.value) return [];
+    const sid = sessionId ?? activeSessionId.value;
     try {
-      const result = await invoke<RecordingResult>("recording_poll");
+      const result = await invoke<RecordingResult>("recording_poll", { sessionId: sid });
       return result.nodes || [];
     } catch (e) {
       console.error("Failed to poll recording:", e);
@@ -287,29 +345,54 @@ export const useBrowserStore = defineStore("browser", () => {
     }
   }
 
-  async function navigate(url: string) {
+  async function navigate(url: string, sessionId?: string) {
+    const sid = sessionId ?? activeSessionId.value;
     try {
-      await invoke("browser_navigate", { url });
+      await invoke("browser_navigate", { url, sessionId: sid });
     } catch (e) {
       console.error("Failed to navigate:", e);
     }
   }
 
-  async function fetchStatus() {
+  async function fetchStatus(sessionId?: string) {
+    const sid = sessionId ?? activeSessionId.value;
     try {
-      const result = await invoke<{ connected: boolean; url: string | null; pages: number }>("browser_status");
-      connected.value = result.connected;
+      const result = await invoke<{ connected: boolean; url: string | null; pages: number }>("browser_status", { sessionId: sid });
+      if (sid) {
+        const s = sessions.value.get(sid);
+        if (s) {
+          const next = new Map(sessions.value);
+          next.set(sid, { ...s, connected: result.connected, url: result.url, pages: result.pages });
+          sessions.value = next;
+        }
+      }
       return result;
     } catch (e) {
       console.error("Failed to get browser status:", e);
     }
   }
 
+  async function listSessions() {
+    try {
+      return await invoke<{ sessions: Array<{ session_id: string; connected: boolean; url: string | null; pages: number }> }>("browser_list_sessions");
+    } catch (e) {
+      console.error("Failed to list sessions:", e);
+      return { sessions: [] };
+    }
+  }
+
+  function setActiveSession(sessionId: string) {
+    if (sessions.value.has(sessionId)) {
+      activeSessionId.value = sessionId;
+    }
+  }
+
   return {
+    sessions, activeSessionId,
     connected, launching, recording, recordedNodes,
     setupPhase, setupError, installStep, installProgress, installDetail, systemPkgName,
     camoufoxInstalled, camoufoxVersion, camoufoxChecking, camoufoxInstalling,
-    launch, close, navigate, fetchStatus,
+    launch, close, navigate, fetchStatus, listSessions, setActiveSession,
     startRecording, stopRecording, pollRecording,
     startRecordingPreview, stopRecordingPreview,
     installBrowser, installSystemPkg, launchAfterSetup,
