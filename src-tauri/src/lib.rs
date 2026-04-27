@@ -94,6 +94,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             commands::browser::browser_launch,
+            commands::browser::browser_detect_screens,
             commands::browser::browser_install,
             commands::browser::browser_list_sessions,
             commands::browser::install_system_pkg,

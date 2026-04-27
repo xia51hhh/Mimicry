@@ -24,7 +24,9 @@ class BrowserController:
         self._browser = None
         self._page = None
         self._persistent = False  # True when using persistent_context
+        self._browser_pid = None
         self.launch_warnings: list[str] = []
+        self._on_disconnected = None
 
     @staticmethod
     def _get_screen_size() -> tuple[int, int]:
@@ -49,36 +51,41 @@ class BrowserController:
                 return int(m.group(1)), int(m.group(2))
         else:  # Linux
             import os
+            # GNOME Wayland/X11: parse Mutter D-Bus for current monitors
+            try:
+                dbus_out = subprocess.check_output(
+                    ["gdbus", "call", "--session",
+                     "--dest", "org.gnome.Mutter.DisplayConfig",
+                     "--object-path", "/org/gnome/Mutter/DisplayConfig",
+                     "--method", "org.gnome.Mutter.DisplayConfig.GetCurrentState"],
+                    text=True, stderr=subprocess.DEVNULL, timeout=3,
+                )
+                # Find all current modes: ('WxH@freq', W, H, freq, scale, [...], {'is-current': <true>...})
+                # Parse each is-current block to extract resolution and scale
+                monitors = []
+                for m in re.finditer(r"'is-current': <true>", dbus_out):
+                    chunk = dbus_out[max(0, m.start() - 400):m.start()]
+                    # Find resolution: W, H, freq, scale pattern
+                    mode = re.findall(r"(\d+),\s*(\d+),\s*[\d.]+,\s*([\d.]+),\s*\[", chunk)
+                    if mode:
+                        w, h, sc = mode[-1]
+                        monitors.append((int(w), int(h), float(sc)))
+                if monitors:
+                    # Pick the monitor with highest resolution
+                    w, h, sc = max(monitors, key=lambda m: m[0] * m[1])
+                    scale = max(1, round(sc))
+                    return w // scale, h // scale
+            except Exception:
+                pass
+
+            # Fallback: xdpyinfo + GDK_SCALE
             scale = 1
-            # Detect Wayland fractional/integer scale
-            if os.environ.get("WAYLAND_DISPLAY"):
-                # Try GDK_SCALE env
-                gdk = os.environ.get("GDK_SCALE")
-                if gdk:
-                    try:
-                        scale = int(gdk)
-                    except ValueError:
-                        pass
-                # GNOME Wayland: parse Mutter D-Bus for current monitor scale
-                if scale <= 1:
-                    try:
-                        dbus_out = subprocess.check_output(
-                            ["gdbus", "call", "--session",
-                             "--dest", "org.gnome.Mutter.DisplayConfig",
-                             "--object-path", "/org/gnome/Mutter/DisplayConfig",
-                             "--method", "org.gnome.Mutter.DisplayConfig.GetCurrentState"],
-                            text=True, stderr=subprocess.DEVNULL, timeout=3,
-                        )
-                        # Pattern near is-current: ..., freq, scale, [supported], {props}
-                        idx = dbus_out.find("'is-current': <true>")
-                        if idx > 0:
-                            chunk = dbus_out[max(0, idx - 300):idx]
-                            sm = re.findall(r"(\d+\.\d+),\s*\[", chunk)
-                            if sm:
-                                scale = max(1, round(float(sm[-1])))
-                    except Exception:
-                        pass
-            # Physical resolution via xdpyinfo
+            gdk = os.environ.get("GDK_SCALE")
+            if gdk:
+                try:
+                    scale = int(gdk)
+                except ValueError:
+                    pass
             try:
                 out = subprocess.check_output(["xdpyinfo"], text=True, stderr=subprocess.DEVNULL)
                 m = re.search(r"dimensions:\s+(\d+)x(\d+)", out)
@@ -89,9 +96,75 @@ class BrowserController:
                 pass
         return 1920, 1080  # fallback
 
+    @staticmethod
+    def get_monitors() -> list[dict]:
+        """Get all connected monitors with logical resolution (after scaling)."""
+        system = platform.system()
+        monitors = []
+
+        if system == "Linux":
+            try:
+                dbus_out = subprocess.check_output(
+                    ["gdbus", "call", "--session",
+                     "--dest", "org.gnome.Mutter.DisplayConfig",
+                     "--object-path", "/org/gnome/Mutter/DisplayConfig",
+                     "--method", "org.gnome.Mutter.DisplayConfig.GetCurrentState"],
+                    text=True, stderr=subprocess.DEVNULL, timeout=3,
+                )
+                # Parse connector names and current modes
+                import re
+                # Find connector names (e.g., 'eDP-1', 'DP-4')
+                connectors = re.findall(r"\('([A-Za-z]+-\d+)',", dbus_out)
+                connector_idx = 0
+                for m in re.finditer(r"'is-current': <true>", dbus_out):
+                    chunk = dbus_out[max(0, m.start() - 400):m.start()]
+                    mode = re.findall(r"(\d+),\s*(\d+),\s*[\d.]+,\s*([\d.]+),\s*\[", chunk)
+                    if mode:
+                        w, h, sc = mode[-1]
+                        w, h, sc = int(w), int(h), float(sc)
+                        scale = max(1, round(sc))
+                        name_match = re.findall(r"'display-name': <'([^']+)'>", dbus_out[m.start():m.start()+500])
+                        name = name_match[0] if name_match else f"Monitor {connector_idx + 1}"
+                        monitors.append({
+                            "name": name,
+                            "physical_width": w,
+                            "physical_height": h,
+                            "scale": sc,
+                            "logical_width": w // scale,
+                            "logical_height": h // scale,
+                        })
+                    connector_idx += 1
+            except Exception as e:
+                logger.debug(f"Monitor detection failed: {e}")
+
+        if not monitors:
+            # Fallback: single monitor from _get_screen_size
+            w, h = BrowserController._get_screen_size()
+            monitors.append({
+                "name": "Primary",
+                "physical_width": w,
+                "physical_height": h,
+                "scale": 1.0,
+                "logical_width": w,
+                "logical_height": h,
+            })
+
+        return monitors
+
     @property
     def connected(self) -> bool:
-        return self._browser is not None
+        if not self._browser:
+            return False
+        try:
+            # Check if browser process is still alive
+            if hasattr(self._browser, 'is_connected'):
+                return self._browser.is_connected()
+            # For persistent context, check pages
+            if self._persistent:
+                return len(self._browser.pages) > 0
+            return len(self._browser.contexts) > 0
+        except Exception:
+            return False
 
     @property
     def _context(self):
@@ -139,13 +212,45 @@ class BrowserController:
             if profile.get("os_target"):
                 kwargs["os"] = profile["os_target"]
 
-        # Fit browser window to screen (cross-platform, DPI-aware)
-        try:
-            w, h = self._get_screen_size()
-            kwargs["window"] = (max(w - 100, 800), max(h - 150, 600))
-            logger.debug(f"Screen size: {w}x{h}, window: {kwargs['window']}")
-        except Exception as e:
-            logger.warning(f"Failed to detect screen size: {e}")
+            # Apply browser_config overrides
+            bc = profile.get("browser_config") or {}
+            if isinstance(bc, dict):
+                # Bool/value params: direct mapping to Camoufox kwargs
+                bool_params = [
+                    "headless", "geoip", "block_webrtc", "block_webgl",
+                    "block_images", "enable_cache", "disable_coop",
+                ]
+                for key in bool_params:
+                    if key in bc:
+                        kwargs[key] = bc[key]
+
+                if "humanize" in bc:
+                    kwargs["humanize"] = bc["humanize"]
+                if bc.get("locale"):
+                    kwargs["locale"] = bc["locale"]
+                if bc.get("fonts"):
+                    kwargs["fonts"] = bc["fonts"]
+                if bc.get("addons"):
+                    kwargs["addons"] = bc["addons"]
+                if bc.get("executable_path"):
+                    kwargs["executable_path"] = bc["executable_path"]
+                if bc.get("args"):
+                    kwargs["args"] = bc["args"]
+                if bc.get("virtual_display"):
+                    kwargs["virtual_display"] = bc["virtual_display"]
+
+                # Window size from browser_config takes priority
+                if bc.get("window_width") and bc.get("window_height"):
+                    kwargs["window"] = (bc["window_width"], bc["window_height"])
+
+        # Fit browser window to screen if not explicitly set
+        if "window" not in kwargs:
+            try:
+                w, h = self._get_screen_size()
+                kwargs["window"] = (w, h)
+                logger.debug(f"Screen size: {w}x{h}, window: {kwargs['window']}")
+            except Exception as e:
+                logger.warning(f"Failed to detect screen size: {e}")
 
         self._persistent = kwargs.get("persistent_context", False)
         # Log kwargs without potentially large config values
@@ -183,16 +288,107 @@ class BrowserController:
             self._browser = ctx_or_browser
             self._page = self._browser.new_page()
 
+        # Save browser process PID for force-kill fallback
+        try:
+            impl = getattr(self._browser, '_impl_obj', self._browser)
+            if hasattr(impl, '_browser_type'):
+                # For BrowserContext (persistent), try parent browser
+                bt = impl._browser_type
+                if hasattr(bt, '_connection') and hasattr(bt._connection, '_transport'):
+                    proc = getattr(bt._connection._transport, '_proc', None)
+                    if proc:
+                        self._browser_pid = proc.pid
+            elif hasattr(impl, '_connection'):
+                proc = getattr(impl._connection._transport, '_proc', None)
+                if proc:
+                    self._browser_pid = proc.pid
+        except Exception:
+            pass
+        if not self._browser_pid:
+            # Fallback: find Firefox PID from process tree
+            try:
+                import psutil
+                for p in psutil.process_iter(['pid', 'name', 'cmdline']):
+                    if 'firefox' in (p.info.get('name') or '').lower():
+                        cmdline = p.info.get('cmdline') or []
+                        if any('camoufox' in str(c).lower() for c in cmdline):
+                            self._browser_pid = p.pid
+                            break
+            except Exception:
+                pass
+        logger.info(f"Browser PID: {self._browser_pid}")
+
+        # Navigate to startup URL if configured
+        startup_url = (profile or {}).get("browser_config", {}).get("startup_url")
+        if startup_url and startup_url.startswith(("http://", "https://")):
+            try:
+                self._page.goto(startup_url)
+            except Exception as e:
+                logger.warning(f"Failed to navigate to startup URL: {e}")
+
         logger.info("Browser launched")
 
+        # Register disconnect listener
+        try:
+            if self._persistent:
+                self._browser.on("close", lambda: self._fire_disconnected())
+            else:
+                self._browser.on("disconnected", lambda: self._fire_disconnected())
+        except Exception as e:
+            logger.warning(f"Failed to register disconnect listener: {e}")
+
+    def _fire_disconnected(self):
+        logger.info("Browser disconnected event fired")
+        if self._on_disconnected:
+            try:
+                self._on_disconnected()
+            except Exception as e:
+                logger.warning(f"on_disconnected callback error: {e}")
+
     def close(self):
-        if self._camoufox:
-            self._camoufox.__exit__(None, None, None)
-            self._camoufox = None
-            self._browser = None
-            self._page = None
-            self._persistent = False
-            logger.info("Browser closed")
+        camoufox = self._camoufox
+        browser = self._browser
+        pid = self._browser_pid
+        self._camoufox = None
+        self._browser = None
+        self._page = None
+        self._persistent = False
+        self._browser_pid = None
+
+        if not camoufox and not browser and not pid:
+            return
+
+        import threading, asyncio, signal, os
+
+        def _do_close():
+            asyncio.set_event_loop(asyncio.new_event_loop())
+            try:
+                if browser:
+                    browser.close()
+            except Exception as e:
+                logger.warning(f"Browser.close error: {e}")
+            try:
+                if camoufox:
+                    camoufox.__exit__(None, None, None)
+            except Exception as e:
+                logger.warning(f"Camoufox exit error: {e}")
+
+        t = threading.Thread(target=_do_close, daemon=True)
+        t.start()
+        t.join(timeout=5)
+
+        # Force kill if process is still alive
+        if pid:
+            try:
+                os.kill(pid, 0)  # Check if alive
+                os.kill(pid, signal.SIGKILL)
+                logger.info(f"Force-killed browser process {pid}")
+            except ProcessLookupError:
+                pass
+            except Exception as e:
+                logger.warning(f"Failed to kill browser process {pid}: {e}")
+
+        logger.info("Browser closed")
 
     def navigate(self, url: str):
         if not url.startswith(("http://", "https://")):
@@ -412,16 +608,58 @@ class SessionManager:
         self._sessions: dict[str, BrowserController] = {}
         import threading
         self._lock = threading.Lock()
+        self._on_session_disconnected = None  # callback(session_id)
 
     def create(self, session_id: str, **kwargs) -> BrowserController:
+        import threading
         with self._lock:
-            if session_id in self._sessions:
-                raise RuntimeError(f"Session '{session_id}' already exists")
-            ctrl = BrowserController()
-            ctrl.launch(**kwargs)
-            self._sessions[session_id] = ctrl
-            logger.info(f"Session created: {session_id}")
-            return ctrl
+            existing = self._sessions.get(session_id)
+            if existing and existing.connected:
+                logger.info(f"Session reused: {session_id}")
+                return existing
+            if existing:
+                try:
+                    existing.close()
+                except Exception:
+                    pass
+                del self._sessions[session_id]
+
+        # Launch in a clean thread to isolate Playwright's event loop
+        result = [None]
+        error = [None]
+
+        def _launch():
+            import asyncio
+            # Ensure clean event loop for this thread
+            asyncio.set_event_loop(asyncio.new_event_loop())
+            try:
+                ctrl = BrowserController()
+                ctrl.launch(**kwargs)
+                result[0] = ctrl
+            except Exception as e:
+                error[0] = e
+
+        t = threading.Thread(target=_launch, daemon=True)
+        t.start()
+        t.join()
+
+        if error[0]:
+            raise error[0]
+
+        with self._lock:
+            self._sessions[session_id] = result[0]
+
+        # Register disconnect callback
+        def _on_disconnect():
+            with self._lock:
+                self._sessions.pop(session_id, None)
+            logger.info(f"Session auto-removed on disconnect: {session_id}")
+            if self._on_session_disconnected:
+                self._on_session_disconnected(session_id)
+
+        result[0]._on_disconnected = _on_disconnect
+        logger.info(f"Session created: {session_id}")
+        return result[0]
 
     def get(self, session_id: str) -> BrowserController:
         with self._lock:
@@ -439,6 +677,14 @@ class SessionManager:
 
     def list_sessions(self) -> list[dict]:
         with self._lock:
+            dead = [sid for sid, ctrl in self._sessions.items() if not ctrl.connected]
+            for sid in dead:
+                ctrl = self._sessions.pop(sid)
+                try:
+                    ctrl.close()
+                except Exception:
+                    pass
+                logger.info(f"Session auto-cleaned: {sid}")
             return [
                 {"session_id": sid, **ctrl.status()}
                 for sid, ctrl in self._sessions.items()

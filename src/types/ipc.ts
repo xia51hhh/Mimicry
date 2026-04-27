@@ -32,6 +32,7 @@ export const SidecarEvent = {
   WorkflowLog: "sidecar:workflow/log",
   CamoufoxProgress: "sidecar:camoufox/progress",
   BrowserWarning: "sidecar:browser/warning",
+  SessionClosed: "sidecar:browser/session_closed",
 } as const;
 
 /** Extract readable message from Tauri AppError (serialized as {kind,message,display}) or any thrown value */

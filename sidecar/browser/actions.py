@@ -27,6 +27,12 @@ def set_server(server):
     from browser.env_check import set_server as env_set_server
     env_set_server(server)
 
+    # Wire up session disconnect notifications
+    def _on_session_disconnected(session_id):
+        if _server:
+            _server.send_notification("browser.session_closed", {"session_id": session_id})
+    _mgr._on_session_disconnected = _on_session_disconnected
+
 
 def _get_recorder(session_id: str) -> RecordingEngine:
     with _aux_lock:
@@ -44,6 +50,13 @@ def _get_executor(session_id: str) -> WorkflowExecutor:
                 default_session_id=session_id,
             )
         return _executors[session_id]
+
+
+@rpc_method("browser.detect_screens")
+def browser_detect_screens():
+    """Detect connected monitors and return logical resolutions."""
+    from browser.controller import BrowserController
+    return BrowserController.get_monitors()
 
 
 @rpc_method("browser.launch")

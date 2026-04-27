@@ -29,9 +29,15 @@ pub fn init(conn: &Connection) -> rusqlite::Result<()> {
             user_data_dir TEXT NOT NULL DEFAULT '',
             proxy TEXT,
             os_target TEXT NOT NULL DEFAULT 'windows',
+            browser_config TEXT NOT NULL DEFAULT '{}',
             created_at TEXT NOT NULL,
             updated_at TEXT NOT NULL
         );"
     )?;
+    // Migration: add browser_config column if missing
+    let _ = conn.execute(
+        "ALTER TABLE profiles ADD COLUMN browser_config TEXT NOT NULL DEFAULT '{}'",
+        [],
+    );
     Ok(())
 }

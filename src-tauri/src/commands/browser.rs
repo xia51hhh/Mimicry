@@ -68,6 +68,7 @@ pub async fn browser_launch(
                 "fingerprint": profile.fingerprint,
                 "proxy": profile.proxy,
                 "os_target": profile.os_target,
+                "browser_config": profile.browser_config,
             });
         } else {
             tracing::warn!("Profile not found: {}", pid);
@@ -81,6 +82,13 @@ pub async fn browser_launch(
         Err(e) => tracing::error!("browser.launch failed: {}", e),
     }
     result
+}
+
+#[tauri::command]
+pub async fn browser_detect_screens(
+    sidecar: State<'_, Mutex<Sidecar>>,
+) -> Result<serde_json::Value, AppError> {
+    sidecar_call(sidecar, "browser.detect_screens", None).await
 }
 
 #[tauri::command]

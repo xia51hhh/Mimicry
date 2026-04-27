@@ -17,6 +17,12 @@ onMounted(() => store.fetchAll());
 
 const sessionList = computed(() => Array.from(browser.sessions.values()));
 
+function getSessionLabel(s: { profileId?: string; sessionId: string }) {
+  const profile = store.profiles.find(p => p.id === s.profileId);
+  const name = profile?.name || s.profileId || 'default';
+  return `${name} (${s.sessionId})`;
+}
+
 function onCreate() {
   editingProfile.value = null;
   showDialog.value = true;
@@ -63,18 +69,6 @@ function getOsIcon(os: string) {
       </button>
     </div>
 
-    <!-- Default launch (no profile) -->
-    <div class="default-launch">
-      <button
-        class="btn-default-launch"
-        :disabled="browser.launching"
-        @click="browser.launch()"
-      >
-        <Play :size="14" />
-        <span>{{ t('profile.defaultProfile') }}</span>
-      </button>
-    </div>
-
     <!-- Active sessions -->
     <div v-if="sessionList.length > 0" class="session-section">
       <div class="session-header">
@@ -89,7 +83,7 @@ function getOsIcon(os: string) {
           @click="browser.setActiveSession(s.sessionId)"
         >
           <span class="session-dot" />
-          <span class="session-name">{{ s.profileId ?? s.sessionId }}</span>
+          <span class="session-name">{{ getSessionLabel(s) }}</span>
           <button
             class="btn-icon-xs btn-danger"
             :title="t('session.close')"

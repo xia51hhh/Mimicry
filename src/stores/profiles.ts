@@ -2,6 +2,37 @@ import { defineStore } from "pinia";
 import { ref } from "vue";
 import { invoke } from "@tauri-apps/api/core";
 
+export interface BrowserConfig {
+  window_width?: number;
+  window_height?: number;
+  headless?: boolean;
+  startup_url?: string;
+  geoip?: boolean;
+  block_webrtc?: boolean;
+  block_webgl?: boolean;
+  humanize?: boolean | number;
+  block_images?: boolean;
+  enable_cache?: boolean;
+  disable_coop?: boolean;
+  locale?: string;
+  fonts?: string[];
+  executable_path?: string;
+  args?: string[];
+  virtual_display?: string;
+  addons?: string[];
+}
+
+export const DEFAULT_BROWSER_CONFIG: BrowserConfig = {
+  geoip: true,
+  block_webrtc: true,
+  block_webgl: false,
+  humanize: true,
+  enable_cache: true,
+  disable_coop: true,
+  block_images: false,
+  headless: false,
+};
+
 export interface Profile {
   id: string;
   name: string;
@@ -9,6 +40,7 @@ export interface Profile {
   user_data_dir: string;
   proxy?: { server: string; username?: string; password?: string } | null;
   os_target: string;
+  browser_config: BrowserConfig;
   created_at: string;
   updated_at: string;
 }

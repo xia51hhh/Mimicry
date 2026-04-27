@@ -3,11 +3,21 @@ import { useI18n } from 'vue-i18n'
 import { useBrowserStore } from "../../stores/browser";
 import { useWorkflowStore } from "../../stores/workflow";
 import { useExecutionStore } from "../../stores/execution";
+import { useProfileStore } from "../../stores/profiles";
 
 const { t } = useI18n()
 const browser = useBrowserStore();
 const workflow = useWorkflowStore();
 const execution = useExecutionStore();
+const profiles = useProfileStore();
+
+function launchBrowser() {
+  if (!profiles.selectedId && profiles.profiles.length > 0) {
+    browser.setupError = t('toolbar.selectProfileFirst');
+    return;
+  }
+  browser.launch(profiles.selectedId || undefined);
+}
 
 async function toggleRecording() {
   if (browser.recording) {
@@ -44,7 +54,7 @@ async function runWorkflow() {
       <button
         class="rounded bg-[var(--color-primary)] px-3 py-1 text-xs text-white hover:opacity-90 disabled:opacity-50"
         :disabled="browser.launching"
-        @click="browser.connected ? browser.close() : browser.launch()"
+        @click="browser.connected ? browser.close() : launchBrowser()"
       >
         {{ browser.launching ? t('toolbar.launching') : browser.connected ? t('toolbar.closeBrowser') : t('toolbar.launchBrowser') }}
       </button>

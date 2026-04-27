@@ -7,7 +7,7 @@ import { useWorkflowStore } from '../../stores/workflow'
 import { usePanelLayout } from '../../composables/usePanel'
 import { useFileOps } from '../../composables/useFileOps'
 import { Plus, X, PanelLeft, PanelBottom, PanelRight, Minus, Square, Maximize2, Undo2, Redo2, Save } from 'lucide-vue-next'
-import MimicryLogo from '../../assets/mimicry-logo.svg'
+import MimicryLogo from '../../assets/mimicry-logo.svg?url'
 
 const { t } = useI18n()
 const router = useRouter()

@@ -199,6 +199,7 @@ export const useBrowserStore = defineStore("browser", () => {
       };
       sessions.value = new Map(sessions.value).set(sid, session);
       if (!activeSessionId.value) activeSessionId.value = sid;
+      startSessionHeartbeat();
       // Show warnings as non-blocking error (auto-dismissed by next launch)
       if (result.warnings?.length) {
         setupError.value = result.warnings.join("\n");
@@ -391,6 +392,58 @@ export const useBrowserStore = defineStore("browser", () => {
     }
   }
 
+  let heartbeatTimer: ReturnType<typeof setInterval> | null = null;
+  let sessionClosedUnlisten: UnlistenFn | null = null;
+
+  function startSessionHeartbeat() {
+    if (heartbeatTimer) return;
+    // Listen for server-pushed session close events
+    if (!sessionClosedUnlisten) {
+      listen<{ session_id: string }>(SidecarEvent.SessionClosed, (event) => {
+        const sid = event.payload.session_id;
+        if (sid && sessions.value.has(sid)) {
+          const next = new Map(sessions.value);
+          next.delete(sid);
+          sessions.value = next;
+          if (activeSessionId.value === sid) {
+            activeSessionId.value = next.size > 0 ? next.keys().next().value ?? null : null;
+          }
+        }
+      }).then(fn => { sessionClosedUnlisten = fn; });
+    }
+    heartbeatTimer = setInterval(async () => {
+      if (sessions.value.size === 0) return;
+      try {
+        const result = await listSessions();
+        if (!result) return;
+        const alive = new Set(result.sessions.filter(s => s.connected).map(s => s.session_id));
+        const next = new Map(sessions.value);
+        let changed = false;
+        for (const [sid] of next) {
+          if (!alive.has(sid)) {
+            next.delete(sid);
+            changed = true;
+          }
+        }
+        if (changed) {
+          sessions.value = next;
+          if (activeSessionId.value && !next.has(activeSessionId.value)) {
+            activeSessionId.value = next.size > 0 ? next.keys().next().value ?? null : null;
+          }
+        }
+      } catch { /* ignore */ }
+    }, 3000);
+  }
+
+  function stopSessionHeartbeat() {
+    if (heartbeatTimer) {
+      clearInterval(heartbeatTimer);
+      heartbeatTimer = null;
+    }
+    sessionClosedUnlisten?.();
+    sessionClosedUnlisten = null;
+  }
+
   return {
     sessions, activeSessionId,
     connected, launching, recording, recordedNodes,
@@ -402,5 +455,6 @@ export const useBrowserStore = defineStore("browser", () => {
     installBrowser, installSystemPkg, launchAfterSetup,
     checkEnvironment, resetSetup,
     checkCamoufox, installCamoufox,
+    startSessionHeartbeat, stopSessionHeartbeat,
   };
 });
