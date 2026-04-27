@@ -111,6 +111,36 @@ class TestCanonicalNodes:
         assert result["success"]
         mock_ctrl.click.assert_called_once_with("#legacy")
 
+    def test_canonical_data_wins_over_legacy_top_level(self, executor, mock_ctrl):
+        """Canonical node carrying data.selector must NOT be overridden by a
+        stray top-level legacy `selector`. The executor reads from data."""
+        wf = {"nodes": [{
+            "id": "n1",
+            "kind": "action",
+            "action": "Click",
+            "position": {"x": 0, "y": 0},
+            "data": {"selector": "#right"},
+            "selector": "#WRONG",
+        }]}
+        result = executor.execute(wf)
+        assert result["success"]
+        mock_ctrl.click.assert_called_once_with("#right")
+
+    def test_canonical_action_top_wins_over_data_action(self, executor, mock_ctrl):
+        """When both node['action'] and data['action'] are present, the
+        canonical top-level value wins."""
+        wf = {"nodes": [{
+            "id": "n1",
+            "kind": "action",
+            "action": "Click",
+            "position": {"x": 0, "y": 0},
+            "data": {"action": "Type", "selector": "#go"},
+        }]}
+        result = executor.execute(wf)
+        assert result["success"]
+        mock_ctrl.click.assert_called_once_with("#go")
+        mock_ctrl.type_text.assert_not_called()
+
 
 # --- Basic action tests ---
 

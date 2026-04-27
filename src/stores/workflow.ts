@@ -6,8 +6,9 @@ import type { RecordedNode } from "./browser";
 import { errorMessage } from "../types/ipc";
 import dagre from "@dagrejs/dagre";
 import {
-  canonicalEdgesToVueEdges,
-  canonicalNodesToVueNodes,
+  canonicalEdgeToVue,
+  canonicalNodeToVue,
+  migrateLegacyWorkflow,
   toCanonicalWorkflow,
 } from "../utils/workflowSchema";
 
@@ -102,6 +103,7 @@ export const useWorkflowStore = defineStore("workflow", () => {
     name.value = "Untitled Workflow";
     nodes.value = [];
     edges.value = [];
+    selectedNodeId.value = null;
   }
 
   function importRecordedNodes(recordedNodes: RecordedNode[]) {
@@ -146,14 +148,18 @@ export const useWorkflowStore = defineStore("workflow", () => {
   }
 
   function fromJSON(data: { id?: string; name?: string; nodes?: unknown[]; edges?: unknown[] }) {
-    if (data.id) id.value = data.id;
-    if (data.name) name.value = data.name;
-    if (data.nodes) {
-      nodes.value = canonicalNodesToVueNodes(data.nodes);
-    }
-    if (data.edges) {
-      edges.value = canonicalEdgesToVueEdges(data.edges);
-    }
+    // Run the full record through migrateLegacyWorkflow so the validator
+    // sees workflow-level fields (id/name) and gives precise error paths.
+    const canonical = migrateLegacyWorkflow({
+      id: data.id ?? id.value,
+      name: data.name ?? name.value,
+      nodes: data.nodes ?? [],
+      edges: data.edges ?? [],
+    });
+    if (data.id) id.value = canonical.id;
+    if (data.name) name.value = canonical.name;
+    if (data.nodes) nodes.value = canonical.nodes.map(canonicalNodeToVue);
+    if (data.edges) edges.value = canonical.edges.map(canonicalEdgeToVue);
   }
 
   // --- Persistence (Tauri invoke) ---
@@ -231,26 +237,31 @@ export const useWorkflowStore = defineStore("workflow", () => {
 
   function applyJsonText(text: string): { success: boolean; error?: string } {
     try {
-      const data = JSON.parse(text);
-      if (!data.nodes || !Array.isArray(data.nodes)) {
-        return { success: false, error: "Missing 'nodes' array" };
+      const parsed = JSON.parse(text);
+      if (!parsed || typeof parsed !== "object") {
+        return { success: false, error: "Workflow JSON must be an object" };
       }
+      const canonical = migrateLegacyWorkflow({
+        id: parsed.id ?? id.value,
+        name: parsed.name ?? name.value,
+        nodes: Array.isArray(parsed.nodes) ? parsed.nodes : [],
+        edges: Array.isArray(parsed.edges) ? parsed.edges : [],
+      });
 
       const existingPositions = new Map(
         nodes.value.map((n) => [n.id, n.position])
       );
 
-      const newNodes = canonicalNodesToVueNodes(data.nodes).map((node) => ({
+      const newNodes = canonical.nodes.map(canonicalNodeToVue).map((node) => ({
         ...node,
         position: node.position || existingPositions.get(node.id) || { x: 0, y: 0 },
       }));
-
-      const newEdges = canonicalEdgesToVueEdges(data.edges || []);
+      const newEdges = canonical.edges.map(canonicalEdgeToVue);
 
       pushSnapshot();
       nodes.value = newNodes;
       edges.value = newEdges;
-      if (data.name) name.value = data.name;
+      if (parsed.name) name.value = canonical.name;
 
       return { success: true };
     } catch (e) {

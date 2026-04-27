@@ -1,12 +1,12 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   WorkflowSchemaError,
+  canonicalNodeToVue,
   migrateLegacyWorkflow,
   toCanonicalWorkflow,
   validateCanonicalEdge,
   validateCanonicalNode,
   validateCanonicalWorkflow,
-  canonicalNodesToVueNodes,
 } from "../workflowSchema";
 
 describe("validateCanonicalNode", () => {
@@ -77,9 +77,9 @@ describe("validateCanonicalEdge", () => {
     expect(() => validateCanonicalEdge({ id: "e1" })).toThrow(/source.*target/);
   });
 
-  it("rejects unknown edge fields", () => {
+  it("rejects edge fields outside the allowlist", () => {
     expect(() =>
-      validateCanonicalEdge({ id: "e", source: "a", target: "b", animated: true }),
+      validateCanonicalEdge({ id: "e", source: "a", target: "b", futureNew: 1 }),
     ).toThrow(/unknown field/);
   });
 });
@@ -246,28 +246,120 @@ describe("toCanonicalWorkflow (store export)", () => {
   });
 });
 
-describe("canonicalNodesToVueNodes", () => {
+describe("migrate + canonicalNodeToVue (store import path)", () => {
   it("accepts both canonical and legacy nodes in the same import", () => {
-    const vue = canonicalNodesToVueNodes([
-      {
-        id: "n1",
-        kind: "action",
-        action: "Click",
-        position: { x: 0, y: 0 },
-        data: { selector: "#a" },
-      },
-      {
-        id: "n2",
-        type: "action",
-        action: "Type",
-        position: { x: 0, y: 0 },
-        selector: "#b",
-        value: "hi",
-      },
-    ]);
+    const wf = migrateLegacyWorkflow({
+      id: "wf",
+      name: "n",
+      nodes: [
+        {
+          id: "n1",
+          kind: "action",
+          action: "Click",
+          position: { x: 0, y: 0 },
+          data: { selector: "#a" },
+        },
+        {
+          id: "n2",
+          type: "action",
+          action: "Type",
+          position: { x: 0, y: 0 },
+          selector: "#b",
+          value: "hi",
+        },
+      ],
+      edges: [],
+    });
+    const vue = wf.nodes.map(canonicalNodeToVue);
     expect(vue).toHaveLength(2);
     expect(vue[0].type).toBe("action");
     expect(vue[0].data).toMatchObject({ action: "Click", selector: "#a" });
     expect(vue[1].data).toMatchObject({ action: "Type", selector: "#b", value: "hi" });
+  });
+});
+
+describe("edge migration", () => {
+  it("preserves Vue Flow rendering metadata round-trip", () => {
+    const wf = migrateLegacyWorkflow({
+      id: "wf",
+      name: "n",
+      nodes: [],
+      edges: [
+        {
+          id: "e1",
+          source: "a",
+          target: "b",
+          markerEnd: { type: "arrowclosed" },
+          animated: true,
+          style: { stroke: "#888" },
+        },
+      ],
+    });
+    const e = wf.edges[0] as unknown as Record<string, unknown>;
+    expect(e.markerEnd).toEqual({ type: "arrowclosed" });
+    expect(e.animated).toBe(true);
+    expect(e.style).toEqual({ stroke: "#888" });
+  });
+
+  it("synthesises a deterministic id when source/target known but id missing", () => {
+    const wf = migrateLegacyWorkflow({
+      id: "wf",
+      name: "n",
+      nodes: [],
+      edges: [{ source: "a", target: "b" }],
+    });
+    expect(wf.edges[0].id).toBe("edge_a__b");
+  });
+});
+
+describe("conflict warnings", () => {
+  it("warns when canonical and legacy locations both supply action", () => {
+    const spy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      migrateLegacyWorkflow({
+        id: "wf",
+        name: "n",
+        nodes: [
+          {
+            id: "n1",
+            type: "action",
+            action: "Click",
+            position: { x: 0, y: 0 },
+            data: { action: "Type" },
+          },
+        ],
+        edges: [],
+      });
+      expect(spy).toHaveBeenCalled();
+      const msg = spy.mock.calls.map((c) => c.join(" ")).join("\n");
+      expect(msg).toMatch(/action/);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it("warns and keeps data value when legacy top-level duplicates a data param", () => {
+    const spy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      const wf = migrateLegacyWorkflow({
+        id: "wf",
+        name: "n",
+        nodes: [
+          {
+            id: "n1",
+            kind: "action",
+            position: { x: 0, y: 0 },
+            data: { selector: "#right" },
+            selector: "#WRONG",
+          } as never,
+          // ^ note: top-level legacy `selector` while data already has it
+        ],
+        edges: [],
+      });
+      expect((wf.nodes[0].data as Record<string, unknown>).selector).toBe("#right");
+      expect(spy).toHaveBeenCalled();
+    } finally {
+      spy.mockRestore();
+    }
   });
 });

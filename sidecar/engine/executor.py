@@ -131,19 +131,32 @@ class WorkflowExecutor:
         params (selector/url/value/etc.) get absorbed *into* ``data`` rather
         than the other way around, so executors can read parameters via a
         single ``node["data"]`` regardless of vintage.
+
+        When a field appears in BOTH canonical and legacy locations the
+        canonical value wins, but a warning is logged so the offending
+        producer can be fixed instead of silently drifting.
         """
         meta_keys = {
             "id", "kind", "type", "action", "data", "settings",
             "runtime", "session_id", "sessionId", "children", "elseChildren", "selected",
         }
+        node_id = node.get("id", "<no-id>")
         src_data = node.get("data") if isinstance(node.get("data"), dict) else {}
         runtime = node.get("runtime") if isinstance(node.get("runtime"), dict) else {}
 
         data: dict = dict(src_data)
         # Absorb legacy top-level params (e.g. {"selector": "#x"}) into data.
         for key, value in node.items():
-            if key not in meta_keys and key not in data:
-                data[key] = value
+            if key in meta_keys:
+                continue
+            if key in data:
+                if data[key] != value:
+                    logger.warning(
+                        f"node {node_id}: data.{key}={data[key]!r} kept; "
+                        f"legacy top-level {key}={value!r} ignored"
+                    )
+                continue
+            data[key] = value
 
         normalized: dict = {
             "id": node.get("id"),
@@ -151,10 +164,21 @@ class WorkflowExecutor:
             "data": data,
         }
 
+        if node.get("action") is not None and src_data.get("action") is not None \
+                and node.get("action") != src_data.get("action"):
+            logger.warning(
+                f"node {node_id}: action={node.get('action')!r} kept; "
+                f"data.action={src_data.get('action')!r} ignored"
+            )
         action = node.get("action") if node.get("action") is not None else src_data.get("action")
         if action is not None:
             normalized["action"] = action
 
+        if node.get("settings") is not None and src_data.get("settings") is not None:
+            logger.warning(
+                f"node {node_id}: settings present at both top-level and inside data; "
+                f"top-level kept"
+            )
         settings = node.get("settings") if node.get("settings") is not None else src_data.get("settings")
         if settings is not None:
             normalized["settings"] = settings
@@ -170,7 +194,12 @@ class WorkflowExecutor:
             normalized["session_id"] = session_id
 
         for child_key in ("children", "elseChildren"):
-            children = node.get(child_key) or src_data.get(child_key)
+            if node.get(child_key) is not None and src_data.get(child_key) is not None:
+                logger.warning(
+                    f"node {node_id}: {child_key} present at both top-level and inside data; "
+                    f"top-level kept"
+                )
+            children = node.get(child_key) if node.get(child_key) is not None else src_data.get(child_key)
             if isinstance(children, list):
                 normalized[child_key] = [
                     self._normalize_node(child)

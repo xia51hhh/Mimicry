@@ -23,6 +23,9 @@ const ALLOWED_NODE_KEYS = new Set([
   "selected",
 ]);
 
+// Edge keys we keep on the canonical wire format. The first group is
+// semantic graph metadata; the second group is Vue Flow rendering metadata
+// that round-trips through canvas <-> JSON without affecting execution.
 const ALLOWED_EDGE_KEYS = new Set([
   "id",
   "source",
@@ -30,6 +33,29 @@ const ALLOWED_EDGE_KEYS = new Set([
   "sourceHandle",
   "targetHandle",
   "label",
+  // Vue Flow rendering metadata (preserved as-is).
+  "type",
+  "animated",
+  "style",
+  "data",
+  "markerEnd",
+  "markerStart",
+  "selected",
+  "zIndex",
+  "hidden",
+  "deletable",
+  "selectable",
+  "focusable",
+  "interactionWidth",
+  "labelStyle",
+  "labelShowBg",
+  "labelBgStyle",
+  "labelBgPadding",
+  "labelBgBorderRadius",
+  "ariaLabel",
+  "updatable",
+  "class",
+  "events",
 ]);
 
 const ALLOWED_WORKFLOW_KEYS = new Set([
@@ -61,6 +87,13 @@ function isNodeKind(value: unknown): value is WorkflowNodeKind {
 }
 
 // ---------- Validation ----------
+//
+// Validation is structural and stops at the `data` payload boundary —
+// `data` is documented as an opaque per-action payload (URL/selector/timeout
+// for navigate, condition expression for if-blocks, loop config for loops,
+// etc.). Each action handler is responsible for reading what it needs out
+// of `data`. Validating its inner shape here would force schema-bumping on
+// every new action.
 
 export function validateCanonicalNode(raw: unknown, path = "node"): CanonicalWorkflowNode {
   if (!isRecord(raw)) {
@@ -104,7 +137,10 @@ export function validateCanonicalEdge(raw: unknown, path = "edge"): CanonicalWor
   if (!isRecord(raw)) throw new WorkflowSchemaError("expected object", path);
   for (const key of Object.keys(raw)) {
     if (!ALLOWED_EDGE_KEYS.has(key)) {
-      throw new WorkflowSchemaError(`unknown field "${key}"`, path);
+      throw new WorkflowSchemaError(
+        `unknown field "${key}" — extend ALLOWED_EDGE_KEYS if this is a Vue Flow rendering field that should round-trip`,
+        path,
+      );
     }
   }
   const id = optionalString(raw.id);
@@ -145,12 +181,37 @@ export function validateCanonicalWorkflow(raw: unknown): Workflow {
 const LEGACY_NODE_TOP_KEYS = new Set([
   ...ALLOWED_NODE_KEYS,
   "type",
-  "kind",
   "session_id",
   "sessionId",
   "children",
   "elseChildren",
 ]);
+
+interface SessionIdSource {
+  topSnake?: unknown;
+  topCamel?: unknown;
+  dataSnake?: unknown;
+  dataCamel?: unknown;
+  runtime?: unknown;
+}
+
+function pickSessionId(src: SessionIdSource): string | undefined {
+  return (
+    optionalString(src.topCamel) ??
+    optionalString(src.topSnake) ??
+    optionalString(src.dataCamel) ??
+    optionalString(src.dataSnake) ??
+    optionalString(src.runtime)
+  );
+}
+
+function reportConflict(path: string, field: string, kept: unknown, dropped: unknown) {
+  if (kept === dropped) return;
+  console.warn(
+    `[workflowSchema] ${path}.${field}: canonical value ${JSON.stringify(kept)} kept, ` +
+      `legacy duplicate ${JSON.stringify(dropped)} ignored`,
+  );
+}
 
 function migrateLegacyNode(raw: unknown, path: string): CanonicalWorkflowNode {
   if (!isRecord(raw)) {
@@ -169,28 +230,49 @@ function migrateLegacyNode(raw: unknown, path: string): CanonicalWorkflowNode {
   delete data.session_id;
   delete data.kind;
 
+  // action: prefer canonical (top-level), warn on conflict.
   const action = optionalString(raw.action) ?? optionalString(sourceData.action);
+  if (raw.action !== undefined && sourceData.action !== undefined) {
+    reportConflict(path, "action", raw.action, sourceData.action);
+  }
 
-  const settingsRaw = isRecord(raw.settings) ? raw.settings : isRecord(sourceData.settings) ? sourceData.settings : undefined;
+  // settings: prefer canonical, warn on conflict.
+  const settingsRaw = isRecord(raw.settings)
+    ? raw.settings
+    : isRecord(sourceData.settings)
+      ? sourceData.settings
+      : undefined;
+  if (isRecord(raw.settings) && isRecord(sourceData.settings)) {
+    reportConflict(path, "settings", raw.settings, sourceData.settings);
+  }
   const settings: WorkflowNodeSettings | undefined = settingsRaw ? { ...settingsRaw } : undefined;
 
-  const runtimeRaw = isRecord(raw.runtime) ? raw.runtime : isRecord(sourceData.runtime) ? sourceData.runtime : undefined;
+  const runtimeRaw = isRecord(raw.runtime)
+    ? raw.runtime
+    : isRecord(sourceData.runtime)
+      ? sourceData.runtime
+      : undefined;
   const runtime: WorkflowNodeRuntime = runtimeRaw ? { ...runtimeRaw } : {};
-  const sessionId = optionalString(raw.sessionId)
-    ?? optionalString(raw.session_id)
-    ?? optionalString(sourceData.sessionId)
-    ?? optionalString(sourceData.session_id)
-    ?? optionalString(runtime.sessionId);
+  const sessionId = pickSessionId({
+    topCamel: raw.sessionId,
+    topSnake: raw.session_id,
+    dataCamel: sourceData.sessionId,
+    dataSnake: sourceData.session_id,
+    runtime: runtime.sessionId,
+  });
   if (sessionId) runtime.sessionId = sessionId;
 
   // Legacy: top-level extras (selector, url, value, etc.) get tucked into data.
   for (const [key, value] of Object.entries(raw)) {
-    if (!LEGACY_NODE_TOP_KEYS.has(key) && !(key in data)) {
-      data[key] = value;
+    if (LEGACY_NODE_TOP_KEYS.has(key)) continue;
+    if (key in data) {
+      reportConflict(`${path}.data`, key, data[key], value);
+      continue;
     }
+    data[key] = value;
   }
 
-  // Legacy: children at top level move under data.
+  // children / elseChildren: move under data, recurse.
   if (Array.isArray(raw.children)) {
     data.children = raw.children.map((c, i) => migrateLegacyNode(c, `${path}.children[${i}]`));
   } else if (Array.isArray(sourceData.children)) {
@@ -203,7 +285,7 @@ function migrateLegacyNode(raw: unknown, path: string): CanonicalWorkflowNode {
   }
 
   const node: CanonicalWorkflowNode = {
-    id: String(raw.id ?? `node_${Date.now()}`),
+    id: optionalString(raw.id) ?? `node_${Date.now()}`,
     kind,
     position: isRecord(raw.position)
       ? { x: Number(raw.position.x ?? 0), y: Number(raw.position.y ?? 0) }
@@ -217,28 +299,36 @@ function migrateLegacyNode(raw: unknown, path: string): CanonicalWorkflowNode {
   return node;
 }
 
+function deterministicEdgeId(source: string, target: string): string {
+  // Stable across reloads; collisions inside a single workflow get resolved
+  // by validateCanonicalWorkflow downstream (duplicate check is a follow-up).
+  return `edge_${source}__${target}`;
+}
+
 function migrateLegacyEdge(raw: unknown, path: string): CanonicalWorkflowEdge {
   if (!isRecord(raw)) throw new WorkflowSchemaError("expected object", path);
-  const id = optionalString(raw.id) ?? `edge_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
   const source = optionalString(raw.source);
   const target = optionalString(raw.target);
   if (!source || !target) throw new WorkflowSchemaError("edge requires source and target", path);
+  const id = optionalString(raw.id) ?? deterministicEdgeId(source, target);
+
   const edge: CanonicalWorkflowEdge = { id, source, target };
-  if (typeof raw.sourceHandle === "string" || raw.sourceHandle === null) {
-    edge.sourceHandle = raw.sourceHandle as string | null;
+  // Pass through every field validateCanonicalEdge will accept; rejecting
+  // unknown fields here would break round-trips of in-memory Vue Flow edges
+  // that legitimately carry rendering metadata like `markerEnd`.
+  for (const [key, value] of Object.entries(raw)) {
+    if (key === "id" || key === "source" || key === "target") continue;
+    if (!ALLOWED_EDGE_KEYS.has(key)) continue;
+    if (value === undefined) continue;
+    (edge as unknown as UnknownRecord)[key] = value;
   }
-  if (typeof raw.targetHandle === "string" || raw.targetHandle === null) {
-    edge.targetHandle = raw.targetHandle as string | null;
-  }
-  if (typeof raw.label === "string") edge.label = raw.label;
   return edge;
 }
 
 /**
- * Migrate a workflow JSON of unknown vintage into canonical shape.
- * Use this for any externally-sourced JSON (DB rows from before the schema
- * unification, user-pasted JSON in the editor). After migration the result
- * is fed through validateCanonicalWorkflow so failures surface immediately.
+ * Migrate a workflow JSON of unknown vintage into canonical shape and
+ * validate the result. Use this for any externally-sourced JSON: DB rows
+ * from before the schema unification, recorder output, user-pasted JSON.
  */
 export function migrateLegacyWorkflow(raw: unknown): Workflow {
   if (!isRecord(raw)) throw new WorkflowSchemaError("expected object", "workflow");
@@ -259,14 +349,15 @@ export function migrateLegacyWorkflow(raw: unknown): Workflow {
   return validateCanonicalWorkflow(workflow);
 }
 
-// ---------- Vue Flow <-> canonical (internal adapters) ----------
+// ---------- Vue Flow <-> canonical (exported adapters) ----------
 
 /**
  * Convert a Vue Flow Node into a canonical node. Vue Flow uses `type` for
- * what we call `kind`, and stows everything else inside `data`. Action,
- * settings, sessionId and child arrays are lifted out of `data` here.
+ * what we call `kind`, and stows action params inside `data`. This function
+ * lifts action / settings / sessionId out of `data` into the canonical
+ * top-level fields.
  */
-function vueNodeToCanonical(node: Node): CanonicalWorkflowNode {
+export function vueNodeToCanonical(node: Node): CanonicalWorkflowNode {
   const sourceData = isRecord(node.data) ? { ...node.data } : {};
   const data: UnknownRecord = { ...sourceData };
   delete data.action;
@@ -300,7 +391,7 @@ function vueNodeToCanonical(node: Node): CanonicalWorkflowNode {
   return out;
 }
 
-function canonicalNodeToVue(node: CanonicalWorkflowNode): Node {
+export function canonicalNodeToVue(node: CanonicalWorkflowNode): Node {
   const data: UnknownRecord = { ...node.data };
   if (node.action) data.action = node.action;
   if (node.runtime?.sessionId) data.sessionId = node.runtime.sessionId;
@@ -313,27 +404,33 @@ function canonicalNodeToVue(node: CanonicalWorkflowNode): Node {
   };
 }
 
-function vueEdgeToCanonical(edge: Edge): CanonicalWorkflowEdge {
+export function vueEdgeToCanonical(edge: Edge): CanonicalWorkflowEdge {
   const out: CanonicalWorkflowEdge = {
     id: edge.id,
     source: edge.source,
     target: edge.target,
   };
-  if (edge.sourceHandle !== undefined) out.sourceHandle = edge.sourceHandle;
-  if (edge.targetHandle !== undefined) out.targetHandle = edge.targetHandle;
-  if (typeof edge.label === "string") out.label = edge.label;
+  // Forward only the Vue Flow rendering fields the canonical edge accepts,
+  // skipping `undefined` so the JSON output stays clean.
+  for (const [key, value] of Object.entries(edge as unknown as UnknownRecord)) {
+    if (key === "id" || key === "source" || key === "target") continue;
+    if (!ALLOWED_EDGE_KEYS.has(key)) continue;
+    if (value === undefined) continue;
+    (out as unknown as UnknownRecord)[key] = value;
+  }
   return out;
 }
 
-function canonicalEdgeToVue(edge: CanonicalWorkflowEdge): Edge {
-  return {
-    id: edge.id,
-    source: edge.source,
-    target: edge.target,
-    sourceHandle: edge.sourceHandle,
-    targetHandle: edge.targetHandle,
-    label: edge.label,
-  };
+export function canonicalEdgeToVue(edge: CanonicalWorkflowEdge): Edge {
+  // Spread the whole canonical edge — every key is in ALLOWED_EDGE_KEYS,
+  // so Vue Flow gets exactly the rendering fields the JSON carries, and
+  // `undefined` keys are not serialized into the object.
+  const out: UnknownRecord = {};
+  for (const [key, value] of Object.entries(edge as unknown as UnknownRecord)) {
+    if (value === undefined) continue;
+    out[key] = value;
+  }
+  return out as unknown as Edge;
 }
 
 // ---------- Public store-facing helpers ----------
@@ -343,6 +440,8 @@ export function toCanonicalWorkflow(input: {
   name?: string;
   nodes?: Node[];
   edges?: Edge[];
+  createdAt?: string;
+  updatedAt?: string;
 }): Workflow {
   const workflow: Workflow = {
     id: input.id,
@@ -350,22 +449,7 @@ export function toCanonicalWorkflow(input: {
     nodes: (input.nodes || []).map(vueNodeToCanonical),
     edges: (input.edges || []).map(vueEdgeToCanonical),
   };
+  if (input.createdAt) workflow.createdAt = input.createdAt;
+  if (input.updatedAt) workflow.updatedAt = input.updatedAt;
   return validateCanonicalWorkflow(workflow);
-}
-
-/**
- * Accept a list of nodes that are EITHER canonical or legacy and produce
- * Vue Flow nodes. Legacy shapes are migrated through migrateLegacyWorkflow
- * so the boundary is explicit.
- */
-export function canonicalNodesToVueNodes(nodes: unknown[] | undefined): Node[] {
-  if (!nodes || nodes.length === 0) return [];
-  const migrated = migrateLegacyWorkflow({ id: `wf_tmp_${Date.now()}`, nodes, edges: [] });
-  return migrated.nodes.map(canonicalNodeToVue);
-}
-
-export function canonicalEdgesToVueEdges(edges: unknown[] | undefined): Edge[] {
-  if (!edges || edges.length === 0) return [];
-  const migrated = migrateLegacyWorkflow({ id: `wf_tmp_${Date.now()}`, nodes: [], edges });
-  return migrated.edges.map(canonicalEdgeToVue);
 }
