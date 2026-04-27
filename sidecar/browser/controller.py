@@ -24,6 +24,7 @@ class BrowserController:
         self._browser = None
         self._page = None
         self._persistent = False  # True when using persistent_context
+        self.launch_warnings: list[str] = []
 
     @staticmethod
     def _get_screen_size() -> tuple[int, int]:
@@ -46,11 +47,46 @@ class BrowserController:
             m = re.search(r"Resolution:\s+(\d+)\s*x\s*(\d+)", out)
             if m:
                 return int(m.group(1)), int(m.group(2))
-        else:  # Linux / X11
-            out = subprocess.check_output(["xdpyinfo"], text=True)
-            m = re.search(r"dimensions:\s+(\d+)x(\d+)", out)
-            if m:
-                return int(m.group(1)), int(m.group(2))
+        else:  # Linux
+            import os
+            scale = 1
+            # Detect Wayland fractional/integer scale
+            if os.environ.get("WAYLAND_DISPLAY"):
+                # Try GDK_SCALE env
+                gdk = os.environ.get("GDK_SCALE")
+                if gdk:
+                    try:
+                        scale = int(gdk)
+                    except ValueError:
+                        pass
+                # GNOME Wayland: parse Mutter D-Bus for current monitor scale
+                if scale <= 1:
+                    try:
+                        dbus_out = subprocess.check_output(
+                            ["gdbus", "call", "--session",
+                             "--dest", "org.gnome.Mutter.DisplayConfig",
+                             "--object-path", "/org/gnome/Mutter/DisplayConfig",
+                             "--method", "org.gnome.Mutter.DisplayConfig.GetCurrentState"],
+                            text=True, stderr=subprocess.DEVNULL, timeout=3,
+                        )
+                        # Pattern near is-current: ..., freq, scale, [supported], {props}
+                        idx = dbus_out.find("'is-current': <true>")
+                        if idx > 0:
+                            chunk = dbus_out[max(0, idx - 300):idx]
+                            sm = re.findall(r"(\d+\.\d+),\s*\[", chunk)
+                            if sm:
+                                scale = max(1, round(float(sm[-1])))
+                    except Exception:
+                        pass
+            # Physical resolution via xdpyinfo
+            try:
+                out = subprocess.check_output(["xdpyinfo"], text=True, stderr=subprocess.DEVNULL)
+                m = re.search(r"dimensions:\s+(\d+)x(\d+)", out)
+                if m:
+                    pw, ph = int(m.group(1)), int(m.group(2))
+                    return pw // scale, ph // scale
+            except Exception:
+                pass
         return 1920, 1080  # fallback
 
     @property
@@ -116,13 +152,28 @@ class BrowserController:
         safe_log = {k: v for k, v in kwargs.items() if k != "config"}
         logger.info(f"Launching Camoufox: {safe_log}")
 
+        self.launch_warnings = []
+
         try:
             self._camoufox = Camoufox(**kwargs)
             ctx_or_browser = self._camoufox.__enter__()
         except Exception as e:
-            logger.error(f"Camoufox launch failed: {type(e).__name__}: {e}")
-            self._camoufox = None
-            raise
+            # Retry without geoip if IP lookup failed
+            if "ip" in str(e).lower() and kwargs.get("geoip"):
+                self.launch_warnings.append(f"GeoIP 定位失败 ({e})，已禁用 GeoIP 继续启动")
+                logger.warning(f"geoip failed ({e}), retrying without geoip")
+                kwargs["geoip"] = False
+                try:
+                    self._camoufox = Camoufox(**kwargs)
+                    ctx_or_browser = self._camoufox.__enter__()
+                except Exception as e2:
+                    logger.error(f"Camoufox launch failed (retry): {type(e2).__name__}: {e2}")
+                    self._camoufox = None
+                    raise
+            else:
+                logger.error(f"Camoufox launch failed: {type(e).__name__}: {e}")
+                self._camoufox = None
+                raise
 
         if self._persistent:
             # persistent_context returns a BrowserContext directly

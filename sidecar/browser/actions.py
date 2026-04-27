@@ -51,9 +51,13 @@ def browser_launch(session_id: str = "default", headless: bool = False,
                    proxy: dict | None = None, profile: dict | None = None):
     logger.info(f"browser.launch: session_id={session_id}, headless={headless}, profile_keys={list(profile.keys()) if profile else None}")
     ctrl = _mgr.create(session_id, headless=headless, proxy=proxy, profile=profile)
+    # Send launch warnings as notifications to frontend
+    if ctrl.launch_warnings and _server:
+        for warning in ctrl.launch_warnings:
+            _server.send_notification("browser.warning", {"message": warning})
     status = ctrl.status()
     logger.info(f"browser.launch success: {status}")
-    return {"session_id": session_id, **status}
+    return {"session_id": session_id, "warnings": ctrl.launch_warnings or None, **status}
 
 
 @rpc_method("browser.close")

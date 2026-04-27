@@ -184,7 +184,7 @@ export const useBrowserStore = defineStore("browser", () => {
     launching.value = true;
     setupError.value = null;
     try {
-      const result = await invoke<{ session_id: string }>("browser_launch", {
+      const result = await invoke<{ session_id: string; warnings?: string[] }>("browser_launch", {
         profileId: profileId || null,
         sessionId: sessionId || null,
       });
@@ -199,6 +199,10 @@ export const useBrowserStore = defineStore("browser", () => {
       };
       sessions.value = new Map(sessions.value).set(sid, session);
       if (!activeSessionId.value) activeSessionId.value = sid;
+      // Show warnings as non-blocking error (auto-dismissed by next launch)
+      if (result.warnings?.length) {
+        setupError.value = result.warnings.join("\n");
+      }
       setupPhase.value = "idle";
     } catch (e: unknown) {
       const msg = errorMessage(e);
