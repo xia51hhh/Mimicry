@@ -1,4 +1,8 @@
-"""Bidirectional mapping between frontend PascalCase and backend lowercase action names."""
+"""Bidirectional mapping between frontend PascalCase and backend lowercase action names.
+
+AUTO-GENERATED from shared/action-map.json — do not edit manually.
+Run `python3 scripts/sync-action-map.py --fix` after changing the shared map.
+"""
 
 # Frontend (PascalCase) → Backend (lowercase)
 FRONTEND_TO_BACKEND: dict[str, str] = {

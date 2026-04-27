@@ -118,9 +118,75 @@ class WorkflowExecutor:
     def context(self) -> ExecutionContext:
         return self._ctx
 
+    def _normalize_node(self, node: dict) -> dict:
+        """Normalize canonical and legacy workflow nodes into executor shape.
+
+        Canonical frontend shape (preserved here):
+            {id, kind/type, action, data, settings, runtime, children, elseChildren}
+
+        Legacy shape (e.g. recorder output, hand-written JSON):
+            {type, action, selector, url, ...} — flat.
+
+        Strategy: keep ``data`` as a parameter namespace. Legacy top-level
+        params (selector/url/value/etc.) get absorbed *into* ``data`` rather
+        than the other way around, so executors can read parameters via a
+        single ``node["data"]`` regardless of vintage.
+        """
+        meta_keys = {
+            "id", "kind", "type", "action", "data", "settings",
+            "runtime", "session_id", "sessionId", "children", "elseChildren", "selected",
+        }
+        src_data = node.get("data") if isinstance(node.get("data"), dict) else {}
+        runtime = node.get("runtime") if isinstance(node.get("runtime"), dict) else {}
+
+        data: dict = dict(src_data)
+        # Absorb legacy top-level params (e.g. {"selector": "#x"}) into data.
+        for key, value in node.items():
+            if key not in meta_keys and key not in data:
+                data[key] = value
+
+        normalized: dict = {
+            "id": node.get("id"),
+            "type": node.get("kind") or node.get("type", "action"),
+            "data": data,
+        }
+
+        action = node.get("action") if node.get("action") is not None else src_data.get("action")
+        if action is not None:
+            normalized["action"] = action
+
+        settings = node.get("settings") if node.get("settings") is not None else src_data.get("settings")
+        if settings is not None:
+            normalized["settings"] = settings
+
+        session_id = (
+            node.get("session_id")
+            or node.get("sessionId")
+            or src_data.get("session_id")
+            or src_data.get("sessionId")
+            or runtime.get("sessionId")
+        )
+        if session_id:
+            normalized["session_id"] = session_id
+
+        for child_key in ("children", "elseChildren"):
+            children = node.get(child_key) or src_data.get(child_key)
+            if isinstance(children, list):
+                normalized[child_key] = [
+                    self._normalize_node(child)
+                    for child in children
+                    if isinstance(child, dict)
+                ]
+
+        return normalized
+
     def execute(self, workflow_json: dict) -> dict:
         """Execute a workflow from JSON. Returns execution result."""
-        nodes = workflow_json.get("nodes", [])
+        nodes = [
+            self._normalize_node(n)
+            for n in workflow_json.get("nodes", [])
+            if isinstance(n, dict)
+        ]
         self._ctx = ExecutionContext()
         self._ctx.total_steps = self._count_nodes(nodes)
         self._ctx.running = True
@@ -152,7 +218,11 @@ class WorkflowExecutor:
 
     def resume(self, workflow_json: dict, saved_state: dict) -> dict:
         """Resume a workflow from a saved execution state."""
-        nodes = workflow_json.get("nodes", [])
+        nodes = [
+            self._normalize_node(n)
+            for n in workflow_json.get("nodes", [])
+            if isinstance(n, dict)
+        ]
         self._ctx = ExecutionContext()
         self._ctx.deserialize(saved_state)
         self._ctx.running = True
@@ -171,6 +241,7 @@ class WorkflowExecutor:
     def _count_nodes(self, nodes: list[dict]) -> int:
         count = 0
         for n in nodes:
+            n = self._normalize_node(n)
             count += 1
             count += self._count_nodes(n.get("children", []))
             count += self._count_nodes(n.get("elseChildren", []))
@@ -178,6 +249,7 @@ class WorkflowExecutor:
 
     def _execute_nodes(self, nodes: list[dict], skip_until: int = 0):
         for _i, node in enumerate(nodes):
+            node = self._normalize_node(node)
             if not self._ctx.running:
                 return
             if self._ctx.step_index < skip_until:
@@ -244,10 +316,11 @@ class WorkflowExecutor:
         action = to_backend(node.get("action", ""))
         ctrl = self._get_ctrl(node)
         ctx = self._ctx
+        data = node.get("data") or {}
 
         match action:
             case "open":
-                ctrl.navigate(ctx.resolve(node["url"]))
+                ctrl.navigate(ctx.resolve(data["url"]))
             case "back":
                 ctrl.go_back()
             case "forward":
@@ -255,98 +328,98 @@ class WorkflowExecutor:
             case "reload":
                 ctrl.reload()
             case "click":
-                ctrl.click(ctx.resolve(node["selector"]))
+                ctrl.click(ctx.resolve(data["selector"]))
             case "dblclick":
-                ctrl.dblclick(ctx.resolve(node["selector"]))
+                ctrl.dblclick(ctx.resolve(data["selector"]))
             case "type":
-                ctrl.type_text(ctx.resolve(node["selector"]), ctx.resolve(node.get("value", "")))
+                ctrl.type_text(ctx.resolve(data["selector"]), ctx.resolve(data.get("value", "")))
             case "clear":
-                ctrl.clear(ctx.resolve(node["selector"]))
+                ctrl.clear(ctx.resolve(data["selector"]))
             case "select":
-                ctrl.select_option(ctx.resolve(node["selector"]), ctx.resolve(node.get("value", "")))
+                ctrl.select_option(ctx.resolve(data["selector"]), ctx.resolve(data.get("value", "")))
             case "hover":
-                ctrl.hover(ctx.resolve(node["selector"]))
+                ctrl.hover(ctx.resolve(data["selector"]))
             case "scroll":
-                sel = ctx.resolve(node.get("selector", "window"))
-                ctrl.scroll(sel, node.get("direction", "down"), node.get("amount", 300))
+                sel = ctx.resolve(data.get("selector", "window"))
+                ctrl.scroll(sel, data.get("direction", "down"), data.get("amount", 300))
             case "focus":
-                ctrl.focus(ctx.resolve(node["selector"]))
+                ctrl.focus(ctx.resolve(data["selector"]))
             case "press_key":
-                sel = ctx.resolve(node.get("selector", "body"))
-                ctrl.press_key(sel, ctx.resolve(node["key"]))
+                sel = ctx.resolve(data.get("selector", "body"))
+                ctrl.press_key(sel, ctx.resolve(data["key"]))
             case "wait":
-                if node.get("selector"):
-                    timeout = _parse_duration(node.get("timeout", "5s")) * 1000
-                    ctrl.wait_for(ctx.resolve(node["selector"]), timeout=int(timeout))
-                elif node.get("url_contains"):
-                    target = ctx.resolve(node["url_contains"])
-                    timeout = _parse_duration(node.get("timeout", "10s"))
+                if data.get("selector"):
+                    timeout = _parse_duration(data.get("timeout", "5s")) * 1000
+                    ctrl.wait_for(ctx.resolve(data["selector"]), timeout=int(timeout))
+                elif data.get("url_contains"):
+                    target = ctx.resolve(data["url_contains"])
+                    timeout = _parse_duration(data.get("timeout", "10s"))
                     deadline = time.time() + timeout
                     while time.time() < deadline:
                         if target in ctrl.get_url():
                             break
                         time.sleep(0.2)
-                elif node.get("time"):
-                    time.sleep(_parse_duration(node["time"]))
+                elif data.get("time"):
+                    time.sleep(_parse_duration(data["time"]))
             case "extract_text":
-                sel = ctx.resolve(node["selector"])
-                into = node.get("into", "$_result")
+                sel = ctx.resolve(data["selector"])
+                into = data.get("into", "$_result")
                 ctx.set_var(into, ctrl.get_element_text(sel))
             case "extract_attr":
-                sel = ctx.resolve(node["selector"])
-                into = node.get("into", "$_result")
-                ctx.set_var(into, ctrl.get_element_attribute(sel, node.get("attrName", "")))
+                sel = ctx.resolve(data["selector"])
+                into = data.get("into", "$_result")
+                ctx.set_var(into, ctrl.get_element_attribute(sel, data.get("attrName", "")))
             case "extract_table":
-                sel = ctx.resolve(node["selector"])
-                into = node.get("into", "$_result")
+                sel = ctx.resolve(data["selector"])
+                into = data.get("into", "$_result")
                 ctx.set_var(into, ctrl.extract_table(sel))
             case "get_url":
-                into = node.get("into", "$_result")
+                into = data.get("into", "$_result")
                 ctx.set_var(into, ctrl.get_url())
             case "set":
-                ctx.set_var(node["variable"], node.get("value"))
+                ctx.set_var(data["variable"], data.get("value"))
             case "screenshot":
-                ctrl.screenshot(_safe_path(node.get("filename", "screenshot.png")))
+                ctrl.screenshot(_safe_path(data.get("filename", "screenshot.png")))
             case "log":
-                parts = node.get("parts", [])
+                parts = data.get("parts", [])
                 resolved = [ctx.resolve(p) for p in parts]
                 logger.info(f"[LOG] {' '.join(str(r) for r in resolved)}")
             case "sleep":
-                time.sleep(_parse_duration(node.get("duration", "1s")))
+                time.sleep(_parse_duration(data.get("duration", "1s")))
             case "fail":
-                raise RuntimeError(ctx.resolve(node.get("message", "Workflow failed")))
+                raise RuntimeError(ctx.resolve(data.get("message", "Workflow failed")))
             case "new_tab":
-                ctrl.new_tab(ctx.resolve(node.get("url", "")))
+                ctrl.new_tab(ctx.resolve(data.get("url", "")))
             case "switch_tab":
-                ctrl.switch_tab(node.get("tabIndex", 0))
+                ctrl.switch_tab(data.get("tabIndex", 0))
             case "close_tab":
-                ctrl.close_tab(node.get("tabIndex"))
+                ctrl.close_tab(data.get("tabIndex"))
             case "handle_dialog":
                 ctrl.handle_dialog(
-                    accept=node.get("accept", True),
-                    text=ctx.resolve(node.get("text", ""))
+                    accept=data.get("accept", True),
+                    text=ctx.resolve(data.get("text", ""))
                 )
             case "upload_file":
                 ctrl.upload_file(
-                    ctx.resolve(node["selector"]),
-                    ctx.resolve(node["filePath"])
+                    ctx.resolve(data["selector"]),
+                    ctx.resolve(data["filePath"])
                 )
             case "run_script":
-                result = ctrl.evaluate(ctx.resolve(node["script"]))
-                into = node.get("into")
+                result = ctrl.evaluate(ctx.resolve(data["script"]))
+                into = data.get("into")
                 if into:
                     ctx.set_var(into, result)
             case "http_request":
-                url = ctx.resolve(node["url"])
+                url = ctx.resolve(data["url"])
                 if not url.startswith(("http://", "https://")):
                     raise ValueError(f"HTTP request URL scheme not allowed: {url}")
-                method = node.get("method", "GET").upper()
-                headers = node.get("headers", {})
-                body = ctx.resolve(node["body"]) if node.get("body") else None
+                method = data.get("method", "GET").upper()
+                headers = data.get("headers", {})
+                body = ctx.resolve(data["body"]) if data.get("body") else None
                 try:
-                    timeout_val = int(node.get("timeout", 30))
+                    timeout_val = int(data.get("timeout", 30))
                 except (ValueError, TypeError):
-                    timeout_val = int(_parse_duration(str(node.get("timeout", "30s"))))
+                    timeout_val = int(_parse_duration(str(data.get("timeout", "30s"))))
                 req = urllib.request.Request(
                     url, method=method,
                     data=body.encode("utf-8") if body else None,
@@ -355,7 +428,7 @@ class WorkflowExecutor:
                 try:
                     with urllib.request.urlopen(req, timeout=timeout_val) as resp:
                         resp_body = resp.read().decode("utf-8", errors="replace")
-                        into = node.get("into", "$_result")
+                        into = data.get("into", "$_result")
                         try:
                             ctx.set_var(into, json.loads(resp_body))
                         except json.JSONDecodeError:
@@ -363,14 +436,14 @@ class WorkflowExecutor:
                 except urllib.error.URLError as e:
                     raise RuntimeError(f"HTTP request failed: {e}")
             case "export":
-                fmt = node.get("format", "json")
-                raw_path = ctx.resolve(node.get("path", "export.json"))
+                fmt = data.get("format", "json")
+                raw_path = ctx.resolve(data.get("path", "export.json"))
                 path = _safe_path(raw_path)
-                data = ctx.variables
+                exported = ctx.variables
                 if fmt == "csv":
                     buf = io.StringIO()
                     writer = csv.writer(buf)
-                    for k, v in data.items():
+                    for k, v in exported.items():
                         if isinstance(v, list) and v and isinstance(v[0], list):
                             for row in v:
                                 writer.writerow(row)
@@ -380,83 +453,83 @@ class WorkflowExecutor:
                         f.write(buf.getvalue())
                 else:
                     with open(path, "w", encoding="utf-8") as f:
-                        json.dump(data, f, ensure_ascii=False, indent=2)
+                        json.dump(exported, f, ensure_ascii=False, indent=2)
                 logger.info(f"Exported to {path} ({fmt})")
             case "comment":
                 pass
             case "switch_frame":
-                sel = ctx.resolve(node.get("selector"))
+                sel = ctx.resolve(data.get("selector"))
                 ctrl.switch_frame(sel)
             case "wait_for_page":
-                state = node.get("state", "load")
-                timeout = int(node.get("timeout", 30000))
+                state = data.get("state", "load")
+                timeout = int(data.get("timeout", 30000))
                 ctrl.wait_for_page(state, timeout=timeout)
             case "cookie":
-                op = node.get("operation", "get")
+                op = data.get("operation", "get")
                 if op == "get":
-                    name = ctx.resolve(node.get("name", "")) or None
-                    into = node.get("into", "$_result")
+                    name = ctx.resolve(data.get("name", "")) or None
+                    into = data.get("into", "$_result")
                     ctx.set_var(into, ctrl.get_cookie(name))
                 elif op == "set":
-                    cookies = node.get("cookies", [])
+                    cookies = data.get("cookies", [])
                     ctrl.set_cookie(cookies)
                 elif op == "delete":
-                    name = ctx.resolve(node.get("name", "")) or None
+                    name = ctx.resolve(data.get("name", "")) or None
                     ctrl.delete_cookie(name)
             case "element_exists":
-                sel = ctx.resolve(node["selector"])
-                into = node.get("into", "$_result")
+                sel = ctx.resolve(data["selector"])
+                into = data.get("into", "$_result")
                 try:
                     ctx.set_var(into, ctrl.get_element_count(sel) > 0)
                 except Exception:
                     ctx.set_var(into, False)
             case "handle_download":
-                save_path = ctx.resolve(node.get("savePath", "download"))
-                timeout = int(node.get("timeout", 30000))
+                save_path = ctx.resolve(data.get("savePath", "download"))
+                timeout = int(data.get("timeout", 30000))
                 result = ctrl.handle_download(save_path, timeout=timeout)
-                into = node.get("into", "$_result")
+                into = data.get("into", "$_result")
                 ctx.set_var(into, result)
             case "transform":
-                source_var = node.get("source", "$_result")
-                into = node.get("into", "$_result")
-                op = node.get("operation", "identity")
-                data = ctx.get_var(source_var)
+                source_var = data.get("source", "$_result")
+                into = data.get("into", "$_result")
+                op = data.get("operation", "identity")
+                src = ctx.get_var(source_var)
                 match op:
                     case "map":
-                        expr = node.get("expression", "")
-                        if isinstance(data, list):
-                            data = [ctx.resolve(expr.replace("$item", str(item))) for item in data]
+                        expr = data.get("expression", "")
+                        if isinstance(src, list):
+                            src = [ctx.resolve(expr.replace("$item", str(item))) for item in src]
                     case "filter":
-                        expr = node.get("expression", "")
-                        if isinstance(data, list):
-                            data = [item for item in data if item]
+                        expr = data.get("expression", "")
+                        if isinstance(src, list):
+                            src = [item for item in src if item]
                     case "sort":
-                        reverse = node.get("reverse", False)
-                        if isinstance(data, list):
-                            data = sorted(data, reverse=reverse)
+                        reverse = data.get("reverse", False)
+                        if isinstance(src, list):
+                            src = sorted(src, reverse=reverse)
                     case "flatten":
-                        if isinstance(data, list):
+                        if isinstance(src, list):
                             flat = []
-                            for item in data:
+                            for item in src:
                                 if isinstance(item, list):
                                     flat.extend(item)
                                 else:
                                     flat.append(item)
-                            data = flat
+                            src = flat
                     case "unique":
-                        if isinstance(data, list):
+                        if isinstance(src, list):
                             seen = set()
                             result_list = []
-                            for item in data:
+                            for item in src:
                                 key = str(item)
                                 if key not in seen:
                                     seen.add(key)
                                     result_list.append(item)
-                            data = result_list
-                ctx.set_var(into, data)
+                            src = result_list
+                ctx.set_var(into, src)
             case "execute_workflow":
-                # Sub-workflow execution - requires workflow JSON in node
-                sub_wf = node.get("workflow")
+                # Sub-workflow execution - requires workflow JSON in data
+                sub_wf = data.get("workflow")
                 if sub_wf:
                     sub_executor = WorkflowExecutor(
                         session_manager=self._session_manager,
@@ -465,7 +538,7 @@ class WorkflowExecutor:
                     if not self._session_manager:
                         sub_executor._controller = ctrl
                     result = sub_executor.execute(sub_wf)
-                    into = node.get("into")
+                    into = data.get("into")
                     if into:
                         ctx.set_var(into, result)
                 else:
@@ -482,7 +555,8 @@ class WorkflowExecutor:
                 logger.warning(f"Unknown action: {action}")
 
     def _execute_condition(self, node: dict):
-        condition = self._ctx.resolve(node.get("condition", ""))
+        data = node.get("data") or {}
+        condition = self._ctx.resolve(data.get("condition", ""))
         result = self._evaluate_condition(condition, node)
         if result:
             self._execute_nodes(node.get("children", []))
@@ -495,12 +569,13 @@ class WorkflowExecutor:
         return evaluate_condition(condition, self._get_ctrl(node), self._ctx)
 
     def _execute_loop(self, node: dict):
-        lt = node.get("loopType", "items")
+        data = node.get("data") or {}
+        lt = data.get("loopType", "items")
         ctx = self._ctx
 
         if lt == "count":
-            count = node.get("count", 1)
-            var = node.get("variable")
+            count = data.get("count", 1)
+            var = data.get("variable")
             for i in range(count):
                 if not ctx.running:
                     return
@@ -512,9 +587,9 @@ class WorkflowExecutor:
                     break
 
         elif lt == "items":
-            selector = ctx.resolve(node.get("selector", ""))
-            var = node.get("variable")
-            max_iter = node.get("max", 100)
+            selector = ctx.resolve(data.get("selector", ""))
+            var = data.get("variable")
+            max_iter = data.get("max", 100)
             elements_count = self._get_ctrl(node).get_element_count(selector)
             count = min(elements_count, max_iter)
             for i in range(count):
@@ -528,8 +603,8 @@ class WorkflowExecutor:
                     break
 
         elif lt == "while":
-            cond = node.get("whileCondition", "")
-            max_iter = node.get("max", 100)
+            cond = data.get("whileCondition", "")
+            max_iter = data.get("max", 100)
             iteration = 0
             while ctx.running and iteration < max_iter:
                 if not self._evaluate_condition(cond, node):
@@ -541,9 +616,9 @@ class WorkflowExecutor:
                 iteration += 1
 
         elif lt == "elements":
-            selector = ctx.resolve(node.get("selector", ""))
-            var = node.get("variable")
-            max_iter = node.get("max", 100)
+            selector = ctx.resolve(data.get("selector", ""))
+            var = data.get("variable")
+            max_iter = data.get("max", 100)
             elements_count = self._get_ctrl(node).get_element_count(selector)
             count = min(elements_count, max_iter)
             for i in range(count):

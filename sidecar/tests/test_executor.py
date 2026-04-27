@@ -25,6 +25,93 @@ def executor(mock_ctrl):
     return WorkflowExecutor(mock_ctrl)
 
 
+class TestCanonicalNodes:
+    def test_canonical_action_node(self, executor, mock_ctrl):
+        wf = {"nodes": [{
+            "id": "n1",
+            "kind": "action",
+            "action": "Navigate",
+            "position": {"x": 0, "y": 0},
+            "data": {"url": "https://canonical.test"},
+            "settings": {"onError": "stop"},
+        }]}
+        result = executor.execute(wf)
+        assert result["success"]
+        mock_ctrl.navigate.assert_called_once_with("https://canonical.test")
+
+    def test_canonical_action_node_with_runtime_session(self, mock_ctrl):
+        from browser.controller import SessionManager
+        mgr = MagicMock(spec=SessionManager)
+        mgr.get.return_value = mock_ctrl
+        executor = WorkflowExecutor(session_manager=mgr, default_session_id="default")
+        wf = {"nodes": [{
+            "id": "n1",
+            "kind": "action",
+            "action": "Click",
+            "position": {"x": 0, "y": 0},
+            "data": {"selector": "#btn"},
+            "runtime": {"sessionId": "profile-a"},
+        }]}
+        result = executor.execute(wf)
+        assert result["success"]
+        mgr.get.assert_called_with("profile-a")
+        mock_ctrl.click.assert_called_once_with("#btn")
+
+    def test_canonical_condition_node(self, executor, mock_ctrl):
+        mock_ctrl.get_element_count.return_value = 1
+        wf = {"nodes": [{
+            "id": "cond",
+            "kind": "condition",
+            "position": {"x": 0, "y": 0},
+            "data": {
+                "condition": 'exists("#el")',
+                "children": [{
+                    "id": "set",
+                    "kind": "action",
+                    "action": "SetVariable",
+                    "position": {"x": 0, "y": 0},
+                    "data": {"variable": "$branch", "value": "true"},
+                }],
+            },
+        }]}
+        result = executor.execute(wf)
+        assert result["success"]
+        assert result["variables"]["$branch"] == "true"
+
+    def test_canonical_loop_node(self, executor):
+        wf = {"nodes": [{
+            "id": "loop",
+            "kind": "loop",
+            "position": {"x": 0, "y": 0},
+            "data": {
+                "loopType": "count",
+                "count": 2,
+                "variable": "$i",
+                "children": [{
+                    "id": "log",
+                    "kind": "action",
+                    "action": "Log",
+                    "position": {"x": 0, "y": 0},
+                    "data": {"parts": ["iter"]},
+                }],
+            },
+        }]}
+        result = executor.execute(wf)
+        assert result["success"]
+        assert result["variables"]["$i"] == 1
+
+    def test_legacy_vue_flow_data_action_node(self, executor, mock_ctrl):
+        wf = {"nodes": [{
+            "id": "n1",
+            "type": "action",
+            "position": {"x": 0, "y": 0},
+            "data": {"action": "Click", "selector": "#legacy"},
+        }]}
+        result = executor.execute(wf)
+        assert result["success"]
+        mock_ctrl.click.assert_called_once_with("#legacy")
+
+
 # --- Basic action tests ---
 
 class TestBasicActions:

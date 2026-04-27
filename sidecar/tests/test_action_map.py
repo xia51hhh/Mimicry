@@ -1,4 +1,18 @@
+import json
+from pathlib import Path
+
 from engine.action_map import FRONTEND_TO_BACKEND, BACKEND_TO_FRONTEND, to_backend, to_frontend
+
+
+ROOT = Path(__file__).resolve().parents[2]
+SHARED_ACTION_MAP = ROOT / "shared" / "action-map.json"
+
+
+def test_python_map_matches_shared_source():
+    with SHARED_ACTION_MAP.open(encoding="utf-8") as f:
+        shared_map = json.load(f)
+
+    assert FRONTEND_TO_BACKEND == shared_map
 
 
 def test_maps_are_inverse():
