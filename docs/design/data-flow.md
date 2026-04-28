@@ -1,8 +1,10 @@
 # 数据流设计
 
-> **状态**: Planned / Partial | **最后更新**: 2026-04-27
+> **状态**: Planned / Partial | **最后更新**: 2026-04-28
 
 > 现实边界：当前代码已支持 workflow JSON、canonical node 导入导出、顺序执行、条件/循环嵌套和变量类 action；本文描述的边驱动数据传递、节点 IO、完整表达式上下文和 graph traversal 仍属于目标设计。
+>
+> **工作流格式转化**: Rust 转化层已实现 4 种格式互转（Canonical ↔ Compact ↔ Backend ↔ Legacy），详见 [transform-layer.md](transform-layer.md)。
 
 ---
 

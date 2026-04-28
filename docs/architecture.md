@@ -72,6 +72,7 @@
 | 模块 | 路径 | 职责 |
 |------|------|------|
 | Commands | `commands/` | Tauri 命令层，前端通过 `invoke()` 调用 |
+| Transform | `transform/` | 工作流格式转化层：4 格式互转、格式检测、自动布局。详见 [transform-layer.md](design/transform-layer.md) |
 | DB | `db/` | SQLite 数据访问，工作流 CRUD、配置存储 |
 | IPC | `ipc/` | Sidecar 进程管理 + JSON-RPC 客户端 |
 | Logger | `logger.rs` | tracing 日志系统，文件旋转输出 |
