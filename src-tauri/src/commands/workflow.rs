@@ -57,3 +57,46 @@ pub async fn workflow_import(db_conn: State<'_, Mutex<Connection>>, json: String
     let conn = db_conn.lock().await;
     db::workflow::import_json(&conn, &json).map_err(|e| AppError::Sidecar(e.to_string()))
 }
+
+/// Auto-detect format and transform any workflow JSON to Canonical format.
+/// Supports: Canonical (passthrough), Compact, Recording, Legacy.
+#[tauri::command]
+pub fn workflow_transform_import(json: serde_json::Value) -> Result<serde_json::Value, AppError> {
+    use crate::transform::*;
+
+    let fmt = detect_format(&json);
+    let canonical = match fmt {
+        WorkflowFormat::Canonical => {
+            serde_json::from_value::<CanonicalWorkflow>(json)?
+        }
+        WorkflowFormat::Compact | WorkflowFormat::Recording => {
+            let compact: CompactWorkflow = serde_json::from_value(json)?;
+            compact_to_canonical(&compact)?
+        }
+        WorkflowFormat::Legacy => {
+            legacy_to_canonical(&json)?
+        }
+        WorkflowFormat::Unknown => {
+            return Err(AppError::Transform("Unknown workflow format. Expected Canonical, Compact, Recording, or Legacy.".into()));
+        }
+    };
+
+    Ok(serde_json::to_value(&canonical)?)
+}
+
+/// Export a Canonical workflow to Compact format (LLM-friendly).
+#[tauri::command]
+pub fn workflow_export_compact(workflow: serde_json::Value) -> Result<serde_json::Value, AppError> {
+    use crate::transform::*;
+
+    let canonical: CanonicalWorkflow = serde_json::from_value(workflow)?;
+    let compact = canonical_to_compact(&canonical)?;
+    Ok(serde_json::to_value(&compact)?)
+}
+
+/// Detect the format of a workflow JSON.
+#[tauri::command]
+pub fn workflow_detect_format(json: serde_json::Value) -> Result<String, AppError> {
+    let fmt = crate::transform::detect_format(&json);
+    Ok(fmt.to_string())
+}
