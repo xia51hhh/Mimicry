@@ -205,6 +205,8 @@ class RecordingEngine:
         self._events: list[dict] = []
         self._last_poll_index = 0
         self.event_callback: callable | None = None
+        self._active_page_id: int | None = None  # id(page) of last active page for switch detection
+        self._page_tab_cache: dict[int, dict] = {}  # id(page) → TabInfo dict snapshot (survives unregister)
 
     @property
     def is_recording(self) -> bool:
@@ -216,6 +218,8 @@ class RecordingEngine:
         self._recording = True
         self._events.clear()
         self._last_poll_index = 0
+        self._page_tab_cache.clear()
+        self._active_page_id = id(self._controller._page) if self._controller._page else None
         self._inject_recorder()
         logger.info("Recording started")
 
@@ -249,6 +253,11 @@ class RecordingEngine:
                 page.evaluate(RECORDER_JS)
                 page.on("load", lambda p=page: self._safe_inject(p))
                 page.on("close", lambda p=page: self._on_page_close(p))
+                # Cache tabInfo for close event
+                pid = id(page)
+                tab_id = self._controller._page_to_tab.get(pid)
+                if tab_id and tab_id in self._controller._tab_registry:
+                    self._page_tab_cache[pid] = self._controller._tab_registry[tab_id].to_dict()
                 # Inject into all existing frames
                 for frame in page.frames:
                     if frame == page.main_frame:
@@ -285,6 +294,11 @@ class RecordingEngine:
             self._events.append(tab_event)
             if self.event_callback:
                 self.event_callback(tab_event)
+            # Cache tabInfo for close event (survives controller unregister)
+            if tab_info:
+                self._page_tab_cache[id(page)] = tab_info
+            # Track new tab as active for switch detection
+            self._active_page_id = id(page)
             # Inject recorder into new tab
             page.evaluate(RECORDER_JS)
             page.on("load", lambda p=page: self._safe_inject(p))
@@ -296,9 +310,10 @@ class RecordingEngine:
 
     def _on_page_close(self, page) -> None:
         """Handle tab closed during recording."""
-        tab_info = {}
-        if self._controller:
-            pid = id(page)
+        pid = id(page)
+        # Use cached tabInfo (survives controller unregister race)
+        tab_info = self._page_tab_cache.pop(pid, {})
+        if not tab_info and self._controller:
             tab_id = self._controller._page_to_tab.get(pid)
             if tab_id and tab_id in self._controller._tab_registry:
                 tab_info = self._controller._tab_registry[tab_id].to_dict()
@@ -330,16 +345,23 @@ class RecordingEngine:
             pass
 
     def _poll_events(self) -> None:
-        """Pull events from all browser pages and frames."""
+        """Pull NEW events from all browser pages and frames (incremental).
+        Auto-inserts switch_tab events when active page changes."""
         ctx = self._controller._context
         if not ctx:
             return
-        all_events = []
+        new_events = []
         for page in ctx.pages:
+            page_id = id(page)
             try:
-                raw = page.evaluate("window.__mimicryEvents || []")
+                # Atomically drain events from browser (splice returns removed items)
+                raw = page.evaluate("""() => {
+                    return (window.__mimicryEvents || []).splice(0);
+                }""")
                 if raw:
-                    all_events.extend(raw)
+                    for evt in raw:
+                        evt["_page_id"] = page_id
+                    new_events.extend(raw)
             except Exception:
                 pass
             # Collect from iframes
@@ -347,15 +369,36 @@ class RecordingEngine:
                 if frame == page.main_frame:
                     continue
                 try:
-                    raw = frame.evaluate("window.__mimicryEvents || []")
+                    raw = frame.evaluate("""() => {
+                        return (window.__mimicryEvents || []).splice(0);
+                    }""")
                     if raw:
-                        all_events.extend(raw)
+                        for evt in raw:
+                            evt["_page_id"] = page_id
+                        new_events.extend(raw)
                 except Exception:
                     pass
-        # Sort by timestamp and deduplicate
-        all_events.sort(key=lambda e: e.get("timestamp", 0))
-        if len(all_events) > len(self._events):
-            self._events = all_events
+        if not new_events:
+            return
+        # Sort new batch by timestamp
+        new_events.sort(key=lambda e: e.get("timestamp", 0))
+        # Detect page switches and insert switch_tab events
+        for evt in new_events:
+            page_id = evt.pop("_page_id", None)
+            if page_id and page_id != self._active_page_id:
+                # Page changed — auto-insert switch_tab
+                tab_info = {}
+                tab_id = self._controller._page_to_tab.get(page_id)
+                if tab_id and tab_id in self._controller._tab_registry:
+                    tab_info = self._controller._tab_registry[tab_id].to_dict()
+                switch_event = {
+                    "type": "switch_tab",
+                    "timestamp": evt.get("timestamp", int(_time.time() * 1000)),
+                    "tabInfo": tab_info,
+                }
+                self._events.append(switch_event)
+                self._active_page_id = page_id
+            self._events.append(evt)
 
     @staticmethod
     def events_to_workflow_nodes(events: list[dict]) -> list[dict]:
@@ -440,6 +483,15 @@ class RecordingEngine:
                         node_data["tabId"] = ti.get("tab_id", "")
                         node_data["seq"] = ti.get("seq")
                     nodes.append(_make_node("close_tab", node_data))
+                case "switch_tab":
+                    node_data = {}
+                    if ti := event.get("tabInfo"):
+                        node_data["tabId"] = ti.get("tab_id", "")
+                        node_data["seq"] = ti.get("seq")
+                        node_data["urlOrigin"] = ti.get("url_origin", "")
+                        node_data["urlPath"] = ti.get("url_path", "")
+                        node_data["title"] = ti.get("title", "")
+                    nodes.append(_make_node("switch_tab", node_data))
 
         # Attach selector quality score into data
         for node in nodes:
