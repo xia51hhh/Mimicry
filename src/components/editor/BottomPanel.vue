@@ -62,9 +62,9 @@ const levelColors: Record<string, string> = {
   debug: 'text-gray-400',
 }
 
-/** Import workflow JSON from clipboard or file */
+/** Import workflow JSON from clipboard or file (supports all formats) */
 async function importJson() {
-  await fileOps.openFile()
+  await fileOps.importFile()
 }
 
 /** Run standalone validation */

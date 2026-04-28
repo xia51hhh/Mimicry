@@ -56,10 +56,10 @@ export function useKeyboardShortcuts() {
       return
     }
 
-    // Ctrl+O — Open File
+    // Ctrl+O — Open File (multi-format import)
     if (ctrl && key === 'o') {
       e.preventDefault()
-      fileOps.openFile()
+      fileOps.importFile()
       showToast(t('fileMenu.open'), 'Ctrl+O')
       return
     }
