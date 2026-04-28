@@ -4,6 +4,19 @@ use tokio::sync::Mutex;
 use crate::db;
 use crate::AppError;
 
+/// Validate that a file path ends with one of the allowed extensions.
+fn validate_file_extension(path: &str, allowed: &[&str]) -> Result<(), AppError> {
+    let lower = path.to_lowercase();
+    if allowed.iter().any(|ext| lower.ends_with(&format!(".{ext}"))) {
+        Ok(())
+    } else {
+        Err(AppError::Transform(format!(
+            "Invalid file extension. Expected: {}",
+            allowed.join(", ")
+        )))
+    }
+}
+
 #[derive(serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct WorkspaceFile {
@@ -29,11 +42,9 @@ pub async fn file_read(path: String) -> Result<WorkspaceFile, AppError> {
 pub async fn file_import(path: String) -> Result<serde_json::Value, AppError> {
     use crate::transform::*;
 
-    let content = tokio::fs::read_to_string(&path)
-        .await
-        .map_err(|e| AppError::Sidecar(format!("Failed to read file: {e}")))?;
-    let raw: serde_json::Value = serde_json::from_str(&content)
-        .map_err(|e| AppError::Sidecar(format!("Invalid JSON: {e}")))?;
+    validate_file_extension(&path, &["json", "mimicry.json"])?;
+    let content = tokio::fs::read_to_string(&path).await?;
+    let raw: serde_json::Value = serde_json::from_str(&content)?;
 
     let fmt = detect_format(&raw);
     let canonical = match fmt {
@@ -58,13 +69,11 @@ pub async fn file_import(path: String) -> Result<serde_json::Value, AppError> {
 pub async fn file_export_compact(path: String, workflow: serde_json::Value) -> Result<(), AppError> {
     use crate::transform::*;
 
+    validate_file_extension(&path, &["json", "compact.json"])?;
     let canonical: CanonicalWorkflow = serde_json::from_value(workflow)?;
     let compact = canonical_to_compact(&canonical)?;
-    let json = serde_json::to_string_pretty(&compact)
-        .map_err(|e| AppError::Sidecar(format!("Serialize error: {e}")))?;
-    tokio::fs::write(&path, json)
-        .await
-        .map_err(|e| AppError::Sidecar(format!("Failed to write file: {e}")))?;
+    let json = serde_json::to_string_pretty(&compact)?;
+    tokio::fs::write(&path, json).await?;
     Ok(())
 }
 

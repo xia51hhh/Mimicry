@@ -116,8 +116,8 @@ fn convert_compact_nodes(
         // Recursively convert children
         if let Some(ref children) = cn.children {
             let mut child_nodes = Vec::new();
-            let mut child_edges = Vec::new();
-            convert_compact_nodes(children, &mut child_nodes, &mut child_edges)?;
+            let mut _child_edges = Vec::new();
+            convert_compact_nodes(children, &mut child_nodes, &mut _child_edges)?;
             let children_val: Vec<serde_json::Value> = child_nodes
                 .iter()
                 .map(|n| serde_json::to_value(n).unwrap())
@@ -130,8 +130,8 @@ fn convert_compact_nodes(
 
         if let Some(ref else_children) = cn.else_children {
             let mut child_nodes = Vec::new();
-            let mut child_edges = Vec::new();
-            convert_compact_nodes(else_children, &mut child_nodes, &mut child_edges)?;
+            let mut _child_edges = Vec::new();
+            convert_compact_nodes(else_children, &mut child_nodes, &mut _child_edges)?;
             let children_val: Vec<serde_json::Value> = child_nodes
                 .iter()
                 .map(|n| serde_json::to_value(n).unwrap())

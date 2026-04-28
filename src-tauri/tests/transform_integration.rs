@@ -152,8 +152,20 @@ fn import_pipeline_recording() {
     let fmt = detect_format(&recording_json);
     assert_eq!(fmt, WorkflowFormat::Recording);
 
-    // Recording format can be treated as Compact (has action, no position)
-    // with snake_case actions that need normalization
+    // Recording → Compact → Canonical full conversion chain
+    let compact: CompactWorkflow = serde_json::from_value(recording_json).unwrap();
+    let canonical = compact_to_canonical(&compact).unwrap();
+
+    assert_eq!(canonical.nodes.len(), 2);
+    assert_eq!(canonical.nodes[0].action.as_deref(), Some("Click")); // snake→Pascal
+    assert_eq!(canonical.nodes[1].action.as_deref(), Some("Type"));
+    assert!(canonical.nodes[0].data.get("selector").is_some());
+    assert_eq!(canonical.edges.len(), 1); // auto-generated edge
+
+    // Verify can further convert to Backend
+    let backend = canonical_to_backend(&canonical, "default").unwrap();
+    assert_eq!(backend.nodes[0].action, "click"); // Pascal→snake
+    assert_eq!(backend.nodes[1].action, "type");
 }
 
 /// Test Canonical → Compact → Canonical roundtrip preserves execution semantics
