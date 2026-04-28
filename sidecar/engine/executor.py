@@ -310,7 +310,6 @@ class WorkflowExecutor:
     def _count_nodes(self, nodes: list[dict]) -> int:
         count = 0
         for n in nodes:
-            n = self._normalize_node(n)
             count += 1
             count += self._count_nodes(n.get("children", []))
             count += self._count_nodes(n.get("elseChildren", []))

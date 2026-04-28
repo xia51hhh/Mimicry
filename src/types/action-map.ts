@@ -1,7 +1,6 @@
 /**
  * Bidirectional mapping between frontend PascalCase and backend lowercase action names.
  * AUTO-GENERATED from shared/action-map.json — do not edit manually.
- * Run `python3 scripts/sync-action-map.py --fix` after changing the shared map.
  */
 
 export const FRONTEND_TO_BACKEND: Record<string, string> = {
@@ -47,6 +46,7 @@ export const FRONTEND_TO_BACKEND: Record<string, string> = {
   HandleDownload: "handle_download",
   Transform: "transform",
   Stop: "stop",
+  Fail: "fail",
 };
 
 export const BACKEND_TO_FRONTEND: Record<string, string> = Object.fromEntries(

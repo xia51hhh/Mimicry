@@ -70,7 +70,7 @@ const actionTypes = [
   { group: t('blockCategories.interaction'), items: ['Click', 'DblClick', 'Type', 'Hover', 'PressKey', 'Scroll', 'SelectOption', 'UploadFile', 'Clear', 'Focus'] },
   { group: t('blockCategories.data'), items: ['GetText', 'GetAttribute', 'GetURL', 'Screenshot', 'ExtractTable', 'SetVariable', 'Transform', 'Export', 'Cookie', 'ElementExists'] },
   { group: t('blockCategories.advanced'), items: ['RunScript', 'HttpRequest', 'HandleDownload', 'Log', 'Delay', 'Comment'] },
-  { group: t('blockCategories.flow'), items: ['Wait', 'ExecuteWorkflow', 'Stop', 'LoopBreakpoint', 'WaitConnections'] },
+  { group: t('blockCategories.flow'), items: ['Wait', 'ExecuteWorkflow', 'Stop', 'Fail', 'LoopBreakpoint', 'WaitConnections'] },
 ]
 
 const loopTypes = [

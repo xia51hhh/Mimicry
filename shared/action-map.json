@@ -40,5 +40,6 @@
   "ExecuteWorkflow": "execute_workflow",
   "HandleDownload": "handle_download",
   "Transform": "transform",
-  "Stop": "stop"
+  "Stop": "stop",
+  "Fail": "fail"
 }
