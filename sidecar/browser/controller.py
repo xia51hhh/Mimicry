@@ -358,24 +358,20 @@ class BrowserController:
         if not camoufox and not browser and not pid:
             return
 
-        import threading, asyncio, signal, os
+        import signal, os
 
-        def _do_close():
-            asyncio.set_event_loop(asyncio.new_event_loop())
-            try:
-                if browser:
-                    browser.close()
-            except Exception as e:
-                logger.warning(f"Browser.close error: {e}")
-            try:
-                if camoufox:
-                    camoufox.__exit__(None, None, None)
-            except Exception as e:
-                logger.warning(f"Camoufox exit error: {e}")
-
-        t = threading.Thread(target=_do_close, daemon=True)
-        t.start()
-        t.join(timeout=5)
+        # Close on the current thread so Playwright's greenlet can switch
+        # back to the dispatcher_fiber that was created on this same thread.
+        try:
+            if browser:
+                browser.close()
+        except Exception as e:
+            logger.warning(f"Browser.close error: {e}")
+        try:
+            if camoufox:
+                camoufox.__exit__(None, None, None)
+        except Exception as e:
+            logger.warning(f"Camoufox exit error: {e}")
 
         # Force kill if process is still alive
         if pid:
@@ -611,7 +607,6 @@ class SessionManager:
         self._on_session_disconnected = None  # callback(session_id)
 
     def create(self, session_id: str, **kwargs) -> BrowserController:
-        import threading
         with self._lock:
             existing = self._sessions.get(session_id)
             if existing and existing.connected:
@@ -624,30 +619,16 @@ class SessionManager:
                     pass
                 del self._sessions[session_id]
 
-        # Launch in a clean thread to isolate Playwright's event loop
-        result = [None]
-        error = [None]
-
-        def _launch():
-            import asyncio
-            # Ensure clean event loop for this thread
-            asyncio.set_event_loop(asyncio.new_event_loop())
-            try:
-                ctrl = BrowserController()
-                ctrl.launch(**kwargs)
-                result[0] = ctrl
-            except Exception as e:
-                error[0] = e
-
-        t = threading.Thread(target=_launch, daemon=True)
-        t.start()
-        t.join()
-
-        if error[0]:
-            raise error[0]
+        # Launch on the current thread — Playwright's greenlet-based sync API
+        # binds dispatcher_fiber to the calling thread.  Launching in a
+        # separate thread would cause all subsequent Playwright calls to fail
+        # with "cannot switch to a different thread (which happens to have
+        # exited)" once that thread exits.
+        ctrl = BrowserController()
+        ctrl.launch(**kwargs)
 
         with self._lock:
-            self._sessions[session_id] = result[0]
+            self._sessions[session_id] = ctrl
 
         # Register disconnect callback
         def _on_disconnect():
@@ -657,9 +638,9 @@ class SessionManager:
             if self._on_session_disconnected:
                 self._on_session_disconnected(session_id)
 
-        result[0]._on_disconnected = _on_disconnect
+        ctrl._on_disconnected = _on_disconnect
         logger.info(f"Session created: {session_id}")
-        return result[0]
+        return ctrl
 
     def get(self, session_id: str) -> BrowserController:
         with self._lock:

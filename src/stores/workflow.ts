@@ -3,6 +3,7 @@ import { ref, shallowRef, computed } from "vue";
 import { invoke } from "@tauri-apps/api/core";
 import type { Node, Edge } from "@vue-flow/core";
 import type { RecordedNode } from "./browser";
+import { toFrontend } from "../types/action-map";
 import { errorMessage } from "../types/ipc";
 import dagre from "@dagrejs/dagre";
 import {
@@ -117,12 +118,12 @@ export const useWorkflowStore = defineStore("workflow", () => {
 
     recordedNodes.forEach((rn, i) => {
       const nodeId = `rec_${Date.now()}_${i}`;
-      const nodeType = rn.type === "condition" ? "condition" : rn.type === "loop" ? "loop" : "action";
+      const nodeType = rn.kind === "condition" ? "condition" : rn.kind === "loop" ? "loop" : "action";
       newNodes.push({
         id: nodeId,
         type: nodeType,
         position: { x: 300, y: startY + i * 80 },
-        data: { label: `${rn.action || rn.type}`, ...rn },
+        data: { action: toFrontend(rn.action), ...rn.data },
       });
       if (prevId) {
         newEdges.push({

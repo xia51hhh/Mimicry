@@ -119,66 +119,79 @@ class WorkflowExecutor:
         return self._ctx
 
     def _normalize_node(self, node: dict) -> dict:
-        """Normalize canonical and legacy workflow nodes into executor shape.
+        """Normalize canonical workflow nodes into executor shape.
 
-        Canonical frontend shape (preserved here):
-            {id, kind/type, action, data, settings, runtime, children, elseChildren}
+        Canonical shape (from frontend):
+            {id, kind, action, position, data, settings, runtime}
+            - action is already snake_case
+            - data contains action parameters (selector, url, etc.)
+            - children/elseChildren are inside data
 
-        Legacy shape (e.g. recorder output, hand-written JSON):
+        Legacy shape (e.g. old recorder output, hand-written JSON):
             {type, action, selector, url, ...} — flat.
 
-        Strategy: keep ``data`` as a parameter namespace. Legacy top-level
-        params (selector/url/value/etc.) get absorbed *into* ``data`` rather
-        than the other way around, so executors can read parameters via a
-        single ``node["data"]`` regardless of vintage.
-
-        When a field appears in BOTH canonical and legacy locations the
-        canonical value wins, but a warning is logged so the offending
-        producer can be fixed instead of silently drifting.
+        Returns a normalized dict with: id, type, action, data, settings,
+        session_id, children, elseChildren.
         """
+        node_id = node.get("id", "<no-id>")
+
+        # Canonical path: node has 'kind' field
+        if "kind" in node:
+            data = node.get("data") if isinstance(node.get("data"), dict) else {}
+            runtime = node.get("runtime") if isinstance(node.get("runtime"), dict) else {}
+            raw_action = node.get("action")
+            normalized: dict = {
+                "id": node.get("id"),
+                "type": node["kind"],
+                "data": {k: v for k, v in data.items()
+                         if k not in ("children", "elseChildren")},
+            }
+            if raw_action:
+                # action may already be snake_case; to_backend is idempotent
+                normalized["action"] = to_backend(raw_action)
+            settings = node.get("settings")
+            if settings is not None:
+                normalized["settings"] = settings
+            session_id = runtime.get("sessionId")
+            if session_id:
+                normalized["session_id"] = session_id
+            for child_key in ("children", "elseChildren"):
+                children = data.get(child_key)
+                if isinstance(children, list):
+                    normalized[child_key] = [
+                        self._normalize_node(child)
+                        for child in children
+                        if isinstance(child, dict)
+                    ]
+            return normalized
+
+        # Legacy fallback: flat format with 'type' field
+        logger.debug(f"node {node_id}: legacy format detected, normalizing")
         meta_keys = {
             "id", "kind", "type", "action", "data", "settings",
             "runtime", "session_id", "sessionId", "children", "elseChildren", "selected",
         }
-        node_id = node.get("id", "<no-id>")
         src_data = node.get("data") if isinstance(node.get("data"), dict) else {}
         runtime = node.get("runtime") if isinstance(node.get("runtime"), dict) else {}
 
         data: dict = dict(src_data)
-        # Absorb legacy top-level params (e.g. {"selector": "#x"}) into data.
         for key, value in node.items():
             if key in meta_keys:
                 continue
             if key in data:
-                if data[key] != value:
-                    logger.warning(
-                        f"node {node_id}: data.{key}={data[key]!r} kept; "
-                        f"legacy top-level {key}={value!r} ignored"
-                    )
                 continue
             data[key] = value
 
-        normalized: dict = {
+        normalized = {
             "id": node.get("id"),
-            "type": node.get("kind") or node.get("type", "action"),
+            "type": node.get("type", "action"),
             "data": data,
         }
 
-        if node.get("action") is not None and src_data.get("action") is not None \
-                and node.get("action") != src_data.get("action"):
-            logger.warning(
-                f"node {node_id}: action={node.get('action')!r} kept; "
-                f"data.action={src_data.get('action')!r} ignored"
-            )
         action = node.get("action") if node.get("action") is not None else src_data.get("action")
         if action is not None:
-            normalized["action"] = action
+            normalized["action"] = to_backend(action)
 
-        if node.get("settings") is not None and src_data.get("settings") is not None:
-            logger.warning(
-                f"node {node_id}: settings present at both top-level and inside data; "
-                f"top-level kept"
-            )
         settings = node.get("settings") if node.get("settings") is not None else src_data.get("settings")
         if settings is not None:
             normalized["settings"] = settings
@@ -194,11 +207,6 @@ class WorkflowExecutor:
             normalized["session_id"] = session_id
 
         for child_key in ("children", "elseChildren"):
-            if node.get(child_key) is not None and src_data.get(child_key) is not None:
-                logger.warning(
-                    f"node {node_id}: {child_key} present at both top-level and inside data; "
-                    f"top-level kept"
-                )
             children = node.get(child_key) if node.get(child_key) is not None else src_data.get(child_key)
             if isinstance(children, list):
                 normalized[child_key] = [
@@ -308,7 +316,7 @@ class WorkflowExecutor:
             self.progress_callback({
                 "step": self._ctx.step_index,
                 "total": self._ctx.total_steps,
-                "action": to_backend(action) if ntype == "action" else action,
+                "action": action,
                 "nodeId": node.get("id"),
                 "status": "running",
             })
@@ -342,7 +350,7 @@ class WorkflowExecutor:
                 raise last_error
 
     def _execute_action(self, node: dict):
-        action = to_backend(node.get("action", ""))
+        action = node.get("action", "")
         ctrl = self._get_ctrl(node)
         ctx = self._ctx
         data = node.get("data") or {}

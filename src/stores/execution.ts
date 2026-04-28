@@ -4,43 +4,37 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { toBackend } from "../types/action-map";
 import { errorMessage, SidecarEvent } from "../types/ipc";
+import { useBrowserStore } from "./browser";
 
-function convertNodesToBackend(nodes: Record<string, unknown>[]): Record<string, unknown>[] {
+/**
+ * Convert canonical workflow nodes to backend format.
+ * - action names: PascalCase → snake_case via toBackend()
+ * - structure: kept as canonical (kind/data/settings/runtime)
+ * - children/elseChildren: recursively converted
+ */
+function canonicalNodesToBackend(nodes: Record<string, unknown>[]): Record<string, unknown>[] {
   return nodes.map((n) => {
-    // Flatten both canonical workflow nodes:
-    // { id, kind, action, data, settings, runtime }
-    // and legacy Vue Flow nodes:
-    // { id, type, position, data: { action, ... } }
-    // into executor format: { id, type, action, selector, ... }.
-    const data = (n.data as Record<string, unknown>) || {};
-    const runtime = (n.runtime as Record<string, unknown>) || {};
-    const flat: Record<string, unknown> = {
-      id: n.id,
-      type: n.kind ?? n.type,
-      ...data,
-    };
-    if (typeof n.action === "string") {
-      flat.action = n.action;
+    const out: Record<string, unknown> = { ...n };
+    // Convert action name to snake_case
+    if (typeof out.action === "string") {
+      out.action = toBackend(out.action as string);
     }
-    if (n.settings && typeof n.settings === "object") {
-      flat.settings = n.settings;
-    }
-    if (typeof flat.action === "string") {
-      flat.action = toBackend(flat.action as string);
-    }
-    // Pass session_id for cross-profile execution (from data.sessionId)
-    const sessionId = flat.sessionId ?? flat.session_id ?? runtime.sessionId;
-    if (sessionId) {
-      flat.session_id = sessionId;
-      delete flat.sessionId;
-    }
+    // Recursively convert children
+    const data = (out.data as Record<string, unknown>) || {};
     if (Array.isArray(data.children)) {
-      flat.children = convertNodesToBackend(data.children as Record<string, unknown>[]);
+      out.data = {
+        ...data,
+        children: canonicalNodesToBackend(data.children as Record<string, unknown>[]),
+      };
     }
-    if (Array.isArray(data.elseChildren)) {
-      flat.elseChildren = convertNodesToBackend(data.elseChildren as Record<string, unknown>[]);
+    if (Array.isArray((out.data as Record<string, unknown>)?.elseChildren)) {
+      const d = out.data as Record<string, unknown>;
+      out.data = {
+        ...d,
+        elseChildren: canonicalNodesToBackend(d.elseChildren as Record<string, unknown>[]),
+      };
     }
-    return flat;
+    return out;
   });
 }
 
@@ -215,14 +209,18 @@ export const useExecutionStore = defineStore("execution", () => {
     await listenProgress();
     startPolling(); // fallback for missed events
 
-    // Convert frontend PascalCase action names to backend lowercase
+    // Convert action names to backend snake_case, keep canonical structure
     const converted = {
       ...workflowJson,
-      nodes: convertNodesToBackend(workflowJson.nodes as Record<string, unknown>[]),
+      nodes: canonicalNodesToBackend(workflowJson.nodes as Record<string, unknown>[]),
     };
 
     try {
-      const result = await invoke<ExecutionResult>("workflow_execute", { workflow: converted });
+      const browserStore = useBrowserStore();
+      const result = await invoke<ExecutionResult>("workflow_execute", {
+        workflow: converted,
+        sessionId: browserStore.activeSessionId,
+      });
       running.value = false;
       stopPolling();
       stopListening();

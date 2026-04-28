@@ -4,8 +4,11 @@ import threading
 from loguru import logger
 from .methods import METHOD_REGISTRY
 
-# Methods that should run in a background thread (non-blocking)
-ASYNC_METHODS = {"workflow.execute"}
+# Methods that should run in a background thread (non-blocking).
+# NOTE: Playwright sync API uses greenlet which is thread-bound.
+# workflow.execute MUST run on the main thread (same as browser.launch)
+# so Playwright calls don't cross thread boundaries.
+ASYNC_METHODS: set[str] = set()
 
 
 class JsonRpcServer:

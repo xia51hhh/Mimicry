@@ -5,11 +5,9 @@ import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { errorMessage, SidecarEvent } from "../types/ipc";
 
 export interface RecordedNode {
-  type: string;
+  kind: string;
   action: string;
-  selector?: string;
-  value?: string;
-  url?: string;
+  data: Record<string, unknown>;
   position?: { x: number; y: number };
 }
 
@@ -122,11 +120,13 @@ export const useBrowserStore = defineStore("browser", () => {
       // Filter events by active session
       if (node.session_id && node.session_id !== activeSessionId.value) return;
       recordedNodes.value = [...recordedNodes.value, {
-        type: "action",
+        kind: "action",
         action: (node.type as string) || "click",
-        selector: node.selector as string | undefined,
-        value: node.value as string | undefined,
-        url: node.url as string | undefined,
+        data: {
+          selector: node.selector as string | undefined,
+          value: node.value as string | undefined,
+          url: node.url as string | undefined,
+        },
       }];
     });
   }
@@ -314,6 +314,7 @@ export const useBrowserStore = defineStore("browser", () => {
       await startRecordingPreview();
     } catch (e) {
       console.error("Failed to start recording:", e);
+      setupError.value = errorMessage(e);
     }
   }
 

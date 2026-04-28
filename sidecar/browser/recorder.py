@@ -1,7 +1,6 @@
 """Recording engine: inject JS into Camoufox pages to capture user actions."""
 from __future__ import annotations
 from loguru import logger
-from engine.action_map import to_frontend
 
 # JavaScript injected into pages to capture user interactions
 RECORDER_JS = """
@@ -319,9 +318,22 @@ class RecordingEngine:
 
     @staticmethod
     def events_to_workflow_nodes(events: list[dict]) -> list[dict]:
-        """Convert recorded events to workflow JSON nodes."""
+        """Convert recorded events to canonical workflow nodes.
+
+        Output format (canonical):
+            {kind: "action", action: "click", data: {selector: "#btn"}}
+        Action names are snake_case (backend authority format).
+        Position is omitted — layout is a frontend concern.
+        """
         nodes = []
         seen_navigations = set()
+
+        def _make_node(action: str, data: dict) -> dict:
+            return {
+                "kind": "action",
+                "action": action,
+                "data": data,
+            }
 
         for event in events:
             etype = event.get("type")
@@ -330,75 +342,48 @@ class RecordingEngine:
             # Auto-insert OPEN for new URLs
             if url and url not in seen_navigations:
                 seen_navigations.add(url)
-                if not nodes or nodes[-1].get("action") != "open" or nodes[-1].get("url") != url:
-                    nodes.append({
-                        "type": "action",
-                        "action": "open",
-                        "url": url,
-                    })
+                last_data = nodes[-1].get("data", {}) if nodes else {}
+                if not nodes or nodes[-1].get("action") != "open" or last_data.get("url") != url:
+                    nodes.append(_make_node("open", {"url": url}))
 
             match etype:
                 case "click":
-                    nodes.append({
-                        "type": "action",
-                        "action": "click",
-                        "selector": event["selector"],
-                    })
+                    nodes.append(_make_node("click", {"selector": event["selector"]}))
                 case "dblclick":
-                    nodes.append({
-                        "type": "action",
-                        "action": "dblclick",
-                        "selector": event["selector"],
-                    })
+                    nodes.append(_make_node("dblclick", {"selector": event["selector"]}))
                 case "type":
                     # Merge consecutive types on same selector
-                    if nodes and nodes[-1].get("action") == "type" and nodes[-1].get("selector") == event["selector"]:
-                        nodes[-1]["value"] = event["value"]
+                    if nodes and nodes[-1].get("action") == "type" and nodes[-1].get("data", {}).get("selector") == event["selector"]:
+                        nodes[-1]["data"]["value"] = event["value"]
                     else:
-                        nodes.append({
-                            "type": "action",
-                            "action": "type",
+                        nodes.append(_make_node("type", {
                             "selector": event["selector"],
                             "value": event.get("value", ""),
-                        })
+                        }))
                 case "select":
-                    nodes.append({
-                        "type": "action",
-                        "action": "select",
+                    nodes.append(_make_node("select", {
                         "selector": event["selector"],
                         "value": event.get("value", ""),
-                    })
+                    }))
                 case "scroll":
                     dy = event.get("deltaY", 300)
-                    nodes.append({
-                        "type": "action",
-                        "action": "scroll",
+                    nodes.append(_make_node("scroll", {
                         "selector": "window",
                         "direction": "down" if dy > 0 else "up",
                         "amount": abs(dy),
-                    })
+                    }))
                 case "hover":
-                    nodes.append({
-                        "type": "action",
-                        "action": "hover",
-                        "selector": event["selector"],
-                    })
+                    nodes.append(_make_node("hover", {"selector": event["selector"]}))
                 case "press_key":
-                    nodes.append({
-                        "type": "action",
-                        "action": "press_key",
+                    nodes.append(_make_node("press_key", {
                         "selector": event.get("selector", "body"),
                         "key": event.get("key", ""),
-                    })
+                    }))
 
-        # Attach selector quality score
+        # Attach selector quality score into data
         for node in nodes:
-            if "selector" in node:
-                node["selectorScore"] = score_selector(node["selector"])
-
-        # Convert backend action names to frontend PascalCase
-        for node in nodes:
-            if "action" in node:
-                node["action"] = to_frontend(node["action"])
+            sel = node.get("data", {}).get("selector")
+            if sel:
+                node["data"]["selectorScore"] = score_selector(sel)
 
         return nodes

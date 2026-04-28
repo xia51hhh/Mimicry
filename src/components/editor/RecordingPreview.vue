@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { useBrowserStore } from "../../stores/browser";
+import { toFrontend } from "../../types/action-map";
 
 const browser = useBrowserStore();
 </script>
@@ -19,8 +20,8 @@ const browser = useBrowserStore();
         :key="i"
         class="flex gap-2 py-1 px-2 rounded hover:bg-[var(--bg-hover)]"
       >
-        <span class="text-[var(--accent-primary)] shrink-0 w-16">{{ node.action }}</span>
-        <span class="opacity-60 truncate">{{ node.selector || node.url || node.value || '' }}</span>
+        <span class="text-[var(--accent-primary)] shrink-0 w-16">{{ toFrontend(node.action) }}</span>
+        <span class="opacity-60 truncate">{{ node.data?.selector || node.data?.url || node.data?.value || '' }}</span>
       </div>
       <div v-if="browser.recordedNodes.length === 0" class="text-center opacity-30 py-4">
         {{ browser.recording ? 'Waiting for events...' : 'Start recording to see events' }}
