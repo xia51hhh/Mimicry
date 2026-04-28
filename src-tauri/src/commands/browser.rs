@@ -308,6 +308,16 @@ pub async fn recording_poll(sidecar: State<'_, Mutex<Sidecar>>, session_id: Opti
 
 #[tauri::command]
 pub async fn workflow_execute(sidecar: State<'_, Mutex<Sidecar>>, workflow: serde_json::Value, session_id: Option<String>, humanize: Option<bool>, delay_multiplier: Option<f64>) -> Result<serde_json::Value, AppError> {
+    // Pre-execution validation: block on Error-level diagnostics
+    let diags = crate::workflow_validator::validate(&workflow);
+    if crate::workflow_validator::has_errors(&diags) {
+        let errors: Vec<_> = diags
+            .into_iter()
+            .filter(|d| d.level == crate::workflow_validator::DiagLevel::Error)
+            .collect();
+        return Err(AppError::Validation(errors));
+    }
+
     let sid = session_id.unwrap_or_else(|| "default".into());
     let h = humanize.unwrap_or(true);
     let dm = delay_multiplier.unwrap_or(1.0);
@@ -334,4 +344,10 @@ pub async fn camoufox_check(sidecar: State<'_, Mutex<Sidecar>>) -> Result<serde_
 #[tauri::command]
 pub async fn camoufox_install(sidecar: State<'_, Mutex<Sidecar>>) -> Result<serde_json::Value, AppError> {
     sidecar_call(sidecar, "camoufox.install", None).await
+}
+
+#[tauri::command]
+pub fn workflow_validate(workflow: serde_json::Value) -> Result<serde_json::Value, AppError> {
+    let diags = crate::workflow_validator::validate(&workflow);
+    Ok(serde_json::to_value(&diags).unwrap_or_default())
 }

@@ -13,6 +13,9 @@ pub enum AppError {
 
     #[error("IO error: {0}")]
     Io(#[from] std::io::Error),
+
+    #[error("Validation failed")]
+    Validation(Vec<crate::workflow_validator::Diagnostic>),
 }
 
 impl serde::Serialize for AppError {
@@ -21,16 +24,25 @@ impl serde::Serialize for AppError {
         S: serde::Serializer,
     {
         use serde::ser::SerializeMap;
-        let mut map = serializer.serialize_map(Some(3))?;
-        let (kind, message) = match self {
-            AppError::Database(e) => ("database", e.to_string()),
-            AppError::Sidecar(s) => ("sidecar", s.clone()),
-            AppError::Json(e) => ("json", e.to_string()),
-            AppError::Io(e) => ("io", e.to_string()),
+        let (kind, message, diagnostics) = match self {
+            AppError::Database(e) => ("database", e.to_string(), None),
+            AppError::Sidecar(s) => ("sidecar", s.clone(), None),
+            AppError::Json(e) => ("json", e.to_string(), None),
+            AppError::Io(e) => ("io", e.to_string(), None),
+            AppError::Validation(diags) => (
+                "validation",
+                format!("{} validation error(s)", diags.len()),
+                Some(diags),
+            ),
         };
+        let entries = if diagnostics.is_some() { 4 } else { 3 };
+        let mut map = serializer.serialize_map(Some(entries))?;
         map.serialize_entry("kind", kind)?;
         map.serialize_entry("message", &message)?;
         map.serialize_entry("display", &self.to_string())?;
+        if let Some(diags) = diagnostics {
+            map.serialize_entry("diagnostics", diags)?;
+        }
         map.end()
     }
 }
