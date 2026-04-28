@@ -4,6 +4,7 @@ mod commands;
 mod logger;
 mod error;
 pub mod workflow_validator;
+pub mod transform;
 
 pub use error::{AppError, AppResult};
 use ipc::sidecar::Sidecar;

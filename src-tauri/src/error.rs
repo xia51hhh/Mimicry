@@ -16,6 +16,9 @@ pub enum AppError {
 
     #[error("Validation failed")]
     Validation(Vec<crate::workflow_validator::Diagnostic>),
+
+    #[error("Transform error: {0}")]
+    Transform(String),
 }
 
 impl serde::Serialize for AppError {
@@ -34,6 +37,7 @@ impl serde::Serialize for AppError {
                 format!("{} validation error(s)", diags.len()),
                 Some(diags),
             ),
+            AppError::Transform(s) => ("transform", s.clone(), None),
         };
         let entries = if diagnostics.is_some() { 4 } else { 3 };
         let mut map = serializer.serialize_map(Some(entries))?;
