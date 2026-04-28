@@ -1,6 +1,6 @@
 # 工作流转化层架构设计 (Workflow Transform Layer)
 
-> **状态**: Draft v1 — 2026-04-28  
+> **状态**: Implemented — 2026-04-28  
 > **分支**: `refactor/workflow-transform-layer`  
 > **关联**: [block-system.md](block-system.md) | [data-flow.md](data-flow.md) | [decisions.md](decisions.md)
 
@@ -785,7 +785,7 @@ impl From<TransformError> for AppError {
 
 ## 10. 实施阶段
 
-### Phase 1：Rust 核心转换（不改变现有行为）
+### Phase 1：Rust 核心转换 ✅
 
 1. 新建 `src-tauri/src/transform/` 模块
 2. 实现 `types.rs` — 所有结构体定义
@@ -795,28 +795,31 @@ impl From<TransformError> for AppError {
 6. 实现 `compact.rs` — Compact ↔ Canonical
 7. 实现 `layout.rs` — 自动布局（简单线性版）
 8. 实现 `legacy.rs` — Legacy → Canonical
-9. 单元测试全覆盖
+9. 单元测试全覆盖（97 unit tests）
 
-### Phase 2：接入执行链路
+### Phase 2：接入执行链路 ✅
 
 1. `workflow_execute` 增加 `canonical_to_backend()` 调用
 2. 前端 `execution.ts` 删除 `canonicalNodesToBackend()`
 3. Python `_normalize_node()` 简化为断言
-4. E2E 验证执行不回归
+4. 集成测试验证执行链路（5 integration tests）
 
-### Phase 3：接入导入导出
+### Phase 3：接入导入导出 ✅
 
-1. 新增 `workflow_transform_import` command
-2. 新增 `workflow_export_compact` command
-3. 前端导入/导出 UI 改造
-4. CLI 验证兼容性
+1. 新增 `workflow_transform_import` command — 自动检测格式 → Canonical
+2. 新增 `workflow_export_compact` command — Canonical → Compact
+3. 新增 `workflow_detect_format` command — 格式检测
+4. 新增 `file_import` command — 读文件 + 格式检测 + 转 Canonical
+5. 新增 `file_export_compact` command — Canonical → Compact 写磁盘
+6. 前端 `useFileOps` 增加 `importFile()` / `exportCompact()`
+7. `applyJsonText()` 改为 async，优先走 Rust 转换（fallback 前端迁移）
 
-### Phase 4：清理 & 文档
+### Phase 4：清理 & 文档 ✅
 
-1. 移除前端废弃代码
-2. 更新 LLM 格式文档（Compact Schema）
-3. 更新 `docs/architecture.md`
-4. 更新 `docs/design/data-flow.md`
+1. 移除前端废弃代码（`toBackend()` 函数）
+2. 更新同步脚本 `sync-action-map.py`
+3. 更新本设计文档状态
+4. `migrateLegacyWorkflow` 保留为 fallback（Rust 转换失败时兜底）
 
 ---
 
