@@ -127,7 +127,14 @@
     "waitUrl": "等待 URL",
     "waitTime": "等待时间",
     "urlContains": "URL 包含",
-    "waitDuration": "等待时长"
+    "waitDuration": "等待时长",
+    "seq": "创建序号",
+    "seqHint": "Tab 创建顺序号 (1, 2, 3...)",
+    "urlOrigin": "URL 源",
+    "urlPath": "URL 路径",
+    "title": "页面标题",
+    "titleHint": "标题关键词（模糊匹配）",
+    "tabIndexHint": "旧版索引（仅兼容用途）"
   },
   "conditionTypes": {
     "exists": "元素存在",

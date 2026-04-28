@@ -127,7 +127,14 @@
     "waitUrl": "Wait for URL",
     "waitTime": "Wait for Time",
     "urlContains": "URL Contains",
-    "waitDuration": "Wait Duration"
+    "waitDuration": "Wait Duration",
+    "seq": "Creation Seq",
+    "seqHint": "Tab creation order (1, 2, 3...)",
+    "urlOrigin": "URL Origin",
+    "urlPath": "URL Path",
+    "title": "Page Title",
+    "titleHint": "Title keyword (fuzzy match)",
+    "tabIndexHint": "Legacy index (compat only)"
   },
   "conditionTypes": {
     "exists": "Element Exists",

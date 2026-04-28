@@ -234,11 +234,43 @@ function updateSessionId(value: string) {
           </div>
 
           <div v-if="editData.action === 'SwitchTab'" class="field-group">
+            <label class="field-label">{{ t('propertyPanel.seq') }}</label>
+            <input
+              type="number"
+              class="field-input"
+              :placeholder="t('propertyPanel.seqHint')"
+              :value="editData.seq"
+              @input="updateField('seq', Number(($event.target as HTMLInputElement).value))"
+            />
+            <label class="field-label">{{ t('propertyPanel.urlOrigin') }}</label>
+            <input
+              type="text"
+              class="field-input"
+              placeholder="https://example.com"
+              :value="editData.urlOrigin"
+              @input="updateField('urlOrigin', ($event.target as HTMLInputElement).value)"
+            />
+            <label class="field-label">{{ t('propertyPanel.urlPath') }}</label>
+            <input
+              type="text"
+              class="field-input"
+              placeholder="/login"
+              :value="editData.urlPath"
+              @input="updateField('urlPath', ($event.target as HTMLInputElement).value)"
+            />
+            <label class="field-label">{{ t('propertyPanel.title') }}</label>
+            <input
+              type="text"
+              class="field-input"
+              :placeholder="t('propertyPanel.titleHint')"
+              :value="editData.title"
+              @input="updateField('title', ($event.target as HTMLInputElement).value)"
+            />
             <label class="field-label">{{ t('propertyPanel.tabIndex') }}</label>
             <input
               type="number"
               class="field-input"
-              placeholder="0"
+              :placeholder="t('propertyPanel.tabIndexHint')"
               :value="editData.tabIndex"
               @input="updateField('tabIndex', Number(($event.target as HTMLInputElement).value))"
             />
@@ -249,7 +281,7 @@ function updateSessionId(value: string) {
             <input
               type="number"
               class="field-input"
-              placeholder="0"
+              :placeholder="t('propertyPanel.tabIndexHint')"
               :value="editData.tabIndex"
               @input="updateField('tabIndex', Number(($event.target as HTMLInputElement).value))"
             />
