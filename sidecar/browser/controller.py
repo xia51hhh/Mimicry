@@ -4,6 +4,9 @@ import random
 import subprocess
 import re
 import time
+import uuid
+from dataclasses import dataclass, asdict
+from urllib.parse import urlparse
 
 # Set DPI awareness once at process level (Windows only)
 if platform.system() == "Windows":
@@ -20,6 +23,30 @@ if platform.system() == "Windows":
             ctypes.windll.user32.SetProcessDPIAware()
 
 
+@dataclass
+class TabInfo:
+    """Tab identification metadata for recording/replay matching."""
+    tab_id: str          # UUID, runtime-unique
+    seq: int             # Creation order (1-based, never reused)
+    url_origin: str      # e.g. "https://example.com"
+    url_path: str        # e.g. "/login"
+    title: str           # Page title at time of capture
+
+    def to_dict(self) -> dict:
+        return asdict(self)
+
+    @staticmethod
+    def from_page(page, tab_id: str, seq: int) -> "TabInfo":
+        parsed = urlparse(page.url or "")
+        return TabInfo(
+            tab_id=tab_id,
+            seq=seq,
+            url_origin=f"{parsed.scheme}://{parsed.netloc}" if parsed.scheme else "",
+            url_path=parsed.path or "/",
+            title=page.title() if page.url else "",
+        )
+
+
 class BrowserController:
     def __init__(self):
         self._camoufox = None
@@ -29,6 +56,10 @@ class BrowserController:
         self._browser_pid = None
         self.launch_warnings: list[str] = []
         self._on_disconnected = None
+        # Tab identification registry
+        self._tab_registry: dict[str, TabInfo] = {}   # tabId → TabInfo
+        self._page_to_tab: dict[int, str] = {}        # id(page) → tabId
+        self._seq_counter: int = 0                      # monotonic, 1-based
 
     @staticmethod
     def _get_screen_size() -> tuple[int, int]:
@@ -328,6 +359,13 @@ class BrowserController:
             except Exception as e:
                 logger.warning(f"Failed to navigate to startup URL: {e}")
 
+        # Initialize tab registry with the first page
+        self._register_page(self._page)
+        # Track externally opened tabs (window.open, target="_blank")
+        ctx = self._context
+        if ctx:
+            ctx.on("page", self._on_external_page)
+
         logger.info("Browser launched")
 
         # Register disconnect listener
@@ -347,6 +385,81 @@ class BrowserController:
             except Exception as e:
                 logger.warning(f"on_disconnected callback error: {e}")
 
+    def _register_page(self, page) -> TabInfo:
+        """Register a page in the tab registry and return its TabInfo.
+        Idempotent: if page is already registered, returns existing TabInfo."""
+        existing_tab_id = self._page_to_tab.get(id(page))
+        if existing_tab_id and existing_tab_id in self._tab_registry:
+            return self._tab_registry[existing_tab_id]
+        self._seq_counter += 1
+        tab_id = str(uuid.uuid4())
+        info = TabInfo.from_page(page, tab_id, self._seq_counter)
+        self._tab_registry[tab_id] = info
+        self._page_to_tab[id(page)] = tab_id
+        # Auto-cleanup on close (handles manual close, crash, etc.)
+        page.on("close", lambda p=page: self._unregister_page(p))
+        logger.debug(f"Tab registered: seq={info.seq}, tabId={tab_id[:8]}..., url={info.url_origin}{info.url_path}")
+        return info
+
+    def _unregister_page(self, page) -> TabInfo | None:
+        """Remove a page from the tab registry."""
+        tab_id = self._page_to_tab.pop(id(page), None)
+        if tab_id:
+            info = self._tab_registry.pop(tab_id, None)
+            if info:
+                logger.debug(f"Tab unregistered: seq={info.seq}, tabId={tab_id[:8]}...")
+            return info
+        return None
+
+    def _on_external_page(self, page) -> None:
+        """Handle externally opened tab (window.open, target=_blank)."""
+        try:
+            page.wait_for_load_state("domcontentloaded", timeout=5000)
+        except Exception:
+            pass
+        try:
+            self._register_page(page)
+            self._page = page
+            logger.info(f"External tab detected and registered (seq={self._seq_counter})")
+        except Exception as e:
+            logger.warning(f"Failed to register external page: {e}")
+
+    def _update_tab_info(self, page) -> None:
+        """Refresh URL/title in registry for a page."""
+        tab_id = self._page_to_tab.get(id(page))
+        if tab_id and tab_id in self._tab_registry:
+            info = self._tab_registry[tab_id]
+            parsed = urlparse(page.url or "")
+            info.url_origin = f"{parsed.scheme}://{parsed.netloc}" if parsed.scheme else ""
+            info.url_path = parsed.path or "/"
+            try:
+                info.title = page.title() if page.url else ""
+            except Exception:
+                pass
+
+    def get_current_tab_info(self) -> dict | None:
+        """Get TabInfo for the current active page."""
+        if not self._page:
+            return None
+        self._update_tab_info(self._page)
+        tab_id = self._page_to_tab.get(id(self._page))
+        if tab_id and tab_id in self._tab_registry:
+            return self._tab_registry[tab_id].to_dict()
+        return None
+
+    def get_all_tabs(self) -> list[dict]:
+        """Get TabInfo for all open pages."""
+        ctx = self._context
+        if not ctx:
+            return []
+        result = []
+        for page in ctx.pages:
+            self._update_tab_info(page)
+            tab_id = self._page_to_tab.get(id(page))
+            if tab_id and tab_id in self._tab_registry:
+                result.append(self._tab_registry[tab_id].to_dict())
+        return result
+
     def close(self):
         camoufox = self._camoufox
         browser = self._browser
@@ -356,6 +469,10 @@ class BrowserController:
         self._page = None
         self._persistent = False
         self._browser_pid = None
+        # Clear tab registry
+        self._tab_registry.clear()
+        self._page_to_tab.clear()
+        self._seq_counter = 0
 
         if not camoufox and not browser and not pid:
             return
@@ -509,7 +626,8 @@ class BrowserController:
     def upload_file(self, selector: str, file_path: str):
         self._page.locator(selector).set_input_files(file_path)
 
-    def new_tab(self, url: str = "") -> None:
+    def new_tab(self, url: str = "") -> dict:
+        """Open a new tab, optionally navigate to url. Returns TabInfo dict."""
         ctx = self._context
         if not ctx:
             raise RuntimeError("No browser context")
@@ -517,32 +635,134 @@ class BrowserController:
         if url:
             page.goto(url)
         self._page = page
+        info = self._register_page(page)
+        return info.to_dict()
 
-    def switch_tab(self, index: int) -> None:
+    def switch_tab(self, target: int | str | dict | None = None, **match_hints) -> dict:
+        """Switch to a tab using gradient matching.
+
+        Matching priority:
+        1. tabId exact match (same session)
+        2. seq creation order (cross-session replay)
+        3. urlOrigin + urlPath (auxiliary + hand-written workflow)
+        4. title fallback
+
+        Args:
+            target: int (legacy index), str (tabId), or dict with match hints
+            **match_hints: seq, urlOrigin, urlPath, title
+        Returns: TabInfo dict of switched-to tab
+        """
         ctx = self._context
         if not ctx:
             raise RuntimeError("No browser context")
         pages = ctx.pages
-        if 0 <= index < len(pages):
-            self._page = pages[index]
-            self._page.bring_to_front()
-        else:
-            raise ValueError(f"Tab index {index} out of range (0-{len(pages)-1})")
+        if not pages:
+            raise RuntimeError("No tabs available")
 
-    def close_tab(self, index: int | None = None) -> None:
+        # Legacy: plain integer index
+        if isinstance(target, int):
+            if 0 <= target < len(pages):
+                self._page = pages[target]
+                self._page.bring_to_front()
+                self._update_tab_info(self._page)
+                tab_id = self._page_to_tab.get(id(self._page))
+                return self._tab_registry[tab_id].to_dict() if tab_id else {}
+            raise ValueError(f"Tab index {target} out of range (0-{len(pages)-1})")
+
+        # Build match criteria from target dict or kwargs
+        criteria = {}
+        if isinstance(target, dict):
+            criteria = target
+        elif isinstance(target, str):
+            criteria["tabId"] = target
+        criteria.update(match_hints)
+
+        # Priority 1: tabId exact match
+        if tab_id := criteria.get("tabId"):
+            for page in pages:
+                if self._page_to_tab.get(id(page)) == tab_id:
+                    self._page = page
+                    page.bring_to_front()
+                    self._update_tab_info(page)
+                    return self._tab_registry[tab_id].to_dict()
+
+        # Priority 2: seq match
+        if (raw_seq := criteria.get("seq")) is not None:
+            seq = int(raw_seq)
+            for tid, info in self._tab_registry.items():
+                if info.seq == seq:
+                    for page in pages:
+                        if self._page_to_tab.get(id(page)) == tid:
+                            self._page = page
+                            page.bring_to_front()
+                            self._update_tab_info(page)
+                            return info.to_dict()
+
+        # Priority 3: urlOrigin + urlPath
+        url_origin = criteria.get("urlOrigin", "")
+        url_path = criteria.get("urlPath", "")
+        if url_origin:
+            for page in pages:
+                self._update_tab_info(page)
+                tid = self._page_to_tab.get(id(page))
+                if tid and tid in self._tab_registry:
+                    info = self._tab_registry[tid]
+                    if info.url_origin == url_origin and (not url_path or info.url_path == url_path):
+                        self._page = page
+                        page.bring_to_front()
+                        return info.to_dict()
+
+        # Priority 4: title fallback
+        if title := criteria.get("title"):
+            for page in pages:
+                self._update_tab_info(page)
+                tid = self._page_to_tab.get(id(page))
+                if tid and tid in self._tab_registry:
+                    info = self._tab_registry[tid]
+                    if title.lower() in info.title.lower():
+                        self._page = page
+                        page.bring_to_front()
+                        return info.to_dict()
+
+        raise ValueError(f"No tab matching criteria: {criteria}")
+
+    def close_tab(self, target: int | str | None = None) -> None:
+        """Close a tab by index, tabId, or current tab (None)."""
         ctx = self._context
         if not ctx:
             raise RuntimeError("No browser context")
         pages = ctx.pages
-        if index is not None:
-            if 0 <= index < len(pages):
-                pages[index].close()
+
+        page_to_close = None
+        if target is None:
+            page_to_close = self._page
+        elif isinstance(target, int):
+            if 0 <= target < len(pages):
+                page_to_close = pages[target]
             else:
-                raise ValueError(f"Tab index {index} out of range")
-        else:
-            self._page.close()
+                raise ValueError(f"Tab index {target} out of range")
+        elif isinstance(target, str):
+            # tabId match
+            for page in pages:
+                if self._page_to_tab.get(id(page)) == target:
+                    page_to_close = page
+                    break
+            if not page_to_close:
+                raise ValueError(f"No tab with tabId: {target}")
+
+        if page_to_close:
+            page_to_close.close()
+            # _unregister_page is called by the page.on("close") listener
+            # registered in _register_page, but call explicitly as safety net
+            self._unregister_page(page_to_close)
+
         remaining = ctx.pages
-        self._page = remaining[-1] if remaining else None
+        if remaining:
+            if self._page not in remaining:
+                self._page = remaining[-1]
+                self._page.bring_to_front()
+        else:
+            self._page = None
 
     def extract_table(self, selector: str) -> list[list[str]]:
         """Extract table data as a 2D list of strings."""

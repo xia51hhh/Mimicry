@@ -220,22 +220,31 @@ def browser_upload_file(selector: str, file_path: str, session_id: str = "defaul
 @rpc_method("browser.new_tab")
 def browser_new_tab(url: str = "", session_id: str = "default"):
     ctrl = _mgr.get(session_id)
-    ctrl.new_tab(url)
-    return ctrl.status()
+    tab_info = ctrl.new_tab(url)
+    return {**ctrl.status(), "tab": tab_info}
 
 
 @rpc_method("browser.switch_tab")
-def browser_switch_tab(index: int, session_id: str = "default"):
+def browser_switch_tab(target=None, session_id: str = "default", **match_hints):
     ctrl = _mgr.get(session_id)
-    ctrl.switch_tab(index)
-    return ctrl.status()
+    # Accept legacy 'index' param for backward compat
+    if target is None and "index" in match_hints:
+        target = match_hints.pop("index")
+    tab_info = ctrl.switch_tab(target, **match_hints)
+    return {**ctrl.status(), "tab": tab_info}
 
 
 @rpc_method("browser.close_tab")
-def browser_close_tab(index: int | None = None, session_id: str = "default"):
+def browser_close_tab(target=None, session_id: str = "default"):
     ctrl = _mgr.get(session_id)
-    ctrl.close_tab(index)
+    ctrl.close_tab(target)
     return ctrl.status()
+
+
+@rpc_method("browser.get_tabs")
+def browser_get_tabs(session_id: str = "default"):
+    ctrl = _mgr.get(session_id)
+    return {"tabs": ctrl.get_all_tabs(), "current": ctrl.get_current_tab_info()}
 
 
 @rpc_method("browser.handle_dialog")

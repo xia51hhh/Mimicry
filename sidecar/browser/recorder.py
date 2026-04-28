@@ -267,12 +267,20 @@ class RecordingEngine:
     def _on_new_page(self, page) -> None:
         """Handle new tab opened during recording."""
         try:
-            page.wait_for_load_state("domcontentloaded")
-            # Record new tab event
+            page.wait_for_load_state("domcontentloaded", timeout=5000)
+            # Get TabInfo from controller if available
+            tab_info = {}
+            if self._controller:
+                pid = id(page)
+                tab_id = self._controller._page_to_tab.get(pid)
+                if tab_id and tab_id in self._controller._tab_registry:
+                    tab_info = self._controller._tab_registry[tab_id].to_dict()
+            # Record new tab event with TabInfo
             tab_event = {
                 "type": "new_tab",
                 "url": page.url,
                 "timestamp": int(page.evaluate("Date.now()")),
+                "tabInfo": tab_info,
             }
             self._events.append(tab_event)
             if self.event_callback:
@@ -288,10 +296,17 @@ class RecordingEngine:
 
     def _on_page_close(self, page) -> None:
         """Handle tab closed during recording."""
+        tab_info = {}
+        if self._controller:
+            pid = id(page)
+            tab_id = self._controller._page_to_tab.get(pid)
+            if tab_id and tab_id in self._controller._tab_registry:
+                tab_info = self._controller._tab_registry[tab_id].to_dict()
         close_event = {
             "type": "close_tab",
             "url": getattr(page, "url", ""),
             "timestamp": int(_time.time() * 1000),
+            "tabInfo": tab_info,
         }
         self._events.append(close_event)
         if self.event_callback:
@@ -412,9 +427,19 @@ class RecordingEngine:
                         "key": event.get("key", ""),
                     }))
                 case "new_tab":
-                    nodes.append(_make_node("new_tab", {"url": event.get("url", "")}))
+                    node_data = {"url": event.get("url", "")}
+                    if ti := event.get("tabInfo"):
+                        node_data["tabId"] = ti.get("tab_id", "")
+                        node_data["seq"] = ti.get("seq")
+                        node_data["urlOrigin"] = ti.get("url_origin", "")
+                        node_data["urlPath"] = ti.get("url_path", "")
+                    nodes.append(_make_node("new_tab", node_data))
                 case "close_tab":
-                    nodes.append(_make_node("close_tab", {}))
+                    node_data = {}
+                    if ti := event.get("tabInfo"):
+                        node_data["tabId"] = ti.get("tab_id", "")
+                        node_data["seq"] = ti.get("seq")
+                    nodes.append(_make_node("close_tab", node_data))
 
         # Attach selector quality score into data
         for node in nodes:

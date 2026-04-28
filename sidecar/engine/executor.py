@@ -462,9 +462,25 @@ class WorkflowExecutor:
             case "new_tab":
                 ctrl.new_tab(ctx.resolve(data.get("url", "")))
             case "switch_tab":
-                ctrl.switch_tab(data.get("tabIndex", 0))
+                # Gradient matching: tabId → seq → urlOrigin+urlPath → title → legacy index
+                match_hints = {}
+                if "tabId" in data:
+                    match_hints["tabId"] = data["tabId"]
+                if "seq" in data:
+                    match_hints["seq"] = int(data["seq"])
+                if "urlOrigin" in data:
+                    match_hints["urlOrigin"] = ctx.resolve(data["urlOrigin"])
+                if "urlPath" in data:
+                    match_hints["urlPath"] = ctx.resolve(data["urlPath"])
+                if "title" in data:
+                    match_hints["title"] = ctx.resolve(data["title"])
+                if match_hints:
+                    ctrl.switch_tab(match_hints)
+                else:
+                    ctrl.switch_tab(data.get("tabIndex", 0))
             case "close_tab":
-                ctrl.close_tab(data.get("tabIndex"))
+                target = data.get("tabId") or data.get("tabIndex")
+                ctrl.close_tab(target)
             case "handle_dialog":
                 ctrl.handle_dialog(
                     accept=data.get("accept", True),
