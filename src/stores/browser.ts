@@ -111,30 +111,23 @@ export const useBrowserStore = defineStore("browser", () => {
   const camoufoxChecking = ref(false);
   const camoufoxInstalling = ref(false);
 
-  let recordingUnlisten: UnlistenFn | null = null;
+  let recordingPollTimer: ReturnType<typeof setInterval> | null = null;
 
   async function startRecordingPreview() {
-    stopRecordingPreview(); // Prevent listener leaks
-    recordingUnlisten = await listen<Record<string, unknown>>(SidecarEvent.RecordingEvent, (event) => {
-      const node = event.payload as Record<string, unknown>;
-      // Filter events by active session
-      if (node.session_id && node.session_id !== activeSessionId.value) return;
-      recordedNodes.value = [...recordedNodes.value, {
-        kind: "action",
-        action: (node.type as string) || "click",
-        data: {
-          selector: node.selector as string | undefined,
-          value: node.value as string | undefined,
-          url: node.url as string | undefined,
-        },
-      }];
-    });
+    stopRecordingPreview();
+    // Poll sidecar every 500ms — reliable event retrieval without depending on notification forwarding
+    recordingPollTimer = setInterval(async () => {
+      const nodes = await pollRecording();
+      if (nodes.length > 0) {
+        recordedNodes.value = [...recordedNodes.value, ...nodes];
+      }
+    }, 500);
   }
 
   function stopRecordingPreview() {
-    if (recordingUnlisten) {
-      recordingUnlisten();
-      recordingUnlisten = null;
+    if (recordingPollTimer) {
+      clearInterval(recordingPollTimer);
+      recordingPollTimer = null;
     }
   }
 
