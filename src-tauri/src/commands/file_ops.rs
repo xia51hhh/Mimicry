@@ -23,6 +23,51 @@ pub async fn file_read(path: String) -> Result<WorkspaceFile, AppError> {
     Ok(wf)
 }
 
+/// Read any workflow file, auto-detect format, and return Canonical.
+/// Supports Canonical, Compact, Recording, Legacy formats.
+#[tauri::command]
+pub async fn file_import(path: String) -> Result<serde_json::Value, AppError> {
+    use crate::transform::*;
+
+    let content = tokio::fs::read_to_string(&path)
+        .await
+        .map_err(|e| AppError::Sidecar(format!("Failed to read file: {e}")))?;
+    let raw: serde_json::Value = serde_json::from_str(&content)
+        .map_err(|e| AppError::Sidecar(format!("Invalid JSON: {e}")))?;
+
+    let fmt = detect_format(&raw);
+    let canonical = match fmt {
+        WorkflowFormat::Canonical => serde_json::from_value::<CanonicalWorkflow>(raw)?,
+        WorkflowFormat::Compact | WorkflowFormat::Recording => {
+            let compact: CompactWorkflow = serde_json::from_value(raw)?;
+            compact_to_canonical(&compact)?
+        }
+        WorkflowFormat::Legacy => legacy_to_canonical(&raw)?,
+        WorkflowFormat::Unknown => {
+            return Err(AppError::Transform(
+                "Unknown workflow format. Expected Canonical, Compact, Recording, or Legacy.".into(),
+            ));
+        }
+    };
+
+    Ok(serde_json::to_value(&canonical)?)
+}
+
+/// Export a Canonical workflow to Compact format and write to disk.
+#[tauri::command]
+pub async fn file_export_compact(path: String, workflow: serde_json::Value) -> Result<(), AppError> {
+    use crate::transform::*;
+
+    let canonical: CanonicalWorkflow = serde_json::from_value(workflow)?;
+    let compact = canonical_to_compact(&canonical)?;
+    let json = serde_json::to_string_pretty(&compact)
+        .map_err(|e| AppError::Sidecar(format!("Serialize error: {e}")))?;
+    tokio::fs::write(&path, json)
+        .await
+        .map_err(|e| AppError::Sidecar(format!("Failed to write file: {e}")))?;
+    Ok(())
+}
+
 /// Write a .mimicry.json workspace file to disk
 #[tauri::command]
 pub async fn file_write(path: String, workspace: WorkspaceFile) -> Result<(), AppError> {

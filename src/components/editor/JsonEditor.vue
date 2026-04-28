@@ -51,11 +51,11 @@ onMounted(() => {
   editor.onDidChangeModelContent(() => {
     if (isUpdatingFromStore) return
     clearTimeout(debounceTimer)
-    debounceTimer = setTimeout(() => {
+    debounceTimer = setTimeout(async () => {
       if (!editor) return
       const text = editor.getValue()
       isUpdatingFromEditor = true
-      const result = store.applyJsonText(text)
+      const result = await store.applyJsonText(text)
       if (result.success) {
         // Clear markers on valid JSON
         monaco.editor.setModelMarkers(editor.getModel()!, 'json', [])

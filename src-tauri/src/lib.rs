@@ -125,6 +125,8 @@ pub fn run() {
             commands::workflow::workflow_detect_format,
             commands::file_ops::file_read,
             commands::file_ops::file_write,
+            commands::file_ops::file_import,
+            commands::file_ops::file_export_compact,
             commands::file_ops::recent_files_add,
             commands::file_ops::recent_files_list,
             commands::file_ops::recent_files_remove,
