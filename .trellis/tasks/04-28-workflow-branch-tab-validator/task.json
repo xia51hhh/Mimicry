@@ -1,9 +1,10 @@
 {
   "id": "04-28-workflow-branch-tab-validator",
-  "title": "Rust 工作流分支 Tab 一致性检测器",
-  "status": "planned",
+  "title": "工作流静态分析与实时验证系统（调试器+画布集成）",
+  "status": "done",
   "priority": "medium",
   "created": "2026-04-28",
+  "completed": "2026-04-29",
   "dependencies": ["04-28-tab-identification-system"],
   "tags": ["rust", "validator", "workflow", "tab"]
 }

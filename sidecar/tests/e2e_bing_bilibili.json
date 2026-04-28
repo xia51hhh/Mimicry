@@ -1,0 +1,66 @@
+{
+  "name": "E2E: Bing搜索Bilibili",
+  "nodes": [
+    {
+      "id": "n1",
+      "kind": "action",
+      "action": "open",
+      "data": { "url": "https://www.bing.com" }
+    },
+    {
+      "id": "n2",
+      "kind": "action",
+      "action": "wait",
+      "data": { "selector": "textarea#sb_form_q", "timeout": "10s" }
+    },
+    {
+      "id": "n3",
+      "kind": "action",
+      "action": "type",
+      "data": { "selector": "textarea#sb_form_q", "value": "bilibili" }
+    },
+    {
+      "id": "n4",
+      "kind": "action",
+      "action": "press_key",
+      "data": { "selector": "textarea#sb_form_q", "key": "Enter" }
+    },
+    {
+      "id": "n5",
+      "kind": "action",
+      "action": "wait_for_page",
+      "data": { "state": "load", "timeout": 15000 }
+    },
+    {
+      "id": "n6",
+      "kind": "action",
+      "action": "wait",
+      "data": { "selector": "li.b_algo h2 a", "timeout": "10s" }
+    },
+    {
+      "id": "n7",
+      "kind": "action",
+      "action": "click",
+      "data": { "selector": "li.b_algo h2 a" }
+    },
+    {
+      "id": "n8",
+      "kind": "action",
+      "action": "wait_for_page",
+      "data": { "state": "load", "timeout": 20000 }
+    },
+    {
+      "id": "n9",
+      "kind": "action",
+      "action": "sleep",
+      "data": { "duration": "3s" }
+    },
+    {
+      "id": "n10",
+      "kind": "action",
+      "action": "screenshot",
+      "data": { "filename": "tests/screenshots/e2e_bing_bilibili.png" }
+    }
+  ],
+  "edges": []
+}
