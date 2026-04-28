@@ -1,0 +1,8 @@
+{
+  "id": "04-28-i18n-log-normalization",
+  "title": "日志 i18n 规范化：中文操作 + 英文专有名词",
+  "status": "planned",
+  "priority": "low",
+  "created": "2026-04-28",
+  "tags": ["i18n", "log", "sidecar"]
+}

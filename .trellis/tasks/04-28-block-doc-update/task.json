@@ -1,0 +1,9 @@
+{
+  "id": "04-28-block-doc-update",
+  "title": "Block 文档全面更新（canonical 格式 + 多浏览器/Tab）",
+  "status": "planned",
+  "priority": "medium",
+  "created": "2026-04-28",
+  "dependencies": ["04-28-tab-identification-system"],
+  "tags": ["docs", "block", "canonical"]
+}

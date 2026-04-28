@@ -1,0 +1,8 @@
+{
+  "id": "04-28-log-panel-enhancement",
+  "title": "日志面板增强：一键复制 + 右键菜单",
+  "status": "planned",
+  "priority": "medium",
+  "created": "2026-04-28",
+  "tags": ["ui", "log", "clipboard"]
+}
