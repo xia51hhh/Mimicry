@@ -1,9 +1,11 @@
 {
   "id": "04-28-tab-identification-system",
   "title": "Tab 标识与匹配系统",
-  "status": "planned",
+  "status": "completed",
   "priority": "high",
   "created": "2026-04-28",
+  "completedAt": "2026-04-28",
   "dependencies": ["04-28-04-28-block-execution-fix"],
-  "tags": ["browser", "tab", "recording", "replay"]
+  "tags": ["browser", "tab", "recording", "replay"],
+  "notes": "M1(TabInfo+registry+梯度匹配) M2(Recorder增量drain+switch检测) M3(Executor集成) M5(前端PropertyPanel) 完成。M4(Rust验证器)拆分为独立任务。"
 }
