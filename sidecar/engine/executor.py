@@ -168,9 +168,11 @@ class WorkflowExecutor:
             data = node.get("data") if isinstance(node.get("data"), dict) else {}
             runtime = node.get("runtime") if isinstance(node.get("runtime"), dict) else {}
             raw_action = node.get("action")
+            kind = node["kind"]
             normalized: dict = {
                 "id": node.get("id"),
-                "type": node["kind"],
+                "kind": kind,
+                "type": kind,
                 "data": {k: v for k, v in data.items()
                          if k not in ("children", "elseChildren")},
             }
@@ -180,11 +182,11 @@ class WorkflowExecutor:
             settings = node.get("settings")
             if settings is not None:
                 normalized["settings"] = settings
-            session_id = runtime.get("sessionId")
+            session_id = runtime.get("sessionId") or node.get("session_id")
             if session_id:
                 normalized["session_id"] = session_id
             for child_key in ("children", "elseChildren"):
-                children = data.get(child_key)
+                children = data.get(child_key) or node.get(child_key)
                 if isinstance(children, list):
                     normalized[child_key] = [
                         self._normalize_node(child)
@@ -210,9 +212,11 @@ class WorkflowExecutor:
                 continue
             data[key] = value
 
+        node_type = node.get("type", "action")
         normalized = {
             "id": node.get("id"),
-            "type": node.get("type", "action"),
+            "kind": node_type,
+            "type": node_type,
             "data": data,
         }
 
