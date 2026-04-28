@@ -247,7 +247,8 @@ export const useWorkflowStore = defineStore("workflow", () => {
       let canonical: { id?: string; name: string; nodes: unknown[]; edges: unknown[] };
       try {
         canonical = await invoke<typeof canonical>('workflow_transform_import', { json: parsed });
-      } catch {
+      } catch (e) {
+        console.warn('[workflow] Rust transform failed, using frontend fallback:', e);
         // Fallback to frontend migration for robustness
         canonical = migrateLegacyWorkflow({
           id: parsed.id ?? id.value,

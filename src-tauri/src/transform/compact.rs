@@ -70,7 +70,7 @@ pub fn compact_to_canonical(compact: &CompactWorkflow) -> Result<CanonicalWorkfl
 
     Ok(CanonicalWorkflow {
         id: Some(uuid::Uuid::new_v4().to_string()),
-        name: Some(compact.name.clone()),
+        name: compact.name.clone(),
         nodes: canonical_nodes,
         edges,
         created_at: Some(chrono::Utc::now().to_rfc3339()),
@@ -177,7 +177,7 @@ pub fn canonical_to_compact(canonical: &CanonicalWorkflow) -> Result<CompactWork
         .collect::<Result<Vec<_>, _>>()?;
 
     Ok(CompactWorkflow {
-        name: canonical.name.clone().unwrap_or_else(|| "Untitled".into()),
+        name: Some(canonical.name.clone().unwrap_or_else(|| "Untitled".into())),
         description: None,
         nodes,
     })
@@ -188,7 +188,12 @@ fn canonical_node_to_compact(node: &CanonicalNode) -> Result<CompactNode, Transf
     let action = node
         .action
         .clone()
-        .unwrap_or_else(|| format!("{:?}", node.kind));
+        .unwrap_or_else(|| match node.kind {
+            NodeKind::Condition => "Condition".into(),
+            NodeKind::Loop => "Loop".into(),
+            NodeKind::Group => "Group".into(),
+            NodeKind::Action => "Action".into(),
+        });
 
     // Extract note from settings
     let note = node.settings.as_ref().and_then(|s| s.note.clone());
@@ -203,6 +208,8 @@ fn canonical_node_to_compact(node: &CanonicalNode) -> Result<CompactNode, Transf
         s.on_error.is_some()
             || s.disabled.is_some_and(|d| d)
             || s.retry_on_fail.is_some()
+            || s.retry_count.is_some()
+            || s.retry_interval.is_some()
             || !s.extra.is_empty()
     });
 
@@ -264,7 +271,7 @@ mod tests {
     #[test]
     fn compact_to_canonical_basic() {
         let compact = CompactWorkflow {
-            name: "test".into(),
+            name: Some("test".into()),
             description: None,
             nodes: vec![
                 CompactNode {
@@ -305,7 +312,7 @@ mod tests {
     #[test]
     fn compact_snake_case_normalized() {
         let compact = CompactWorkflow {
-            name: "test".into(),
+            name: Some("test".into()),
             description: None,
             nodes: vec![CompactNode {
                 action: "click".into(), // snake_case
@@ -326,7 +333,7 @@ mod tests {
     #[test]
     fn compact_condition_infers_kind() {
         let compact = CompactWorkflow {
-            name: "test".into(),
+            name: Some("test".into()),
             description: None,
             nodes: vec![CompactNode {
                 action: "Condition".into(),
@@ -359,7 +366,7 @@ mod tests {
     #[test]
     fn canonical_to_compact_roundtrip_semantics() {
         let compact = CompactWorkflow {
-            name: "test".into(),
+            name: Some("test".into()),
             description: None,
             nodes: vec![
                 CompactNode {

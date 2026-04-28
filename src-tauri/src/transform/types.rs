@@ -142,7 +142,8 @@ pub struct CompactNode {
 /// Compact workflow — minimal description document
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CompactWorkflow {
-    pub name: String,
+    #[serde(default)]
+    pub name: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
     pub nodes: Vec<CompactNode>,
