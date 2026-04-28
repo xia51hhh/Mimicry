@@ -2,42 +2,9 @@ import { defineStore } from "pinia";
 import { ref, shallowRef } from "vue";
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
-import { toBackend } from "../types/action-map";
 import { errorMessage, extractDiagnostics, SidecarEvent } from "../types/ipc";
 import { useBrowserStore } from "./browser";
 import { useValidationStore } from "./validation";
-
-/**
- * Convert canonical workflow nodes to backend format.
- * - action names: PascalCase → snake_case via toBackend()
- * - structure: kept as canonical (kind/data/settings/runtime)
- * - children/elseChildren: recursively converted
- */
-function canonicalNodesToBackend(nodes: Record<string, unknown>[]): Record<string, unknown>[] {
-  return nodes.map((n) => {
-    const out: Record<string, unknown> = { ...n };
-    // Convert action name to snake_case
-    if (typeof out.action === "string") {
-      out.action = toBackend(out.action as string);
-    }
-    // Recursively convert children
-    const data = (out.data as Record<string, unknown>) || {};
-    if (Array.isArray(data.children)) {
-      out.data = {
-        ...data,
-        children: canonicalNodesToBackend(data.children as Record<string, unknown>[]),
-      };
-    }
-    if (Array.isArray((out.data as Record<string, unknown>)?.elseChildren)) {
-      const d = out.data as Record<string, unknown>;
-      out.data = {
-        ...d,
-        elseChildren: canonicalNodesToBackend(d.elseChildren as Record<string, unknown>[]),
-      };
-    }
-    return out;
-  });
-}
 
 interface ExecutionStatusResult {
   running: boolean;
@@ -214,16 +181,11 @@ export const useExecutionStore = defineStore("execution", () => {
     await listenProgress();
     startPolling(); // fallback for missed events
 
-    // Convert action names to backend snake_case, keep canonical structure
-    const converted = {
-      ...workflowJson,
-      nodes: canonicalNodesToBackend(workflowJson.nodes as Record<string, unknown>[]),
-    };
-
+    // Send canonical format directly — Rust transform layer handles conversion
     try {
       const browserStore = useBrowserStore();
       const result = await invoke<ExecutionResult>("workflow_execute", {
-        workflow: converted,
+        workflow: workflowJson,
         sessionId: browserStore.activeSessionId,
         humanize: humanize.value,
         delayMultiplier: delayMultiplier.value,
