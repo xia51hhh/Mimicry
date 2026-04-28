@@ -1,7 +1,8 @@
 {
   "id": "04-28-block-anti-detection-overhaul",
   "title": "Block 反检测行为修正 + 功能补全",
-  "status": "planned",
+  "status": "completed",
+  "completedAt": "2026-04-28",
   "priority": "critical",
   "created": "2026-04-28",
   "dependencies": ["04-28-04-28-block-execution-fix"],
