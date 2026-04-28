@@ -21,10 +21,12 @@
     "browser": "浏览器操作",
     "interaction": "页面交互",
     "data": "数据处理",
-    "advanced": "高级"
+    "advanced": "高级",
+    "flow": "流程控制"
   },
   "blocks": {
     "Click": "点击",
+    "DblClick": "双击",
     "Type": "输入",
     "Navigate": "导航",
     "Hover": "悬停",
@@ -62,7 +64,10 @@
     "ExecuteWorkflow": "执行子工作流",
     "Stop": "停止",
     "LoopBreakpoint": "循环中断",
-    "WaitConnections": "等待汇合"
+    "WaitConnections": "等待汇合",
+    "Wait": "等待",
+    "Fail": "失败断言",
+    "LoopElements": "遍历DOM元素"
   },
   "nodeTypes": {
     "action": "动作",
@@ -160,7 +165,10 @@
     "newWorkflow": "新建工作流",
     "browserNotInstalled": "浏览器未安装",
     "installBrowser": "自动安装",
-    "installing": "安装中..."
+    "installing": "安装中...",
+    "humanize": "拟人",
+    "humanizeTooltip": "启用/关闭动作间随机延迟和拟人化输入",
+    "delayMultiplier": "延迟倍率"
   },
   "shortcut": {
     "undo": "撤销",

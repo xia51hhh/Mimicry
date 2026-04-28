@@ -21,10 +21,12 @@
     "browser": "Browser",
     "interaction": "Interaction",
     "data": "Data",
-    "advanced": "Advanced"
+    "advanced": "Advanced",
+    "flow": "Flow Control"
   },
   "blocks": {
     "Click": "Click",
+    "DblClick": "Double Click",
     "Type": "Type",
     "Navigate": "Navigate",
     "Hover": "Hover",
@@ -62,7 +64,10 @@
     "ExecuteWorkflow": "Execute Workflow",
     "Stop": "Stop",
     "LoopBreakpoint": "Loop Break",
-    "WaitConnections": "Wait Connections"
+    "WaitConnections": "Wait Connections",
+    "Wait": "Wait",
+    "Fail": "Fail Assertion",
+    "LoopElements": "Loop Elements"
   },
   "nodeTypes": {
     "action": "Action",
@@ -160,7 +165,10 @@
     "newWorkflow": "New Workflow",
     "browserNotInstalled": "Browser not installed",
     "installBrowser": "Auto Install",
-    "installing": "Installing..."
+    "installing": "Installing...",
+    "humanize": "Humanize",
+    "humanizeTooltip": "Toggle random delays and humanized input between actions",
+    "delayMultiplier": "Delay multiplier"
   },
   "shortcut": {
     "undo": "Undo",

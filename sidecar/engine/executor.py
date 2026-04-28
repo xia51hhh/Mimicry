@@ -4,6 +4,7 @@ import csv
 import io
 import json
 import os
+import random
 import re
 import time
 import urllib.request
@@ -89,15 +90,42 @@ def _parse_duration(s) -> float:
 
 
 class WorkflowExecutor:
+    _DELAY_PROFILES: dict[str, tuple[float, float]] = {
+        "click": (0.3, 1.5),
+        "dblclick": (0.3, 1.5),
+        "type": (0.1, 0.5),
+        "open": (1.0, 3.0),
+        "back": (0.8, 2.0),
+        "forward": (0.8, 2.0),
+        "reload": (1.0, 3.0),
+        "scroll": (0.5, 2.0),
+        "select": (0.3, 1.0),
+        "hover": (0.2, 0.8),
+    }
+
     def __init__(self, controller: BrowserController | None = None, *,
                  session_manager: SessionManager | None = None,
-                 default_session_id: str = "default"):
+                 default_session_id: str = "default",
+                 humanize: bool = True,
+                 delay_multiplier: float = 1.0):
         self._controller = controller
         self._session_manager = session_manager
         self._default_session_id = default_session_id
+        self._humanize = humanize
+        self._delay_multiplier = max(0.0, delay_multiplier)
         self._ctx = ExecutionContext()
         self.progress_callback: callable | None = None
         self.log_callback: callable | None = None
+
+    def _human_delay(self, action: str):
+        """Insert a random delay after an action to simulate human think time."""
+        if not self._humanize or self._delay_multiplier == 0.0:
+            return
+        low, high = self._DELAY_PROFILES.get(action, (0.3, 1.5))
+        delay = random.uniform(low, high) * self._delay_multiplier
+        if random.random() < 0.1:
+            delay += random.uniform(1.0, 3.0) * self._delay_multiplier
+        time.sleep(delay)
 
     def _get_ctrl(self, node: dict | None = None) -> BrowserController:
         """Resolve BrowserController for a node, supporting per-node session_id."""
@@ -334,6 +362,8 @@ class WorkflowExecutor:
                     case "loop":
                         self._execute_loop(node)
                 self._emit_log("info", f"Completed: {action}", node.get("id"))
+                if ntype == "action":
+                    self._human_delay(action)
                 return  # success
             except Exception as e:
                 last_error = e
@@ -369,16 +399,17 @@ class WorkflowExecutor:
             case "dblclick":
                 ctrl.dblclick(ctx.resolve(data["selector"]))
             case "type":
-                ctrl.type_text(ctx.resolve(data["selector"]), ctx.resolve(data.get("value", "")))
+                h = self._humanize if data.get("humanize") is None else data["humanize"]
+                ctrl.type_text(ctx.resolve(data["selector"]), ctx.resolve(data.get("value", "")), humanize=h)
             case "clear":
                 ctrl.clear(ctx.resolve(data["selector"]))
             case "select":
-                ctrl.select_option(ctx.resolve(data["selector"]), ctx.resolve(data.get("value", "")))
+                ctrl.select_option(ctx.resolve(data["selector"]), ctx.resolve(data.get("value", "")), humanize=self._humanize)
             case "hover":
                 ctrl.hover(ctx.resolve(data["selector"]))
             case "scroll":
                 sel = ctx.resolve(data.get("selector", "window"))
-                ctrl.scroll(sel, data.get("direction", "down"), data.get("amount", 300))
+                ctrl.scroll(sel, data.get("direction", "down"), data.get("amount", 300), humanize=self._humanize)
             case "focus":
                 ctrl.focus(ctx.resolve(data["selector"]))
             case "press_key":
@@ -571,6 +602,8 @@ class WorkflowExecutor:
                     sub_executor = WorkflowExecutor(
                         session_manager=self._session_manager,
                         default_session_id=self._default_session_id,
+                        humanize=self._humanize,
+                        delay_multiplier=self._delay_multiplier,
                     )
                     if not self._session_manager:
                         sub_executor._controller = ctrl
@@ -588,6 +621,10 @@ class WorkflowExecutor:
             case "wait_connections":
                 # In sequential execution, this is a no-op sync point
                 logger.debug("WaitConnections: sync point (sequential mode)")
+            case "loop_elements":
+                # LoopElements is handled by _execute_loop (kind=loop, loopType=elements)
+                # If it arrives here as an action, treat as a warning
+                logger.warning("loop_elements should be kind=loop, not kind=action")
             case _:
                 logger.warning(f"Unknown action: {action}")
 

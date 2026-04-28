@@ -307,9 +307,11 @@ pub async fn recording_poll(sidecar: State<'_, Mutex<Sidecar>>, session_id: Opti
 }
 
 #[tauri::command]
-pub async fn workflow_execute(sidecar: State<'_, Mutex<Sidecar>>, workflow: serde_json::Value, session_id: Option<String>) -> Result<serde_json::Value, AppError> {
+pub async fn workflow_execute(sidecar: State<'_, Mutex<Sidecar>>, workflow: serde_json::Value, session_id: Option<String>, humanize: Option<bool>, delay_multiplier: Option<f64>) -> Result<serde_json::Value, AppError> {
     let sid = session_id.unwrap_or_else(|| "default".into());
-    sidecar_call(sidecar, "workflow.execute", Some(serde_json::json!({"workflow": workflow, "session_id": sid}))).await
+    let h = humanize.unwrap_or(true);
+    let dm = delay_multiplier.unwrap_or(1.0);
+    sidecar_call(sidecar, "workflow.execute", Some(serde_json::json!({"workflow": workflow, "session_id": sid, "humanize": h, "delay_multiplier": dm}))).await
 }
 
 #[tauri::command]

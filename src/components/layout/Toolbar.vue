@@ -82,6 +82,32 @@ async function runWorkflow() {
       <span v-if="execution.running" class="text-xs text-[var(--color-text-muted)]">
         {{ execution.step }}/{{ execution.total }}
       </span>
+
+      <!-- Humanize delay controls -->
+      <button
+        class="rounded px-2 py-1 text-xs"
+        :class="execution.humanize
+          ? 'bg-green-700 text-white'
+          : 'border border-[var(--color-border)] text-[var(--color-text-muted)] hover:bg-[var(--color-surface-hover)]'"
+        :title="t('toolbar.humanizeTooltip')"
+        @click="execution.humanize = !execution.humanize"
+      >
+        {{ t('toolbar.humanize') }}
+      </button>
+      <div v-if="execution.humanize" class="flex items-center gap-1">
+        <input
+          type="range"
+          min="0.1"
+          max="5.0"
+          step="0.1"
+          :value="execution.delayMultiplier"
+          class="h-1 w-16 accent-[var(--color-primary)]"
+          :title="`${t('toolbar.delayMultiplier')}: ${execution.delayMultiplier}x`"
+          @input="execution.delayMultiplier = parseFloat(($event.target as HTMLInputElement).value)"
+        />
+        <span class="text-xs text-[var(--color-text-muted)] w-8 tabular-nums">{{ execution.delayMultiplier.toFixed(1) }}x</span>
+      </div>
+
       <button
         class="rounded px-3 py-1 text-xs"
         :class="browser.recording

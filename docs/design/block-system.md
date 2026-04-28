@@ -1,6 +1,6 @@
 # Block 体系设计
 
-> **状态**: Partial | **最后更新**: 2026-04-27
+> **状态**: Partial | **最后更新**: 2026-04-28
 
 > 现实边界：canonical node schema 已开始围绕 `kind + action + data + settings` 落地，前端导入/导出和 Python executor 已支持 canonical / legacy 兼容；完整 graph execution、Package IO 和 selector self-healing 仍是后续任务。
 
@@ -263,6 +263,31 @@ Loop Breakpoint:   [input] ──Block── [output]
   "label": ""
 }
 ```
+
+---
+
+## Block 反检测行为模拟
+
+与页面元素交互的 Block 需要模拟真实用户行为，避免被反爬系统检测。详见 [反检测体系文档](../anti-detection.md)。
+
+### 行为模拟覆盖
+
+| 行为 | 实现层 | Block 影响 |
+|------|--------|-----------|
+| 鼠标轨迹 | Camoufox C++ (`humanize=True`) | Click, DblClick, Hover |
+| 逐字符输入 | Controller `type_text()` | Type |
+| 滚轮分步 | Controller `scroll()` via `mouse.wheel()` | Scroll |
+| 下拉前置 click | Controller `select_option()` | SelectOption |
+| 动作间延迟 | Executor `_human_delay()` | 所有 action 类型 |
+| 导航等待 | Controller `navigate()` `wait_until=networkidle` | Navigate, GoBack, GoForward, Reload |
+
+### 延迟控制
+
+执行时可配置：
+- **延迟开关**: 启用/关闭动作间随机延迟
+- **延迟倍率**: 0.1x - 5.0x 全局倍率系数
+
+传递方式：`workflow_execute` 命令的 `humanize: bool` + `delay_multiplier: float` 参数。
 
 ---
 

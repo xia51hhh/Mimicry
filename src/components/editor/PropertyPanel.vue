@@ -66,15 +66,17 @@ function updateField(field: string, value: unknown) {
 
 // Action type options based on block-system.md
 const actionTypes = [
-  { group: t('blockCategories.browser'), items: ['Navigate', 'NewTab', 'SwitchTab', 'CloseTab', 'GoBack', 'GoForward', 'Reload', 'HandleDialog'] },
-  { group: t('blockCategories.interaction'), items: ['Click', 'Type', 'Hover', 'PressKey', 'Scroll', 'SelectOption', 'UploadFile', 'Clear', 'Focus'] },
-  { group: t('blockCategories.data'), items: ['GetText', 'GetAttribute', 'GetURL', 'Screenshot', 'ExtractTable', 'SetVariable', 'Export'] },
-  { group: t('blockCategories.advanced'), items: ['RunScript', 'HttpRequest', 'Log', 'Delay', 'Comment'] },
+  { group: t('blockCategories.browser'), items: ['Navigate', 'NewTab', 'SwitchTab', 'CloseTab', 'GoBack', 'GoForward', 'Reload', 'HandleDialog', 'SwitchFrame', 'WaitForPage'] },
+  { group: t('blockCategories.interaction'), items: ['Click', 'DblClick', 'Type', 'Hover', 'PressKey', 'Scroll', 'SelectOption', 'UploadFile', 'Clear', 'Focus'] },
+  { group: t('blockCategories.data'), items: ['GetText', 'GetAttribute', 'GetURL', 'Screenshot', 'ExtractTable', 'SetVariable', 'Transform', 'Export', 'Cookie', 'ElementExists'] },
+  { group: t('blockCategories.advanced'), items: ['RunScript', 'HttpRequest', 'HandleDownload', 'Log', 'Delay', 'Comment'] },
+  { group: t('blockCategories.flow'), items: ['Wait', 'ExecuteWorkflow', 'Stop', 'LoopBreakpoint', 'WaitConnections'] },
 ]
 
 const loopTypes = [
   { value: 'count', label: t('loopTypes.count') },
   { value: 'items', label: t('loopTypes.items') },
+  { value: 'elements', label: t('loopTypes.elements') },
   { value: 'while', label: t('loopTypes.while') },
 ]
 

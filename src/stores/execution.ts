@@ -80,6 +80,10 @@ export const useExecutionStore = defineStore("execution", () => {
   const completedNodeIds = ref<Set<string>>(new Set());
   const failedNodeIds = ref<Set<string>>(new Set());
 
+  // Anti-detection delay settings
+  const humanize = ref(true);
+  const delayMultiplier = ref(1.0);
+
   let pollTimer: ReturnType<typeof setInterval> | null = null;
   let progressUnlisten: UnlistenFn | null = null;
   let logUnlisten: UnlistenFn | null = null;
@@ -220,6 +224,8 @@ export const useExecutionStore = defineStore("execution", () => {
       const result = await invoke<ExecutionResult>("workflow_execute", {
         workflow: converted,
         sessionId: browserStore.activeSessionId,
+        humanize: humanize.value,
+        delayMultiplier: delayMultiplier.value,
       });
       running.value = false;
       stopPolling();
@@ -266,6 +272,7 @@ export const useExecutionStore = defineStore("execution", () => {
   return {
     running, step, total, currentNodeId, error, variables, logs,
     completedNodeIds, failedNodeIds,
+    humanize, delayMultiplier,
     execute, stop, reset, getNodeStatus,
   };
 });

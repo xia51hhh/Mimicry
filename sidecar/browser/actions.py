@@ -280,10 +280,19 @@ def recording_status(session_id: str = "default"):
 
 
 @rpc_method("workflow.execute")
-def workflow_execute(workflow: dict | None = None, session_id: str = "default"):
+def workflow_execute(workflow: dict | None = None, session_id: str = "default",
+                     humanize: bool = True, delay_multiplier: float = 1.0):
     if not workflow:
         return {"success": False, "error": "No workflow provided"}
-    executor = _get_executor(session_id)
+    # Create a fresh executor each time with the caller's humanize settings
+    with _aux_lock:
+        executor = WorkflowExecutor(
+            session_manager=_mgr,
+            default_session_id=session_id,
+            humanize=humanize,
+            delay_multiplier=delay_multiplier,
+        )
+        _executors[session_id] = executor
 
     def on_progress(event):
         if _server:

@@ -1,5 +1,6 @@
 """Recording engine: inject JS into Camoufox pages to capture user actions."""
 from __future__ import annotations
+import time as _time
 from loguru import logger
 
 # JavaScript injected into pages to capture user interactions
@@ -247,6 +248,7 @@ class RecordingEngine:
             try:
                 page.evaluate(RECORDER_JS)
                 page.on("load", lambda p=page: self._safe_inject(p))
+                page.on("close", lambda p=page: self._on_page_close(p))
                 # Inject into all existing frames
                 for frame in page.frames:
                     if frame == page.main_frame:
@@ -266,11 +268,35 @@ class RecordingEngine:
         """Handle new tab opened during recording."""
         try:
             page.wait_for_load_state("domcontentloaded")
+            # Record new tab event
+            tab_event = {
+                "type": "new_tab",
+                "url": page.url,
+                "timestamp": int(page.evaluate("Date.now()")),
+            }
+            self._events.append(tab_event)
+            if self.event_callback:
+                self.event_callback(tab_event)
+            # Inject recorder into new tab
             page.evaluate(RECORDER_JS)
             page.on("load", lambda p=page: self._safe_inject(p))
-            logger.debug("Recorder JS injected into new tab")
+            # Listen for tab close
+            page.on("close", lambda p=page: self._on_page_close(p))
+            logger.debug("Recorder JS injected into new tab, event recorded")
         except Exception as e:
             logger.warning(f"Failed to inject into new tab: {e}")
+
+    def _on_page_close(self, page) -> None:
+        """Handle tab closed during recording."""
+        close_event = {
+            "type": "close_tab",
+            "url": getattr(page, "url", ""),
+            "timestamp": int(_time.time() * 1000),
+        }
+        self._events.append(close_event)
+        if self.event_callback:
+            self.event_callback(close_event)
+        logger.debug("Tab close event recorded")
 
     @staticmethod
     def _safe_inject(page) -> None:
@@ -345,6 +371,12 @@ class RecordingEngine:
                 last_data = nodes[-1].get("data", {}) if nodes else {}
                 if not nodes or nodes[-1].get("action") != "open" or last_data.get("url") != url:
                     nodes.append(_make_node("open", {"url": url}))
+                    # Auto-insert wait after navigation
+                    nodes.append(_make_node("wait", {
+                        "selector": None,
+                        "url_contains": None,
+                        "time": "2s",
+                    }))
 
             match etype:
                 case "click":
@@ -379,6 +411,10 @@ class RecordingEngine:
                         "selector": event.get("selector", "body"),
                         "key": event.get("key", ""),
                     }))
+                case "new_tab":
+                    nodes.append(_make_node("new_tab", {"url": event.get("url", "")}))
+                case "close_tab":
+                    nodes.append(_make_node("close_tab", {}))
 
         # Attach selector quality score into data
         for node in nodes:

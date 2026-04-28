@@ -1,7 +1,9 @@
 from loguru import logger
 import platform
+import random
 import subprocess
 import re
+import time
 
 # Set DPI awareness once at process level (Windows only)
 if platform.system() == "Windows":
@@ -386,16 +388,30 @@ class BrowserController:
 
         logger.info("Browser closed")
 
-    def navigate(self, url: str):
+    def navigate(self, url: str, wait_until: str = "networkidle"):
         if not url.startswith(("http://", "https://")):
             raise ValueError(f"URL scheme not allowed: {url}")
-        self._page.goto(url)
+        try:
+            self._page.goto(url, wait_until=wait_until)
+        except Exception:
+            # networkidle may timeout on sites with persistent connections; fall back to load
+            if wait_until != "load":
+                self._page.goto(url, wait_until="load")
 
     def click(self, selector: str):
         self._page.click(selector)
 
-    def type_text(self, selector: str, text: str):
-        self._page.fill(selector, text)
+    def type_text(self, selector: str, text: str, humanize: bool = True):
+        locator = self._page.locator(selector)
+        if humanize:
+            locator.click()
+            locator.fill("")
+            for char in text:
+                locator.press(char, delay=random.randint(50, 180))
+                if random.random() < 0.05:
+                    time.sleep(random.uniform(0.3, 0.8))
+        else:
+            locator.fill(text)
 
     def wait_for(self, selector: str, timeout: int = 5000):
         self._page.wait_for_selector(selector, timeout=timeout)
@@ -421,8 +437,12 @@ class BrowserController:
     def hover(self, selector: str):
         self._page.hover(selector)
 
-    def select_option(self, selector: str, value: str):
-        self._page.select_option(selector, value)
+    def select_option(self, selector: str, value: str, humanize: bool = True):
+        locator = self._page.locator(selector)
+        if humanize:
+            locator.click()
+            time.sleep(random.uniform(0.2, 0.5))
+        locator.select_option(value)
 
     def clear(self, selector: str):
         self._page.fill(selector, "")
@@ -445,12 +465,30 @@ class BrowserController:
         else:
             self._page.keyboard.press(key)
 
-    def scroll(self, selector: str = "window", direction: str = "down", amount: int = 300):
+    def scroll(self, selector: str = "window", direction: str = "down", amount: int = 300, humanize: bool = True):
         dy = amount if direction == "down" else -amount
-        if selector == "window":
-            self._page.evaluate(f"window.scrollBy(0, {dy})")
+        if humanize:
+            if selector != "window":
+                box = self._page.locator(selector).bounding_box()
+                if box:
+                    cx = box["x"] + box["width"] / 2 + random.randint(-10, 10)
+                    cy = box["y"] + box["height"] / 2 + random.randint(-10, 10)
+                    self._page.mouse.move(cx, cy)
+                else:
+                    self._page.locator(selector).evaluate(f"el => el.scrollBy(0, {dy})")
+                    return
+            remaining = abs(dy)
+            while remaining > 0:
+                step = min(remaining, random.randint(80, 150))
+                actual_dy = step if dy > 0 else -step
+                self._page.mouse.wheel(0, actual_dy)
+                remaining -= step
+                time.sleep(random.uniform(0.02, 0.08))
         else:
-            self._page.locator(selector).evaluate(f"el => el.scrollBy(0, {dy})")
+            if selector == "window":
+                self._page.evaluate(f"window.scrollBy(0, {dy})")
+            else:
+                self._page.locator(selector).evaluate(f"el => el.scrollBy(0, {dy})")
 
     def evaluate(self, expression: str):
         return self._page.evaluate(expression)

@@ -22,7 +22,7 @@ def mock_ctrl():
 
 @pytest.fixture
 def executor(mock_ctrl):
-    return WorkflowExecutor(mock_ctrl)
+    return WorkflowExecutor(mock_ctrl, humanize=False)
 
 
 class TestCanonicalNodes:
@@ -43,7 +43,7 @@ class TestCanonicalNodes:
         from browser.controller import SessionManager
         mgr = MagicMock(spec=SessionManager)
         mgr.get.return_value = mock_ctrl
-        executor = WorkflowExecutor(session_manager=mgr, default_session_id="default")
+        executor = WorkflowExecutor(session_manager=mgr, default_session_id="default", humanize=False)
         wf = {"nodes": [{
             "id": "n1",
             "kind": "action",
@@ -161,7 +161,7 @@ class TestBasicActions:
         wf = {"nodes": [{"type": "action", "action": "Type", "selector": "#input", "value": "hello"}]}
         result = executor.execute(wf)
         assert result["success"]
-        mock_ctrl.type_text.assert_called_once_with("#input", "hello")
+        mock_ctrl.type_text.assert_called_once_with("#input", "hello", humanize=False)
 
     def test_get_text(self, executor, mock_ctrl):
         wf = {"nodes": [{"type": "action", "action": "GetText", "selector": ".el", "into": "$text"}]}
@@ -220,13 +220,13 @@ class TestBasicActions:
         wf = {"nodes": [{"type": "action", "action": "Scroll", "selector": "window", "direction": "up", "amount": 500}]}
         result = executor.execute(wf)
         assert result["success"]
-        mock_ctrl.scroll.assert_called_once_with("window", "up", 500)
+        mock_ctrl.scroll.assert_called_once_with("window", "up", 500, humanize=False)
 
     def test_select_option(self, executor, mock_ctrl):
         wf = {"nodes": [{"type": "action", "action": "SelectOption", "selector": "#sel", "value": "opt1"}]}
         result = executor.execute(wf)
         assert result["success"]
-        mock_ctrl.select_option.assert_called_once_with("#sel", "opt1")
+        mock_ctrl.select_option.assert_called_once_with("#sel", "opt1", humanize=False)
 
     def test_press_key(self, executor, mock_ctrl):
         wf = {"nodes": [{"type": "action", "action": "PressKey", "key": "Enter"}]}
