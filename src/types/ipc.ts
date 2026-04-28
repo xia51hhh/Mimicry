@@ -40,3 +40,24 @@ export function errorMessage(e: unknown): string {
   if (e && typeof e === "object" && "message" in e) return String((e as Record<string, unknown>).message);
   return String(e);
 }
+
+/** Workflow validation diagnostic from Rust validator */
+export interface WorkflowDiagnostic {
+  level: "error" | "warning" | "info";
+  ruleId: string;
+  nodeId?: string;
+  action?: string;
+  message: string;
+  suggestion?: string;
+}
+
+/** Extract diagnostics array from a Validation AppError */
+export function extractDiagnostics(e: unknown): WorkflowDiagnostic[] | null {
+  if (e && typeof e === "object" && "kind" in e) {
+    const err = e as Record<string, unknown>;
+    if (err.kind === "validation" && Array.isArray(err.diagnostics)) {
+      return err.diagnostics as WorkflowDiagnostic[];
+    }
+  }
+  return null;
+}

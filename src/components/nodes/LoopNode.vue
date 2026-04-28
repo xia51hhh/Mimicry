@@ -4,6 +4,7 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useExecutionStore } from '../../stores/execution'
 import { useWorkflowStore } from '../../stores/workflow'
+import { useValidationStore } from '../../stores/validation'
 import { Repeat } from 'lucide-vue-next'
 
 const props = defineProps<{
@@ -21,12 +22,14 @@ const props = defineProps<{
 const { t } = useI18n()
 const execution = useExecutionStore()
 const workflow = useWorkflowStore()
+const validation = useValidationStore()
 const nodeStatus = computed(() => execution.getNodeStatus(props.id))
 const isSelected = computed(() => props.selected || workflow.selectedNodeId === props.id)
+const diagLevel = computed(() => validation.getNodeMaxLevel(props.id))
 </script>
 
 <template>
-  <div class="node-loop" :class="[`status-${nodeStatus}`, { 'node-selected': isSelected }]">
+  <div class="node-loop" :class="[`status-${nodeStatus}`, { 'node-selected': isSelected }, diagLevel && `diag-${diagLevel}`]">
     <Handle type="target" :position="Position.Left" class="handle handle-target" />
     <div class="node-inner">
       <div class="node-icon">
@@ -34,6 +37,9 @@ const isSelected = computed(() => props.selected || workflow.selectedNodeId === 
       </div>
       <span class="node-label">{{ t('nodeTypes.loop') }}</span>
     </div>
+    <span v-if="diagLevel" class="diag-badge" :class="`diag-badge-${diagLevel}`">
+      {{ diagLevel === 'error' ? '✕' : diagLevel === 'warning' ? '⚠' : 'ℹ' }}
+    </span>
     <div class="branch-outputs">
       <div class="branch-out body-out">
         <span class="branch-label">Body</span>
@@ -60,6 +66,7 @@ const isSelected = computed(() => props.selected || workflow.selectedNodeId === 
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
   transition: box-shadow 0.2s, border-color 0.2s;
   cursor: pointer;
+  position: relative;
 }
 
 .node-loop:hover {
@@ -129,4 +136,11 @@ const isSelected = computed(() => props.selected || workflow.selectedNodeId === 
 .status-running { border-color: #42a5f5; box-shadow: 0 0 8px rgba(66, 165, 245, 0.4); }
 .status-completed { border-color: #66bb6a; }
 .status-error { border-color: #ef5350; }
+
+.diag-error { border-color: #ef5350; }
+.diag-warning { border-color: #ffa726; }
+.diag-badge { position: absolute; top: -6px; right: -6px; width: 16px; height: 16px; border-radius: 50%; font-size: 10px; line-height: 16px; text-align: center; font-weight: 700; }
+.diag-badge-error { background: #ef5350; color: #fff; }
+.diag-badge-warning { background: #ffa726; color: #fff; }
+.diag-badge-info { background: #42a5f5; color: #fff; }
 </style>

@@ -3,8 +3,9 @@ import { ref, shallowRef } from "vue";
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { toBackend } from "../types/action-map";
-import { errorMessage, SidecarEvent } from "../types/ipc";
+import { errorMessage, extractDiagnostics, SidecarEvent } from "../types/ipc";
 import { useBrowserStore } from "./browser";
+import { useValidationStore } from "./validation";
 
 /**
  * Convert canonical workflow nodes to backend format.
@@ -244,8 +245,20 @@ export const useExecutionStore = defineStore("execution", () => {
       running.value = false;
       stopPolling();
       stopListening();
-      error.value = errorMessage(e);
-      addLog("error", `execution.exception: ${e}`);
+      // Check if this is a validation error with diagnostics
+      const diags = extractDiagnostics(e);
+      if (diags) {
+        const validation = useValidationStore();
+        validation.setDiagnostics(diags);
+        error.value = `${diags.length} validation error(s)`;
+        addLog("error", `execution.validationFailed: ${diags.length} error(s)`);
+        for (const d of diags) {
+          addLog("error", `[${d.ruleId}] ${d.message}`);
+        }
+      } else {
+        error.value = errorMessage(e);
+        addLog("error", `execution.exception: ${e}`);
+      }
       throw e;
     }
   }

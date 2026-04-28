@@ -3,6 +3,8 @@ import { ref, nextTick, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import JsonEditor from './JsonEditor.vue'
 import { useExecutionStore } from '../../stores/execution'
+import { useValidationStore } from '../../stores/validation'
+import { useWorkflowStore } from '../../stores/workflow'
 import { usePanel, usePanelLayout } from '../../composables/usePanel'
 import { useFileOps } from '../../composables/useFileOps'
 import { save } from '@tauri-apps/plugin-dialog'
@@ -11,8 +13,10 @@ import { invoke } from '@tauri-apps/api/core'
 const { t } = useI18n()
 
 const execution = useExecutionStore()
+const validation = useValidationStore()
+const workflow = useWorkflowStore()
 const fileOps = useFileOps()
-const activeTab = ref<'json' | 'logs' | 'variables'>('json')
+const activeTab = ref<'json' | 'logs' | 'variables' | 'problems'>('json')
 const logContainer = ref<HTMLElement>()
 
 const { size: panelHeight, collapsed, onResizeStart, toggle: toggleCollapse } = usePanel({
@@ -63,6 +67,14 @@ async function importJson() {
   await fileOps.openFile()
 }
 
+/** Run standalone validation */
+async function runValidation() {
+  const wf = workflow.toJSON()
+  if (wf) {
+    await validation.validate(wf as unknown as Record<string, unknown>)
+  }
+}
+
 /** Export execution logs as text file */
 async function exportLogs() {
   if (execution.logs.length === 0) return
@@ -104,6 +116,15 @@ async function exportLogs() {
         >
           {{ t('bottomPanel.variables') }}
         </button>
+        <button
+          :class="['tab-btn', activeTab === 'problems' && 'active']"
+          @click="activeTab = 'problems'; collapsed = false"
+        >
+          {{ t('bottomPanel.problems') }}
+          <span v-if="validation.totalCount > 0" class="badge" :class="validation.errorCount > 0 ? 'badge-error' : 'badge-warning'">
+            {{ validation.totalCount }}
+          </span>
+        </button>
       </div>
       <div class="flex items-center gap-1">
         <button class="collapse-btn" @click="toggleCollapse">
@@ -124,6 +145,13 @@ async function exportLogs() {
           @click="exportLogs"
         >
           ↑ {{ t('devTools.export') }}
+        </button>
+        <button
+          v-if="activeTab === 'problems'"
+          class="action-btn"
+          @click="runValidation"
+        >
+          ⟳ {{ t('bottomPanel.validateNow') }}
         </button>
       </div>
     </div>
@@ -165,6 +193,24 @@ async function exportLogs() {
             </tr>
           </tbody>
         </table>
+      </div>
+
+      <div v-else-if="activeTab === 'problems'" class="problems-panel">
+        <div v-if="validation.totalCount === 0" class="empty-hint">{{ t('bottomPanel.noProblems') }}</div>
+        <div v-else class="problem-entries">
+          <div
+            v-for="(diag, i) in validation.diagnostics"
+            :key="i"
+            class="problem-entry"
+            :class="`problem-${diag.level}`"
+          >
+            <span class="problem-icon">{{ diag.level === 'error' ? '✕' : diag.level === 'warning' ? '⚠' : 'ℹ' }}</span>
+            <span class="problem-rule">{{ diag.ruleId }}</span>
+            <span class="problem-msg">{{ diag.message }}</span>
+            <span v-if="diag.action" class="problem-action">{{ diag.action }}</span>
+            <span v-if="diag.suggestion" class="problem-suggestion">{{ diag.suggestion }}</span>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -346,5 +392,92 @@ async function exportLogs() {
 .var-type {
   color: var(--color-text-muted);
   font-size: 11px;
+}
+
+/* Problems panel */
+.problems-panel {
+  height: 100%;
+  overflow-y: auto;
+  padding: 8px 12px;
+}
+
+.problem-entries {
+  font-size: 12px;
+}
+
+.problem-entry {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 4px 0;
+  border-bottom: 1px solid var(--color-separator-light);
+}
+
+.problem-icon {
+  flex-shrink: 0;
+  font-size: 12px;
+}
+
+.problem-error .problem-icon {
+  color: #ef5350;
+}
+
+.problem-warning .problem-icon {
+  color: #ffa726;
+}
+
+.problem-info .problem-icon {
+  color: #42a5f5;
+}
+
+.problem-rule {
+  flex-shrink: 0;
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  font-size: 11px;
+  color: var(--color-text-muted);
+  min-width: 40px;
+}
+
+.problem-msg {
+  color: var(--color-text);
+}
+
+.problem-action {
+  flex-shrink: 0;
+  font-size: 10px;
+  color: var(--color-text-muted);
+  background: var(--color-surface-hover);
+  padding: 1px 6px;
+  border-radius: 3px;
+}
+
+.problem-suggestion {
+  font-size: 11px;
+  color: var(--color-text-muted);
+  font-style: italic;
+}
+
+/* Badge on tab */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  font-size: 10px;
+  font-weight: 600;
+  border-radius: 8px;
+  margin-left: 4px;
+}
+
+.badge-error {
+  background: #ef5350;
+  color: #fff;
+}
+
+.badge-warning {
+  background: #ffa726;
+  color: #fff;
 }
 </style>

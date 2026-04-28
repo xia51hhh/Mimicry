@@ -198,11 +198,16 @@
     "json": "JSON",
     "logs": "日志",
     "variables": "变量",
+    "problems": "问题",
     "noLogs": "执行工作流后查看日志",
     "noVariables": "执行工作流后查看变量",
+    "noProblems": "未检测到问题",
     "varName": "变量名",
     "varValue": "值",
-    "varType": "类型"
+    "varType": "类型",
+    "validateNow": "验证",
+    "errorsCount": "{count} 个错误",
+    "warningsCount": "{count} 个警告"
   },
   "settings": {
     "title": "设置",

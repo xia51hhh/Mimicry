@@ -4,6 +4,7 @@ import { computed, markRaw, type Component } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useExecutionStore } from '../../stores/execution'
 import { useWorkflowStore } from '../../stores/workflow'
+import { useValidationStore } from '../../stores/validation'
 import {
   Link, PlusCircle, ArrowLeftRight, X, ArrowLeft, ArrowRight, RotateCw,
   MousePointerClick, Keyboard, Move, ScrollText, ListChecks, Command,
@@ -25,8 +26,10 @@ const props = defineProps<{
 const { t } = useI18n()
 const execution = useExecutionStore()
 const workflow = useWorkflowStore()
+const validation = useValidationStore()
 const nodeStatus = computed(() => execution.getNodeStatus(props.id))
 const isSelected = computed(() => props.selected || workflow.selectedNodeId === props.id)
+const diagLevel = computed(() => validation.getNodeMaxLevel(props.id))
 
 // Map action to icon
 const iconMap: Record<string, Component> = {
@@ -83,7 +86,7 @@ const nodeLabel = computed(() => {
 </script>
 
 <template>
-  <div class="node-action" :class="[`status-${nodeStatus}`, { 'node-selected': isSelected }]">
+  <div class="node-action" :class="[`status-${nodeStatus}`, { 'node-selected': isSelected }, diagLevel && `diag-${diagLevel}`]">
     <Handle type="target" :position="Position.Left" class="handle handle-target" />
     <div class="node-inner">
       <div class="node-icon" :style="{ backgroundColor: nodeColor + '22', color: nodeColor }">
@@ -91,6 +94,9 @@ const nodeLabel = computed(() => {
       </div>
       <span class="node-label">{{ nodeLabel }}</span>
     </div>
+    <span v-if="diagLevel" class="diag-badge" :class="`diag-badge-${diagLevel}`">
+      {{ diagLevel === 'error' ? '✕' : diagLevel === 'warning' ? '⚠' : 'ℹ' }}
+    </span>
     <Handle type="source" :position="Position.Right" class="handle handle-source" />
   </div>
 </template>
@@ -108,6 +114,7 @@ const nodeLabel = computed(() => {
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
   transition: box-shadow 0.2s, border-color 0.2s;
   cursor: pointer;
+  position: relative;
 }
 
 .node-action:hover {
@@ -170,5 +177,42 @@ const nodeLabel = computed(() => {
 
 .status-error {
   border-color: #ef5350;
+}
+
+/* Validation diagnostic indicators */
+.diag-error {
+  border-color: #ef5350;
+}
+
+.diag-warning {
+  border-color: #ffa726;
+}
+
+.diag-badge {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  font-size: 10px;
+  line-height: 16px;
+  text-align: center;
+  font-weight: 700;
+}
+
+.diag-badge-error {
+  background: #ef5350;
+  color: #fff;
+}
+
+.diag-badge-warning {
+  background: #ffa726;
+  color: #fff;
+}
+
+.diag-badge-info {
+  background: #42a5f5;
+  color: #fff;
 }
 </style>

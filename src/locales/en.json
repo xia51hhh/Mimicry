@@ -198,11 +198,16 @@
     "json": "JSON",
     "logs": "Logs",
     "variables": "Variables",
+    "problems": "Problems",
     "noLogs": "Run workflow to see logs",
     "noVariables": "Run workflow to see variables",
+    "noProblems": "No problems detected",
     "varName": "Name",
     "varValue": "Value",
-    "varType": "Type"
+    "varType": "Type",
+    "validateNow": "Validate",
+    "errorsCount": "{count} error(s)",
+    "warningsCount": "{count} warning(s)"
   },
   "settings": {
     "title": "Settings",
