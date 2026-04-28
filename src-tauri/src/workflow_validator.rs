@@ -1,5 +1,6 @@
 use serde::Serialize;
 use serde_json::Value;
+use std::collections::HashSet;
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "lowercase")]
@@ -46,7 +47,13 @@ const URL_ACTIONS: &[&str] = &["Navigate", "HttpRequest"];
 pub fn validate(workflow: &Value) -> Vec<Diagnostic> {
     let mut diags = Vec::new();
     if let Some(nodes) = workflow.get("nodes").and_then(Value::as_array) {
+        // Pass 1: per-node structural validation
         validate_nodes(nodes, &mut diags, false);
+        // Pass 2: cross-node analysis
+        let mut defined_vars = HashSet::new();
+        collect_defined_vars(nodes, &mut defined_vars);
+        check_var_references(nodes, &defined_vars, &mut diags);
+        check_dead_code(nodes, &mut diags);
     }
     diags
 }
@@ -75,7 +82,7 @@ fn validate_node(node: &Value, diags: &mut Vec<Diagnostic>, in_loop: bool) {
     match kind {
         "action" => validate_action_node(&node_id, action, data, diags),
         "condition" => validate_condition_node(&node_id, data, diags, in_loop),
-        "loop" => validate_loop_node(&node_id, data, diags),
+        "loop" => validate_loop_node(node, &node_id, data, diags),
         _ => {}
     }
 
@@ -312,6 +319,7 @@ fn validate_condition_node(
 // ---------------------------------------------------------------------------
 
 fn validate_loop_node(
+    node: &Value,
     node_id: &Option<String>,
     data: &Value,
     diags: &mut Vec<Diagnostic>,
@@ -380,6 +388,9 @@ fn validate_loop_node(
         let max_new_tabs = count_actions(c, "NewTab");
         check_seq_range(c, max_new_tabs, diags);
     }
+
+    // W005 + W010: Loop variable analysis (Phase 2)
+    check_loop_vars(node, diags);
 
     // Recurse into children (in_loop = true)
     if let Some(c) = children {
@@ -456,6 +467,301 @@ fn is_empty_str(v: &Value, key: &str) -> bool {
     match v.get(key) {
         None | Some(Value::Null) => true,
         Some(s) => s.as_str().is_some_and(|s| s.trim().is_empty()),
+    }
+}
+
+/// Regex-free scan: find all `$word` patterns in a string.
+fn find_var_refs(s: &str) -> Vec<String> {
+    let mut refs = Vec::new();
+    let bytes = s.as_bytes();
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == b'$' {
+            let start = i;
+            i += 1;
+            while i < bytes.len() && (bytes[i].is_ascii_alphanumeric() || bytes[i] == b'_') {
+                i += 1;
+            }
+            if i > start + 1 {
+                refs.push(s[start..i].to_string());
+            }
+        } else {
+            i += 1;
+        }
+    }
+    refs
+}
+
+// ---------------------------------------------------------------------------
+// Phase 2: Cross-node analysis
+// ---------------------------------------------------------------------------
+
+/// Collect all variable names defined by the workflow (SetVariable, into, Loop variable).
+fn collect_defined_vars(nodes: &[Value], vars: &mut HashSet<String>) {
+    for node in nodes {
+        let action = str_field(node, "action");
+        let kind = str_field(node, "kind");
+        let data = node.get("data").unwrap_or(&Value::Null);
+
+        // SetVariable defines data.variable
+        if action == "SetVariable" {
+            if let Some(v) = data.get("variable").and_then(Value::as_str) {
+                if !v.is_empty() {
+                    vars.insert(v.to_string());
+                }
+            }
+        }
+
+        // Actions with `into` field define the target variable
+        let into_actions = [
+            "GetText", "GetAttribute", "ExtractTable", "GetURL",
+            "RunScript", "HttpRequest", "Cookie", "ElementExists",
+        ];
+        if into_actions.contains(&action) {
+            let into = data.get("into").and_then(Value::as_str).unwrap_or("$_result");
+            if !into.is_empty() {
+                vars.insert(into.to_string());
+            }
+        }
+
+        // Loop variable
+        if kind == "loop" {
+            if let Some(v) = data.get("variable").and_then(Value::as_str) {
+                if !v.is_empty() {
+                    vars.insert(v.to_string());
+                }
+            }
+        }
+
+        // Recurse into children
+        if let Some(c) = data.get("children").and_then(Value::as_array) {
+            collect_defined_vars(c, vars);
+        }
+        if let Some(c) = data.get("elseChildren").and_then(Value::as_array) {
+            collect_defined_vars(c, vars);
+        }
+    }
+}
+
+/// W001: Check for variable references that are never defined.
+fn check_var_references(
+    nodes: &[Value],
+    defined: &HashSet<String>,
+    diags: &mut Vec<Diagnostic>,
+) {
+    for node in nodes {
+        let node_id = node.get("id").and_then(Value::as_str).map(String::from);
+        let action = str_field(node, "action");
+        let data = node.get("data").unwrap_or(&Value::Null);
+
+        // Scan all string values in data for $varName references
+        if let Some(obj) = data.as_object() {
+            for (key, val) in obj {
+                if key == "children" || key == "elseChildren" {
+                    continue;
+                }
+                if let Some(s) = val.as_str() {
+                    for var_ref in find_var_refs(s) {
+                        if var_ref == "$_result" {
+                            continue; // built-in
+                        }
+                        if !defined.contains(&var_ref) {
+                            diags.push(Diagnostic {
+                                level: DiagLevel::Warning,
+                                rule_id: "W001".into(),
+                                node_id: node_id.clone(),
+                                action: if action.is_empty() {
+                                    None
+                                } else {
+                                    Some(action.into())
+                                },
+                                message: format!(
+                                    "引用了未定义的变量 \"{}\"",
+                                    var_ref
+                                ),
+                                suggestion: Some(
+                                    "确认变量名拼写，或在上游添加 SetVariable 节点".into(),
+                                ),
+                            });
+                        }
+                    }
+                }
+            }
+        }
+
+        // Also check condition/whileCondition for variable refs
+        let kind = str_field(node, "kind");
+        if kind == "condition" {
+            if let Some(cond) = data.get("condition").and_then(Value::as_str) {
+                for var_ref in find_var_refs(cond) {
+                    if var_ref != "$_result" && !defined.contains(&var_ref) {
+                        diags.push(Diagnostic {
+                            level: DiagLevel::Warning,
+                            rule_id: "W001".into(),
+                            node_id: node_id.clone(),
+                            action: None,
+                            message: format!("条件引用了未定义的变量 \"{}\"", var_ref),
+                            suggestion: Some(
+                                "确认变量名拼写，或在上游添加 SetVariable 节点".into(),
+                            ),
+                        });
+                    }
+                }
+            }
+        }
+
+        // Recurse into children
+        if let Some(c) = data.get("children").and_then(Value::as_array) {
+            check_var_references(c, defined, diags);
+        }
+        if let Some(c) = data.get("elseChildren").and_then(Value::as_array) {
+            check_var_references(c, defined, diags);
+        }
+    }
+}
+
+/// W005: While loop body doesn't modify any variable in the condition.
+/// W010: Loop variable defined but never referenced in children.
+fn check_loop_vars(node: &Value, diags: &mut Vec<Diagnostic>) {
+    let data = node.get("data").unwrap_or(&Value::Null);
+    let loop_type = str_field(data, "loopType");
+    let node_id = node.get("id").and_then(Value::as_str).map(String::from);
+    let children = data.get("children").and_then(Value::as_array);
+
+    // W005: While loop without condition variable modification
+    if loop_type == "while" {
+        if let Some(cond) = data.get("whileCondition").and_then(Value::as_str) {
+            let cond_vars: HashSet<String> = find_var_refs(cond).into_iter().collect();
+            if !cond_vars.is_empty() {
+                if let Some(c) = children {
+                    let mut body_defs = HashSet::new();
+                    collect_defined_vars(c, &mut body_defs);
+                    let modified = cond_vars.iter().any(|v| body_defs.contains(v));
+                    if !modified {
+                        diags.push(Diagnostic {
+                            level: DiagLevel::Warning,
+                            rule_id: "W005".into(),
+                            node_id: node_id.clone(),
+                            action: None,
+                            message: format!(
+                                "While 循环条件中的变量 {:?} 在循环体内未被修改，可能导致无限循环",
+                                cond_vars.iter().collect::<Vec<_>>()
+                            ),
+                            suggestion: Some(
+                                "在循环体中添加修改条件变量的操作".into(),
+                            ),
+                        });
+                    }
+                }
+            }
+        }
+    }
+
+    // W010: Loop variable defined but not referenced in children
+    if let Some(var) = data.get("variable").and_then(Value::as_str) {
+        if !var.is_empty() {
+            if let Some(c) = children {
+                let refs = collect_all_str_refs(c);
+                if !refs.contains(var) {
+                    diags.push(Diagnostic {
+                        level: DiagLevel::Warning,
+                        rule_id: "W010".into(),
+                        node_id: node_id.clone(),
+                        action: None,
+                        message: format!(
+                            "Loop 变量 \"{}\" 在循环体中未被引用",
+                            var
+                        ),
+                        suggestion: Some(
+                            "在循环体中使用该变量，或移除变量定义".into(),
+                        ),
+                    });
+                }
+            }
+        }
+    }
+}
+
+/// Collect all `$varName` references from all string fields in nodes (recursive).
+fn collect_all_str_refs(nodes: &[Value]) -> HashSet<String> {
+    let mut refs = HashSet::new();
+    for node in nodes {
+        let data = node.get("data").unwrap_or(&Value::Null);
+        if let Some(obj) = data.as_object() {
+            for (key, val) in obj {
+                if key == "children" || key == "elseChildren" {
+                    continue;
+                }
+                if let Some(s) = val.as_str() {
+                    for r in find_var_refs(s) {
+                        refs.insert(r);
+                    }
+                }
+            }
+        }
+        // Also check condition fields
+        if let Some(cond) = data.get("condition").and_then(Value::as_str) {
+            for r in find_var_refs(cond) {
+                refs.insert(r);
+            }
+        }
+        if let Some(cond) = data.get("whileCondition").and_then(Value::as_str) {
+            for r in find_var_refs(cond) {
+                refs.insert(r);
+            }
+        }
+        if let Some(c) = data.get("children").and_then(Value::as_array) {
+            refs.extend(collect_all_str_refs(c));
+        }
+        if let Some(c) = data.get("elseChildren").and_then(Value::as_array) {
+            refs.extend(collect_all_str_refs(c));
+        }
+    }
+    refs
+}
+
+/// I001: Detect dead code — nodes after Fail/Stop in a linear sequence.
+fn check_dead_code(nodes: &[Value], diags: &mut Vec<Diagnostic>) {
+    let mut saw_terminator = false;
+    let mut terminator_action = String::new();
+    for node in nodes {
+        let action = str_field(node, "action");
+        let kind = str_field(node, "kind");
+
+        if saw_terminator && kind == "action" {
+            let node_id = node.get("id").and_then(Value::as_str).map(String::from);
+            diags.push(Diagnostic {
+                level: DiagLevel::Info,
+                rule_id: "I001".into(),
+                node_id,
+                action: if action.is_empty() {
+                    None
+                } else {
+                    Some(action.into())
+                },
+                message: format!(
+                    "此节点位于 \"{}\" 之后，永远不会被执行",
+                    terminator_action
+                ),
+                suggestion: Some("移除死代码或调整节点顺序".into()),
+            });
+        }
+
+        if action == "Fail" || action == "Stop" {
+            saw_terminator = true;
+            terminator_action = action.to_string();
+        }
+    }
+
+    // Recurse into children of all nodes
+    for node in nodes {
+        let data = node.get("data").unwrap_or(&Value::Null);
+        if let Some(c) = data.get("children").and_then(Value::as_array) {
+            check_dead_code(c, diags);
+        }
+        if let Some(c) = data.get("elseChildren").and_then(Value::as_array) {
+            check_dead_code(c, diags);
+        }
     }
 }
 
@@ -784,5 +1090,148 @@ mod tests {
         assert_eq!(json["nodeId"], "n1");
         assert_eq!(json["level"], "error");
         assert!(json.get("suggestion").is_none());
+    }
+
+    // ── W001: undefined variable reference ──────────────────────────────
+
+    #[test]
+    fn w001_undefined_var() {
+        let wf = make_workflow(vec![
+            make_action("n1", "Navigate", json!({"url": "$baseUrl/page"})),
+        ]);
+        let diags: Vec<_> = validate(&wf).into_iter().filter(|d| d.rule_id == "W001").collect();
+        assert_eq!(diags.len(), 1);
+        assert!(diags[0].message.contains("$baseUrl"));
+    }
+
+    #[test]
+    fn w001_defined_var_ok() {
+        let wf = make_workflow(vec![
+            make_action("n1", "SetVariable", json!({"variable": "$baseUrl", "value": "https://x.com"})),
+            make_action("n2", "Navigate", json!({"url": "$baseUrl/page"})),
+        ]);
+        assert!(!validate(&wf).iter().any(|d| d.rule_id == "W001"));
+    }
+
+    #[test]
+    fn w001_builtin_result_ok() {
+        let wf = make_workflow(vec![
+            make_action("n1", "Navigate", json!({"url": "$_result"})),
+        ]);
+        assert!(!validate(&wf).iter().any(|d| d.rule_id == "W001"));
+    }
+
+    #[test]
+    fn w001_condition_undefined_var() {
+        let wf = make_workflow(vec![json!({
+            "id": "c1", "kind": "condition",
+            "data": { "condition": "$count > 0", "children": [], "elseChildren": [] }
+        })]);
+        assert!(validate(&wf).iter().any(|d| d.rule_id == "W001" && d.message.contains("$count")));
+    }
+
+    // ── W005: While loop without condition change ───────────────────────
+
+    #[test]
+    fn w005_while_no_condition_change() {
+        let wf = make_workflow(vec![json!({
+            "id": "l1", "kind": "loop",
+            "data": {
+                "loopType": "while",
+                "whileCondition": "$hasNext == true",
+                "children": [
+                    { "id": "n1", "kind": "action", "action": "Click", "data": {"selector": "#btn"} }
+                ]
+            }
+        })]);
+        assert!(validate(&wf).iter().any(|d| d.rule_id == "W005"));
+    }
+
+    #[test]
+    fn w005_while_with_condition_change_ok() {
+        let wf = make_workflow(vec![json!({
+            "id": "l1", "kind": "loop",
+            "data": {
+                "loopType": "while",
+                "whileCondition": "$hasNext == true",
+                "children": [
+                    { "id": "n1", "kind": "action", "action": "SetVariable", "data": {"variable": "$hasNext", "value": "false"} }
+                ]
+            }
+        })]);
+        assert!(!validate(&wf).iter().any(|d| d.rule_id == "W005"));
+    }
+
+    // ── W010: Unused loop variable ──────────────────────────────────────
+
+    #[test]
+    fn w010_unused_loop_var() {
+        let wf = make_workflow(vec![json!({
+            "id": "l1", "kind": "loop",
+            "data": {
+                "loopType": "count", "count": 3,
+                "variable": "$i",
+                "children": [
+                    { "id": "n1", "kind": "action", "action": "Click", "data": {"selector": "#btn"} }
+                ]
+            }
+        })]);
+        assert!(validate(&wf).iter().any(|d| d.rule_id == "W010"));
+    }
+
+    #[test]
+    fn w010_used_loop_var_ok() {
+        let wf = make_workflow(vec![json!({
+            "id": "l1", "kind": "loop",
+            "data": {
+                "loopType": "count", "count": 3,
+                "variable": "$i",
+                "children": [
+                    { "id": "n1", "kind": "action", "action": "Navigate", "data": {"url": "https://x.com/$i"} }
+                ]
+            }
+        })]);
+        assert!(!validate(&wf).iter().any(|d| d.rule_id == "W010"));
+    }
+
+    // ── I001: Dead code after Fail/Stop ─────────────────────────────────
+
+    #[test]
+    fn i001_dead_code_after_fail() {
+        let wf = make_workflow(vec![
+            make_action("n1", "Fail", json!({"message": "abort"})),
+            make_action("n2", "Click", json!({"selector": "#btn"})),
+        ]);
+        let diags: Vec<_> = validate(&wf).into_iter().filter(|d| d.rule_id == "I001").collect();
+        assert_eq!(diags.len(), 1);
+        assert!(diags[0].message.contains("Fail"));
+    }
+
+    #[test]
+    fn i001_dead_code_after_stop() {
+        let wf = make_workflow(vec![
+            make_action("n1", "Stop", json!({})),
+            make_action("n2", "Navigate", json!({"url": "https://x.com"})),
+        ]);
+        assert!(validate(&wf).iter().any(|d| d.rule_id == "I001"));
+    }
+
+    #[test]
+    fn i001_no_dead_code() {
+        let wf = make_workflow(vec![
+            make_action("n1", "Click", json!({"selector": "#btn"})),
+            make_action("n2", "Fail", json!({"message": "done"})),
+        ]);
+        assert!(!validate(&wf).iter().any(|d| d.rule_id == "I001"));
+    }
+
+    // ── find_var_refs ───────────────────────────────────────────────────
+
+    #[test]
+    fn test_find_var_refs() {
+        assert_eq!(find_var_refs("$foo and $bar_baz"), vec!["$foo", "$bar_baz"]);
+        assert_eq!(find_var_refs("no vars here"), Vec::<String>::new());
+        assert_eq!(find_var_refs("$"), Vec::<String>::new());
+        assert_eq!(find_var_refs("$x"), vec!["$x"]);
     }
 }
