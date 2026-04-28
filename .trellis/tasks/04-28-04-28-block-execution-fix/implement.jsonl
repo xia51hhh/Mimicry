@@ -1,0 +1,9 @@
+{"file": ".trellis/spec/frontend/index.md", "reason": "Frontend coding conventions and patterns"}
+{"file": ".trellis/spec/frontend/type-safety.md", "reason": "TypeScript type safety guidelines for canonical schema changes"}
+{"file": ".trellis/spec/frontend/state-management.md", "reason": "Pinia store patterns for execution/browser/workflow stores"}
+{"file": ".trellis/tasks/04-28-04-28-block-execution-fix/research/block-data-flow-analysis.md", "reason": "Block data flow analysis with exact file locations and field mappings"}
+{"file": "docs/design/block-system.md", "reason": "Block system design documentation"}
+{"file": "docs/design/data-flow.md", "reason": "Workflow data flow design"}
+{"file": ".github/instructions/python-sidecar.instructions.md", "reason": "Python sidecar coding conventions"}
+{"file": ".github/instructions/rust-backend.instructions.md", "reason": "Rust backend conventions for IPC commands"}
+{"file": ".github/instructions/vue-frontend.instructions.md", "reason": "Vue frontend conventions"}

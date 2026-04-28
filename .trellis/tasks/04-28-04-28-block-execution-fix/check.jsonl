@@ -1,0 +1,6 @@
+{"file": ".trellis/spec/frontend/index.md", "reason": "Frontend coding conventions"}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "Quality check standards"}
+{"file": ".trellis/spec/frontend/type-safety.md", "reason": "Type safety for canonical schema"}
+{"file": ".trellis/tasks/04-28-04-28-block-execution-fix/research/block-data-flow-analysis.md", "reason": "Verify fixes match analyzed data flow"}
+{"file": ".github/instructions/python-sidecar.instructions.md", "reason": "Python sidecar conventions"}
+{"file": ".github/instructions/rust-backend.instructions.md", "reason": "Rust backend conventions"}
