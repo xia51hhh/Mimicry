@@ -66,15 +66,13 @@ def test_bing_search():
     with _launch_browser() as browser:
         page = browser.new_page()
         page.goto("https://www.bing.com", wait_until="domcontentloaded")
-        page.wait_for_timeout(2000)
+        page.wait_for_timeout(3000)
 
         search_input = page.locator('#sb_form_q')
         _human_type(page, search_input, "playwright browser automation")
-        page.wait_for_timeout(800)
+        page.wait_for_timeout(1000)
         page.keyboard.press("Enter")
-
-        # Wait for potential challenge to auto-resolve or results to load
-        page.wait_for_timeout(8000)
+        page.wait_for_timeout(5000)
 
         content = page.content()
         page.screenshot(path="tests/screenshots/bing_search_result.png")
@@ -83,8 +81,8 @@ def test_bing_search():
         challenge_markers = ["one last step", "solve the challenge", "verifying"]
         is_challenged = any(m in content.lower() for m in challenge_markers)
         if is_challenged:
-            # Wait extra time for auto-resolution
-            page.wait_for_timeout(10000)
+            # Wait for potential auto-resolution
+            page.wait_for_timeout(12000)
             content = page.content()
             page.screenshot(path="tests/screenshots/bing_search_result_retry.png")
             is_challenged = any(m in content.lower() for m in challenge_markers)
@@ -120,48 +118,31 @@ def test_duckduckgo_search():
 
 @pytest.mark.skipif(True, reason="Manual E2E test — run explicitly")
 def test_cloudflare_turnstile():
-    """Cloudflare Turnstile challenge page — tests JS challenge bypass."""
+    """Cloudflare Turnstile widget (non-interactive mode).
+    Uses peet.ws test page — a real Turnstile widget, not a managed challenge.
+    """
     with _launch_browser() as browser:
         page = browser.new_page()
-        page.goto("https://nopecha.com/demo/cloudflare", wait_until="domcontentloaded")
-        page.wait_for_timeout(5000)
+        page.goto("https://peet.ws/turnstile-test/non-interactive.html", wait_until="domcontentloaded")
+        page.wait_for_timeout(8000)  # Turnstile needs time to verify
 
         content = page.content()
-
-        # Detect Turnstile challenge
-        challenge_markers = [
-            "verify you are human",
-            "performing security verification",
-            "checking if the site connection is secure",
-        ]
-        is_challenged = any(m in content.lower() for m in challenge_markers)
-
-        if is_challenged:
-            # Try clicking the Turnstile checkbox if visible
-            try:
-                turnstile_frame = page.frame_locator('iframe[src*="challenges.cloudflare.com"]')
-                checkbox = turnstile_frame.locator('input[type="checkbox"], .cb-i')
-                if checkbox.count() > 0:
-                    checkbox.first.click()
-                    page.wait_for_timeout(8000)
-                    content = page.content()
-            except Exception:
-                pass
-
-            # Wait more for potential auto-resolution
-            page.wait_for_timeout(8000)
-            content = page.content()
-
+        title = page.title()
         page.screenshot(path="tests/screenshots/cloudflare_turnstile.png")
 
-        # Re-check after waiting
+        # Check for challenge/block indicators
+        challenge_markers = [
+            "verify you are human",
+            "just a moment",
+            "checking if the site connection is secure",
+        ]
         is_challenged = any(m in content.lower() for m in challenge_markers)
         is_blocked = "blocked" in content.lower() and "ray id" in content.lower()
 
         if is_blocked:
             pytest.fail("Cloudflare blocked the request (Ray ID page)")
         if is_challenged:
-            pytest.fail("Cloudflare Turnstile challenge not auto-resolved")
+            pytest.fail(f"Cloudflare Turnstile challenge not auto-resolved (title: {title})")
 
         print("✅ Cloudflare Turnstile passed")
 

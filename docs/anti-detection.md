@@ -269,32 +269,42 @@ Stop, LoopBreakpoint, WaitConnections, Delay, Log, Comment, Fail, UploadFile
 | 站点 | 结果 | 测试方法 | 详情 |
 |------|------|---------|------|
 | Google | ✅ PASS | 逐字符输入 "zlib python" | 无 CAPTCHA，搜索结果正常返回 |
-| Bing | ❌ FAIL | 逐字符输入 "playwright automation" | 触发 "One last step — Verify you are human" 复选框 |
+| Bing | ⚠️ 不稳定 | 逐字符输入 "playwright automation" | 间歇触发 "One last step" 复选框（见下文分析） |
 | DuckDuckGo | ✅ PASS | 逐字符输入 "camoufox browser" | 搜索结果正常 |
 
 ### 反机器人/指纹检测
 
 | 站点 | 结果 | 详情 |
 |------|------|------|
-| [Cloudflare Turnstile](https://nopecha.com/demo/cloudflare) | ❌ FAIL | Turnstile 复选框挑战未自动通过 |
+| [Cloudflare Turnstile](https://peet.ws/turnstile-test/) | ✅ PASS | non-interactive 模式自动通过 |
 | [BrowserScan](https://www.browserscan.net/) | ✅ PASS | 指纹扫描完成（截图已保存） |
 | [SannySoft](https://bot.sannysoft.com/) | ✅ PASS | 0 项红色标记 |
 | [BrowserLeaks WebRTC](https://browserleaks.com/webrtc) | ✅ PASS | 无 IP 泄露 |
 | [PixelScan](https://pixelscan.net/) | ✅ PASS | 指纹一致性通过 |
 
-### 失败原因分析
+### Bing 不稳定原因分析
 
-**Bing CAPTCHA**:
-- Bing 使用类似 Cloudflare 的挑战机制
-- 数据中心 IP 是主要触发因素（住宅 IP 大概率通过）
-- 与 Camoufox 指纹无关 — 同 IP 下 Edge 浏览器也会触发
-- 挑战类型为交互式复选框，无法自动绕过
+A/B 对比实验结果（同一 IP 连续 3 次测试）：
 
-**Cloudflare Turnstile**:
-- Turnstile 需要点击复选框并通过 JS 行为分析验证
-- Camoufox（Firefox 内核）在 Turnstile 上的通过率低于 Chromium
-- 数据中心 IP 大幅增加触发概率
-- 搭配住宅代理 + 浏览器 Profile 预热可改善
+| 配置 | 结果 | 说明 |
+|------|------|------|
+| `os="windows"` + `geoip=True`（原配置） | ❌ | 首次请求即触发 |
+| 无 os + `geoip=False`（当前配置） | ✅ | 第二次请求通过 |
+| `os="windows"` + `geoip=False` | ❌ | 第三次请求触发 |
+
+- Bing 的挑战由 **IP 频率 + IP 声誉** 共同决定，非确定性
+- `os="windows"` 在 Linux 上反而增加检测概率（Canvas/字体不一致）
+- 数据中心 IP 连续多次请求会累积风险评分
+- **住宅代理 + 请求间隔 15s+** 可显著改善通过率
+
+### Cloudflare 类型说明
+
+| 类型 | 测试结果 | 说明 |
+|------|---------|------|
+| Turnstile Widget (non-interactive) | ✅ PASS | 纯 JS 行为分析，指纹通过即可 |
+| Managed Challenge ("Just a moment...") | ❌ | 服务端基于 IP 声誉决策，非指纹问题 |
+
+Managed Challenge 在数据中心 IP 上无法绕过，需要住宅代理。
 
 ### 自动化测试命令
 ```bash
