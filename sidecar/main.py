@@ -8,14 +8,33 @@ logger.add("mimicry-sidecar.log", rotation="10 MB", retention="3 days", level="D
 
 
 def main():
-    logger.info("Mimicry sidecar starting")
-    # Lazy import: browser/actions imports camoufox which is heavy
-    from rpc.server import JsonRpcServer
-    import browser.actions  # registers browser RPC methods
-    # DSL module is deprecated (ADR-001), do not import dsl.rpc_methods
-    server = JsonRpcServer()
-    browser.actions.set_server(server)
-    server.run()
+    mode = _detect_mode()
+
+    if mode == "daemon":
+        logger.info("Mimicry daemon starting")
+        from daemon import run_daemon
+        run_daemon()
+    elif mode == "mcp":
+        logger.info("Mimicry MCP server starting")
+        from mcp_server import run_mcp
+        run_mcp()
+    else:
+        # Default: stdio JSON-RPC (Tauri sidecar mode)
+        logger.info("Mimicry sidecar starting (stdio)")
+        from rpc.server import JsonRpcServer
+        import browser.actions  # registers browser RPC methods
+        server = JsonRpcServer()
+        browser.actions.set_server(server)
+        server.run()
+
+
+def _detect_mode() -> str:
+    """Parse --daemon / --mcp flags from argv."""
+    if "--daemon" in sys.argv:
+        return "daemon"
+    if "--mcp" in sys.argv:
+        return "mcp"
+    return "stdio"
 
 
 if __name__ == "__main__":

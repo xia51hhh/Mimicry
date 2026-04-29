@@ -92,9 +92,29 @@
 | 模块 | 路径 | 职责 |
 |------|------|------|
 | RPC | `rpc/` | stdio JSON-RPC 服务端，方法注册 |
+| RPC Protocol | `rpc/protocol.py` | 长度前缀帧协议（Daemon ↔ CLI 通信） |
 | Browser | `browser/` | Camoufox 控制器、页面操作、录制器 |
 | Engine | `engine/` | 工作流 JSON 解释执行引擎 |
+| Engine State | `engine/executor_state.py` | 执行控制状态（暂停/单步/断点/注入队列） |
+| Daemon | `daemon.py` | UDS Socket 守护进程，CLI 模式后端 |
+| CLI | `cli.py` | 命令行客户端，25+ 子命令 |
+| MCP Server | `mcp_server.py` | MCP stdio 服务器，52 个工具自动映射 |
 | Utils | `utils/` | 日志等工具函数 |
+
+### Sidecar 三种入口模式
+
+```
+模式 1: Tauri Sidecar（默认）
+  Tauri Shell ──stdio JSON-RPC──► main.py ──► browser/actions.py ──► Camoufox
+
+模式 2: CLI + Daemon
+  LLM Agent ──shell──► cli.py ──UDS socket──► daemon.py ──► browser/actions.py ──► Camoufox
+
+模式 3: MCP Server
+  LLM Client ──stdio MCP──► mcp_server.py ──► browser/actions.py ──► Camoufox
+```
+
+三种模式共享同一个 `browser/actions.py` 适配层和 `rpc/methods.py` 方法注册表。
 
 ---
 

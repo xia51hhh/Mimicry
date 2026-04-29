@@ -347,6 +347,75 @@ def workflow_execution_status(session_id: str = "default"):
     return {"running": False, "step": 0, "total": 0}
 
 
+@rpc_method("workflow.pause")
+def workflow_pause(session_id: str = "default"):
+    if session_id in _executors:
+        _executors[session_id].state.pause()
+        return {"paused": True, "session_id": session_id}
+    return {"paused": False, "error": "No active executor"}
+
+
+@rpc_method("workflow.unpause")
+def workflow_unpause(session_id: str = "default"):
+    """Resume a paused workflow execution."""
+    if session_id in _executors:
+        _executors[session_id].state.resume()
+        return {"resumed": True, "session_id": session_id}
+    return {"resumed": False, "error": "No active executor"}
+
+
+@rpc_method("workflow.step")
+def workflow_step(count: int = 1, session_id: str = "default"):
+    if session_id in _executors:
+        _executors[session_id].state.step(count)
+        return {"stepping": count, "session_id": session_id}
+    return {"stepping": 0, "error": "No active executor"}
+
+
+@rpc_method("workflow.inject")
+def workflow_inject(block: dict, session_id: str = "default"):
+    if session_id in _executors:
+        _executors[session_id].state.inject(block)
+        return {"injected": True, "queue_size": _executors[session_id].state.inject_queue_size}
+    return {"injected": False, "error": "No active executor"}
+
+
+@rpc_method("workflow.set_breakpoint")
+def workflow_set_breakpoint(node_id: str, session_id: str = "default"):
+    if session_id in _executors:
+        _executors[session_id].state.add_breakpoint(node_id)
+        return {"added": node_id}
+    return {"error": "No active executor"}
+
+
+@rpc_method("workflow.remove_breakpoint")
+def workflow_remove_breakpoint(node_id: str, session_id: str = "default"):
+    if session_id in _executors:
+        _executors[session_id].state.remove_breakpoint(node_id)
+        return {"removed": node_id}
+    return {"error": "No active executor"}
+
+
+@rpc_method("workflow.list_breakpoints")
+def workflow_list_breakpoints(session_id: str = "default"):
+    if session_id in _executors:
+        return {"breakpoints": _executors[session_id].state.list_breakpoints()}
+    return {"breakpoints": []}
+
+
+@rpc_method("workflow.state")
+def workflow_state(session_id: str = "default"):
+    """Full state: execution context + control state."""
+    result = {"running": False, "step": 0, "total": 0}
+    if session_id in _executors:
+        executor = _executors[session_id]
+        result = {
+            **executor.context.status(),
+            **executor.state.snapshot(),
+        }
+    return result
+
+
 # --- Camoufox 环境管理 ---
 
 

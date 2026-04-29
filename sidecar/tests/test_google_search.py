@@ -9,10 +9,15 @@ import random
 
 def _launch_browser():
     """Create a Camoufox browser with anti-detection settings."""
+    import platform
     from camoufox.sync_api import Camoufox
+    host_os = {"Linux": "linux", "Darwin": "macos", "Windows": "windows"}.get(
+        platform.system(), "linux"
+    )
     return Camoufox(
         headless=False,
         humanize=True,
+        os=host_os,
         geoip=False,
         block_webrtc=True,
         enable_cache=True,
@@ -69,7 +74,11 @@ def test_google_search_via_typing():
 
 @pytest.mark.skipif(True, reason="Manual E2E test — run explicitly")
 def test_bing_search():
-    """Bing search — validates no CAPTCHA/challenge on search."""
+    """Bing search — validates no CAPTCHA/challenge on search.
+    NOTE: Known to fail on Camoufox v135 due to Akamai detecting C++ patches.
+    See: https://github.com/daijro/camoufox/issues/555
+    Workaround: upgrade to CoryKing fork v142+.
+    """
     with _launch_browser() as browser:
         page = browser.new_page()
         page.goto("https://www.bing.com", wait_until="domcontentloaded")
@@ -252,3 +261,157 @@ def test_creepjs_fingerprint():
             print("📊 CreepJS FP ID: (check screenshot)")
 
         print("✅ CreepJS fingerprint test completed (check screenshot)")
+
+
+# ──── Interaction Tests ────
+
+
+@pytest.mark.skipif(True, reason="Manual E2E test — run explicitly")
+def test_form_submission():
+    """Form submission — fill and submit a contact/demo form on a real site.
+    Uses httpbin.org/forms/post as a stable, public form endpoint.
+    """
+    with _launch_browser() as browser:
+        page = browser.new_page()
+        page.goto("https://httpbin.org/forms/post", wait_until="domcontentloaded")
+        page.wait_for_timeout(random.randint(1000, 2000))
+
+        # Fill customer name
+        custname = page.locator('input[name="custname"]')
+        _human_type(page, custname, "John Doe")
+        page.wait_for_timeout(random.randint(400, 800))
+
+        # Select pizza size (radio)
+        page.locator('input[value="medium"]').click()
+        page.wait_for_timeout(random.randint(300, 600))
+
+        # Check topping checkboxes
+        page.locator('input[value="cheese"]').click()
+        page.wait_for_timeout(random.randint(200, 500))
+        page.locator('input[value="mushroom"]').click()
+        page.wait_for_timeout(random.randint(200, 400))
+
+        # Fill delivery time
+        delivery = page.locator('input[name="delivery"]')
+        _human_type(page, delivery, "19:30")
+        page.wait_for_timeout(random.randint(300, 600))
+
+        # Fill comments textarea
+        comments = page.locator('textarea[name="comments"]')
+        _human_type(page, comments, "Please ring the doorbell twice")
+        page.wait_for_timeout(random.randint(500, 1000))
+
+        page.screenshot(path="tests/screenshots/form_filled.png")
+
+        # Scroll down and submit the form
+        submit_btn = page.locator('button').last
+        submit_btn.scroll_into_view_if_needed()
+        page.wait_for_timeout(random.randint(300, 600))
+        submit_btn.click()
+        page.wait_for_timeout(5000)
+
+        content = page.content()
+        page.screenshot(path="tests/screenshots/form_submitted.png")
+
+        # httpbin returns JSON with form data in a <pre> or as page text
+        page_text = page.locator("body").text_content()
+        assert "custname" in page_text, "Form submission failed — response doesn't contain form fields"
+        assert "cheese" in page_text or "mushroom" in page_text, \
+            "Form submission failed — toppings not in response"
+        print("✅ Form submission: data round-tripped successfully")
+
+
+@pytest.mark.skipif(True, reason="Manual E2E test — run explicitly")
+def test_login_simulation():
+    """Login simulation — fill username/password and submit on a practice site.
+    Uses the-internet.herokuapp.com/login (Selenium practice site).
+    """
+    with _launch_browser() as browser:
+        page = browser.new_page()
+        page.goto("https://the-internet.herokuapp.com/login", wait_until="domcontentloaded")
+        page.wait_for_timeout(random.randint(1500, 2500))
+
+        page.screenshot(path="tests/screenshots/login_page.png")
+
+        # Type username
+        username_input = page.locator('#username')
+        _human_type(page, username_input, "tomsmith")
+        page.wait_for_timeout(random.randint(400, 800))
+
+        # Tab to password (like a real user)
+        page.keyboard.press("Tab")
+        page.wait_for_timeout(random.randint(200, 500))
+
+        # Type password
+        password_input = page.locator('#password')
+        _human_type(page, password_input, "SuperSecretPassword!")
+        page.wait_for_timeout(random.randint(500, 1000))
+
+        # Click login button
+        login_btn = page.locator('button[type="submit"], .radius')
+        box = login_btn.bounding_box()
+        if box:
+            x_off = random.randint(-int(box["width"] * 0.15), int(box["width"] * 0.15))
+            y_off = random.randint(-int(box["height"] * 0.15), int(box["height"] * 0.15))
+            login_btn.click(position={"x": box["width"] / 2 + x_off, "y": box["height"] / 2 + y_off})
+        else:
+            login_btn.click()
+
+        page.wait_for_timeout(3000)
+        content = page.content()
+        page.screenshot(path="tests/screenshots/login_result.png")
+
+        assert "Secure Area" in content or "You logged into" in content, \
+            "Login failed — expected secure area page"
+        print("✅ Login simulation: successfully logged in")
+
+
+@pytest.mark.skipif(True, reason="Manual E2E test — run explicitly")
+def test_multi_page_navigation():
+    """Multi-page navigation — browse across several pages with scroll and back.
+    Tests cookie persistence, history navigation, and behavioral consistency.
+    Uses Wikipedia for stable multi-page content.
+    """
+    with _launch_browser() as browser:
+        page = browser.new_page()
+
+        # Page 1: Wikipedia main page
+        page.goto("https://en.wikipedia.org/wiki/Main_Page", wait_until="domcontentloaded")
+        page.wait_for_timeout(random.randint(2000, 3000))
+        page.mouse.wheel(0, random.randint(200, 400))
+        page.wait_for_timeout(random.randint(1000, 2000))
+
+        # Click a content link
+        link = page.locator('#mp-tfa a').first
+        link_text = link.text_content()
+        link.click()
+        page.wait_for_timeout(random.randint(2000, 4000))
+
+        # Page 2: article page — scroll and read
+        page.mouse.wheel(0, random.randint(300, 600))
+        page.wait_for_timeout(random.randint(1500, 3000))
+        page.mouse.wheel(0, random.randint(200, 500))
+        page.wait_for_timeout(random.randint(1000, 2000))
+
+        article_title = page.title()
+        page.screenshot(path="tests/screenshots/wiki_article.png")
+
+        # Navigate back
+        page.go_back()
+        page.wait_for_timeout(random.randint(1500, 2500))
+
+        assert "Wikipedia" in page.title(), "Back navigation failed"
+
+        # Navigate to search
+        search_box = page.locator('#searchInput, input[name="search"]').first
+        _human_type(page, search_box, "Python programming")
+        page.wait_for_timeout(random.randint(500, 1000))
+        page.keyboard.press("Enter")
+        page.wait_for_timeout(random.randint(3000, 5000))
+
+        content = page.content()
+        page.screenshot(path="tests/screenshots/wiki_search.png")
+
+        assert "Python" in page.title() or "python" in content.lower(), \
+            "Wikipedia search navigation failed"
+        print(f"✅ Multi-page navigation: Main → {article_title[:30]} → Back → Search OK")

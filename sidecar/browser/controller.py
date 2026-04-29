@@ -222,6 +222,9 @@ class BrowserController:
         kwargs = {
             "headless": headless,
             "humanize": True,
+            "os": {"Linux": "linux", "Darwin": "macos", "Windows": "windows"}.get(
+                platform.system(), "linux"
+            ),
             "geoip": False,
             "block_webrtc": True,
             "enable_cache": True,

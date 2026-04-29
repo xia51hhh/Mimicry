@@ -13,6 +13,7 @@ from typing import Any
 from loguru import logger
 from browser.controller import BrowserController, SessionManager
 from engine.action_map import to_backend
+from engine.executor_state import ExecutorState
 
 # Sandbox directory for file outputs (screenshots, exports)
 _SANDBOX_DIR = os.path.abspath(os.getcwd())
@@ -114,6 +115,7 @@ class WorkflowExecutor:
         self._humanize = humanize
         self._delay_multiplier = max(0.0, delay_multiplier)
         self._ctx = ExecutionContext()
+        self._state = ExecutorState()
         self.progress_callback: callable | None = None
         self.log_callback: callable | None = None
 
@@ -257,6 +259,7 @@ class WorkflowExecutor:
             if isinstance(n, dict)
         ]
         self._ctx = ExecutionContext()
+        self._state = ExecutorState()
         self._ctx.total_steps = self._count_nodes(nodes)
         self._ctx.running = True
         logger.info(f"Executing workflow: {workflow_json.get('name', 'unnamed')} ({len(nodes)} top-level nodes)")
@@ -272,8 +275,13 @@ class WorkflowExecutor:
             logger.error(f"Workflow failed: {e}")
             return {"success": False, **self._ctx.status()}
 
+    @property
+    def state(self) -> ExecutorState:
+        return self._state
+
     def stop(self):
         self._ctx.running = False
+        self._state.resume()  # unblock pause gate so loop can exit
 
     def _emit_log(self, level: str, message: str, node_id: str | None = None):
         if self.log_callback:
@@ -352,6 +360,29 @@ class WorkflowExecutor:
                 "status": "running",
             })
 
+        # ── Pause gate ──
+        self._state.current_node_id = node.get("id")
+        self._state.current_action = action
+        self._state.wait_if_paused()
+        if not self._ctx.running:
+            return
+
+        # ── Breakpoint check ──
+        node_id = node.get("id", "")
+        if node_id and self._state.hit_breakpoint(node_id):
+            self._emit_log("info", f"Breakpoint hit: {node_id}", node_id)
+            self._state.pause()
+            self._state.wait_if_paused()
+            if not self._ctx.running:
+                return
+
+        # ── Drain inject queue ──
+        for injected in self._state.drain_inject_queue():
+            self._emit_log("info", f"Injecting: {injected.get('action', '?')}", node_id)
+            self._execute_action(self._normalize_node(injected))
+            if not self._ctx.running:
+                return
+
         last_error: Exception | None = None
         attempts = 1 + retry_count
         for attempt in range(attempts):
@@ -367,6 +398,7 @@ class WorkflowExecutor:
                 self._emit_log("info", f"Completed: {action}", node.get("id"))
                 if ntype == "action":
                     self._human_delay(action)
+                self._state.step_tick()
                 return  # success
             except Exception as e:
                 last_error = e

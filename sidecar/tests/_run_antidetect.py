@@ -17,6 +17,9 @@ from tests.test_google_search import (
     test_browserscan_fingerprint,
     test_incolumitas_bot_detect,
     test_creepjs_fingerprint,
+    test_form_submission,
+    test_login_simulation,
+    test_multi_page_navigation,
 )
 
 tests = [
@@ -27,6 +30,9 @@ tests = [
     ('BrowserScan', test_browserscan_fingerprint),
     ('Incolumitas Bot Detect', test_incolumitas_bot_detect),
     ('CreepJS', test_creepjs_fingerprint),
+    ('Form Submission', test_form_submission),
+    ('Login Simulation', test_login_simulation),
+    ('Multi-Page Navigation', test_multi_page_navigation),
 ]
 
 results = []

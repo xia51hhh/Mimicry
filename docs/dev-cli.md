@@ -2,7 +2,42 @@
 
 ## 概述
 
-`dev_cli.py` 是 Mimicry 的开发调试命令行工具，允许直接操控 sidecar 组件（浏览器、工作流引擎、RPC），无需启动 Tauri 前端。
+Mimicry 提供两套 CLI 工具：
+
+| 工具 | 入口 | 用途 |
+|------|------|------|
+| **`cli.py`** (新) | `python cli.py <command>` | 生产级 CLI + Daemon 架构，LLM Agent 首选 |
+| **`dev_cli.py`** (旧) | `python dev_cli.py <command>` | 开发调试，交互式 REPL |
+
+### 新 CLI 架构 (`cli.py`)
+
+`cli.py` 是基于 Daemon + UDS Socket 的生产级 CLI。详见 [`sidecar/SKILL.md`](../sidecar/SKILL.md)。
+
+```bash
+mimicry daemon start       # 启动守护进程
+mimicry launch             # 启动浏览器
+mimicry navigate <url>     # 导航
+mimicry click <selector>   # 点击
+mimicry type <sel> <text>  # 输入
+mimicry eval <js>          # 执行 JS
+mimicry screenshot [path]  # 截图
+mimicry pause / resume     # 暂停/恢复工作流
+mimicry step [N]           # 单步执行
+mimicry inject '<json>'    # 运行时注入
+mimicry breakpoint add <id># 断点
+mimicry --mcp              # MCP 模式（52 个工具）
+```
+
+三种运行模式：
+1. **CLI + Daemon**: `cli.py` → UDS socket → `daemon.py` → Browser
+2. **MCP Server**: `cli.py --mcp` → stdio → LLM Client (Cursor/Claude Desktop)
+3. **Tauri Sidecar**: `main.py` → stdio JSON-RPC → Tauri 前端（原模式）
+
+---
+
+### 旧版 Dev CLI (`dev_cli.py`)
+
+`dev_cli.py` 是开发调试命令行工具，允许直接操控 sidecar 组件（浏览器、工作流引擎、RPC），无需启动 Tauri 前端。
 
 ## 安装 & 启动
 
