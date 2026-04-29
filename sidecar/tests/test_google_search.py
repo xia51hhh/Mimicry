@@ -176,3 +176,79 @@ def test_browserscan_fingerprint():
         except Exception:
             print("📊 BrowserScan score: (could not extract, check screenshot)")
         print("✅ BrowserScan fingerprint test completed (check screenshot)")
+
+
+@pytest.mark.skipif(True, reason="Manual E2E test — run explicitly")
+def test_incolumitas_bot_detect():
+    """bot.incolumitas.com — behavioral bot classification + fingerprint tests.
+    Tests behavioral score (0=bot, 1=human) and static fingerprint detection.
+    """
+    with _launch_browser() as browser:
+        page = browser.new_page()
+        page.goto("https://bot.incolumitas.com/", wait_until="domcontentloaded")
+        page.wait_for_timeout(3000)
+
+        # Perform natural browsing behavior for behavioral score
+        # Move mouse around, scroll, hover — to generate behavioral signals
+        page.mouse.move(random.randint(100, 500), random.randint(100, 300))
+        page.wait_for_timeout(random.randint(800, 1500))
+        page.mouse.move(random.randint(200, 600), random.randint(200, 400))
+        page.wait_for_timeout(random.randint(500, 1000))
+        page.mouse.wheel(0, random.randint(200, 500))
+        page.wait_for_timeout(random.randint(1000, 2000))
+        page.mouse.move(random.randint(300, 700), random.randint(100, 350))
+        page.wait_for_timeout(random.randint(600, 1200))
+        page.mouse.wheel(0, random.randint(100, 300))
+
+        # Wait for behavioral score to compute (updates at 1.5s, 4s, 7s, 10s, 15s)
+        page.wait_for_timeout(12000)
+
+        content = page.content()
+        page.screenshot(path="tests/screenshots/incolumitas_bot.png", full_page=True)
+
+        # Check new detection tests JSON
+        new_tests_ok = '"puppeteerEvaluationScript": "OK"' in content \
+            or '"webdriverPresent": "OK"' in content
+        if new_tests_ok:
+            print("📊 Incolumitas new detection tests: key checks OK")
+
+        # Try to extract behavioral score
+        try:
+            score_el = page.locator('#behavioral-score, [id*="behavioral"]').first
+            score_text = score_el.text_content(timeout=5000)
+            print(f"📊 Behavioral score: {score_text}")
+        except Exception:
+            print("📊 Behavioral score: (check screenshot)")
+
+        print("✅ Incolumitas bot detection test completed (check screenshot)")
+
+
+@pytest.mark.skipif(True, reason="Manual E2E test — run explicitly")
+def test_creepjs_fingerprint():
+    """CreepJS — advanced fingerprint consistency analysis.
+    Checks for fingerprint lies, contradictions, and suspicious patterns.
+    """
+    with _launch_browser() as browser:
+        page = browser.new_page()
+        page.goto("https://abrahamjuliot.github.io/creepjs/", wait_until="domcontentloaded")
+
+        # CreepJS runs many async tests, needs time
+        page.wait_for_timeout(15000)
+
+        content = page.content()
+        page.screenshot(path="tests/screenshots/creepjs_fingerprint.png", full_page=True)
+
+        # Check for trust score or lies detected
+        has_lies = "lies" in content.lower() and "detected" in content.lower()
+        if has_lies:
+            print("⚠️ CreepJS detected fingerprint lies (check screenshot for details)")
+
+        # Try to get FP ID (indicates test completed)
+        try:
+            fp_el = page.locator('[class*="fp-id"], .visitor-id, #fp-id').first
+            fp_text = fp_el.text_content(timeout=5000)
+            print(f"📊 CreepJS FP ID: {fp_text[:20]}...")
+        except Exception:
+            print("📊 CreepJS FP ID: (check screenshot)")
+
+        print("✅ CreepJS fingerprint test completed (check screenshot)")

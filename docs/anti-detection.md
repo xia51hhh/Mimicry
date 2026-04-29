@@ -269,7 +269,7 @@ Stop, LoopBreakpoint, WaitConnections, Delay, Log, Comment, Fail, UploadFile
 | 站点 | 结果 | 测试方法 | 详情 |
 |------|------|---------|------|
 | Google | ✅ PASS | 逐字符输入 "zlib python" | 无 CAPTCHA，搜索结果正常返回 |
-| Bing | ⚠️ 不稳定 | 逐字符输入 "playwright automation" | 间歇触发 "One last step" 复选框（见下文分析） |
+| Bing | ✅ PASS | 逐字符输入 "zlib compression library" | 需中性搜索词 + 自然鼠标行为（见下文） |
 | DuckDuckGo | ✅ PASS | 逐字符输入 "camoufox browser" | 搜索结果正常 |
 
 ### 反机器人/指纹检测
@@ -282,7 +282,7 @@ Stop, LoopBreakpoint, WaitConnections, Delay, Log, Comment, Fail, UploadFile
 | [BrowserLeaks WebRTC](https://browserleaks.com/webrtc) | ✅ PASS | 无 IP 泄露 |
 | [PixelScan](https://pixelscan.net/) | ✅ PASS | 指纹一致性通过 |
 
-### Bing 不稳定原因分析
+### Bing 检测机制分析
 
 A/B 对比实验结果（同一 IP 连续 3 次测试）：
 
@@ -292,10 +292,22 @@ A/B 对比实验结果（同一 IP 连续 3 次测试）：
 | 无 os + `geoip=False`（当前配置） | ✅ | 第二次请求通过 |
 | `os="windows"` + `geoip=False` | ❌ | 第三次请求触发 |
 
-- Bing 的挑战由 **IP 频率 + IP 声誉** 共同决定，非确定性
-- `os="windows"` 在 Linux 上反而增加检测概率（Canvas/字体不一致）
+**已定位的三重触发因素**：
+
+1. **搜索词内容风控** — 包含自动化关键词（"playwright"、"selenium"、"automation"）会大幅增加触发概率
+2. **鼠标精度检测** — `element.click()` 默认精确命中元素几何中心 = 机器人特征。需使用 ±20% 随机偏移
+3. **打字节奏分析** — 均匀间隔被识别为非人类。需 80-200ms 键间延迟 + 50-180ms 额外抖动
+
+**解决方案（已实施）**：
+- 搜索词使用中性技术词汇（"zlib compression library"）
+- 点击前先随机移动鼠标到页面中间区域
+- 点击使用 `position` 参数添加随机偏移
+- 打字间隔增大并增加更多随机性
+
+**仍可能触发的情况**：
 - 数据中心 IP 连续多次请求会累积风险评分
-- **住宅代理 + 请求间隔 15s+** 可显著改善通过率
+- `os="windows"` 在 Linux 上导致 Canvas/字体不一致
+- **住宅代理 + 请求间隔 15s+** 可进一步改善
 
 ### Cloudflare 类型说明
 
@@ -306,15 +318,18 @@ A/B 对比实验结果（同一 IP 连续 3 次测试）：
 
 Managed Challenge 在数据中心 IP 上无法绕过，需要住宅代理。
 
-### 自动化测试命令
-```bash
-cd sidecar
-# 运行全部反检测测试（默认 CI 跳过，需本地运行）
-pytest tests/test_google_search.py -v -s
-```
+### 人类行为模拟要点
 
-### 截图存储位置
-`sidecar/tests/screenshots/`
+在执行搜索/表单填写等交互时，必须遵循以下规则避免行为检测：
+
+| 维度 | 错误做法 | 正确做法 |
+|------|---------|---------|
+| 鼠标点击 | `element.click()`（精确中心） | `click(position={x: center±20%, y: center±20%})` |
+| 打字前 | 直接开始输入 | 先随机鼠标移动 → 等待 300-600ms → 再点击输入框 |
+| 打字速度 | 固定间隔或 `fill()` | 每字符 80-200ms + 字符间 sleep 50-180ms |
+| 搜索词 | 自动化/爬虫相关词汇 | 中性技术词汇或日常用语 |
+| 页面等待 | 固定 `waitForTimeout(3000)` | 随机区间 `randint(3000, 5000)` |
+| 提交前 | 立即按 Enter | 等待 800-1500ms 模拟思考 |
 
 ## 注意事项
 
@@ -328,3 +343,13 @@ pytest tests/test_google_search.py -v -s
 8. **输入模式**: 敏感站点（登录/支付）建议保持逐字符输入模式
 9. **JS 注入**: 所有注入全局变量必须使用 `Symbol.for()` 存储，禁止使用可枚举属性
 10. **console.log**: 注入代码禁止输出 console.log（CDP 可监控）
+
+### 自动化测试命令
+```bash
+cd sidecar
+# 运行全部反检测测试（默认 CI 跳过，需本地运行）
+pytest tests/test_google_search.py -v -s
+```
+
+### 截图存储位置
+`sidecar/tests/screenshots/`
