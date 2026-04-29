@@ -6,10 +6,20 @@ from loguru import logger
 # JavaScript injected into pages to capture user interactions
 RECORDER_JS = """
 (() => {
-  if (window.__mimicryRecorder) return;
-  window.__mimicryRecorder = true;
+  const _k = Symbol.for('_mr');
+  if (window[_k]) return;
+  window[_k] = true;
 
   const events = [];
+
+  // Expose drain function via a non-enumerable Symbol property
+  const _ek = Symbol.for('_me');
+  Object.defineProperty(window, _ek, {
+    value: () => events.splice(0),
+    writable: false,
+    enumerable: false,
+    configurable: false,
+  });
 
   // Generate the best single-segment selector for an element within its root
   const bestSegment = (el) => {
@@ -81,8 +91,6 @@ RECORDER_JS = """
   const emit = (type, detail) => {
     const event = { type, ...detail, timestamp: Date.now(), url: location.href };
     events.push(event);
-    // Store for polling
-    window.__mimicryEvents = events;
   };
 
   // Click
@@ -160,7 +168,6 @@ RECORDER_JS = """
     emit('press_key', { selector: sel, key });
   }, true);
 
-  console.log('[Mimicry] Recorder injected');
 })();
 """
 
@@ -354,9 +361,10 @@ class RecordingEngine:
         for page in ctx.pages:
             page_id = id(page)
             try:
-                # Atomically drain events from browser (splice returns removed items)
+                # Atomically drain events via Symbol-keyed function (not enumerable)
                 raw = page.evaluate("""() => {
-                    return (window.__mimicryEvents || []).splice(0);
+                    const fn = window[Symbol.for('_me')];
+                    return fn ? fn() : [];
                 }""")
                 if raw:
                     for evt in raw:
@@ -370,7 +378,8 @@ class RecordingEngine:
                     continue
                 try:
                     raw = frame.evaluate("""() => {
-                        return (window.__mimicryEvents || []).splice(0);
+                        const fn = window[Symbol.for('_me')];
+                        return fn ? fn() : [];
                     }""")
                     if raw:
                         for evt in raw:

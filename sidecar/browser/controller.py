@@ -222,8 +222,7 @@ class BrowserController:
         kwargs = {
             "headless": headless,
             "humanize": True,
-            "os": "windows",
-            "geoip": True,
+            "geoip": False,
             "block_webrtc": True,
             "enable_cache": True,
             "disable_coop": True,
@@ -261,6 +260,12 @@ class BrowserController:
                     kwargs["humanize"] = bc["humanize"]
                 if bc.get("locale"):
                     kwargs["locale"] = bc["locale"]
+                if bc.get("timezone"):
+                    # timezone goes into Camoufox config dict
+                    kwargs.setdefault("config", {})
+                    kwargs["config"]["timezone"] = bc["timezone"]
+                if bc.get("os"):
+                    kwargs["os"] = bc["os"]
                 if bc.get("fonts"):
                     kwargs["fonts"] = bc["fonts"]
                 if bc.get("addons"):
