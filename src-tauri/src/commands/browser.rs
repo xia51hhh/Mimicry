@@ -321,7 +321,13 @@ pub async fn workflow_execute(sidecar: State<'_, Mutex<Sidecar>>, workflow: serd
     let sid = session_id.unwrap_or_else(|| "default".into());
     let h = humanize.unwrap_or(true);
     let dm = delay_multiplier.unwrap_or(1.0);
-    sidecar_call(sidecar, "workflow.execute", Some(serde_json::json!({"workflow": workflow, "session_id": sid, "humanize": h, "delay_multiplier": dm}))).await
+
+    // Transform: Canonical → Backend (PascalCase → snake_case, extract children)
+    let canonical: crate::transform::CanonicalWorkflow = serde_json::from_value(workflow)?;
+    let backend = crate::transform::canonical_to_backend(&canonical, &sid)?;
+    let backend_json = serde_json::to_value(&backend)?;
+
+    sidecar_call(sidecar, "workflow.execute", Some(serde_json::json!({"workflow": backend_json, "session_id": sid, "humanize": h, "delay_multiplier": dm}))).await
 }
 
 #[tauri::command]

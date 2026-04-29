@@ -236,33 +236,42 @@ export const useWorkflowStore = defineStore("workflow", () => {
 
   const jsonText = computed(() => JSON.stringify(toJSON(), null, 2));
 
-  function applyJsonText(text: string): { success: boolean; error?: string } {
+  async function applyJsonText(text: string): Promise<{ success: boolean; error?: string }> {
     try {
       const parsed = JSON.parse(text);
       if (!parsed || typeof parsed !== "object") {
         return { success: false, error: "Workflow JSON must be an object" };
       }
-      const canonical = migrateLegacyWorkflow({
-        id: parsed.id ?? id.value,
-        name: parsed.name ?? name.value,
-        nodes: Array.isArray(parsed.nodes) ? parsed.nodes : [],
-        edges: Array.isArray(parsed.edges) ? parsed.edges : [],
-      });
+
+      // Route through Rust transform layer for multi-format support
+      let canonical: { id?: string; name: string; nodes: unknown[]; edges: unknown[] };
+      try {
+        canonical = await invoke<typeof canonical>('workflow_transform_import', { json: parsed });
+      } catch (e) {
+        console.warn('[workflow] Rust transform failed, using frontend fallback:', e);
+        // Fallback to frontend migration for robustness
+        canonical = migrateLegacyWorkflow({
+          id: parsed.id ?? id.value,
+          name: parsed.name ?? name.value,
+          nodes: Array.isArray(parsed.nodes) ? parsed.nodes : [],
+          edges: Array.isArray(parsed.edges) ? parsed.edges : [],
+        });
+      }
 
       const existingPositions = new Map(
         nodes.value.map((n) => [n.id, n.position])
       );
 
-      const newNodes = canonical.nodes.map(canonicalNodeToVue).map((node) => ({
+      const newNodes = canonical.nodes.map((n) => canonicalNodeToVue(n as never)).map((node) => ({
         ...node,
         position: node.position || existingPositions.get(node.id) || { x: 0, y: 0 },
       }));
-      const newEdges = canonical.edges.map(canonicalEdgeToVue);
+      const newEdges = (canonical.edges ?? []).map((e) => canonicalEdgeToVue(e as never));
 
       pushSnapshot();
       nodes.value = newNodes;
       edges.value = newEdges;
-      if (parsed.name) name.value = canonical.name;
+      if (canonical.name) name.value = canonical.name;
 
       return { success: true };
     } catch (e) {

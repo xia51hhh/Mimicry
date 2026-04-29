@@ -4,6 +4,7 @@ mod commands;
 mod logger;
 mod error;
 pub mod workflow_validator;
+pub mod transform;
 
 pub use error::{AppError, AppResult};
 use ipc::sidecar::Sidecar;
@@ -119,8 +120,13 @@ pub fn run() {
             commands::workflow::workflow_delete,
             commands::workflow::workflow_export,
             commands::workflow::workflow_import,
+            commands::workflow::workflow_transform_import,
+            commands::workflow::workflow_export_compact,
+            commands::workflow::workflow_detect_format,
             commands::file_ops::file_read,
             commands::file_ops::file_write,
+            commands::file_ops::file_import,
+            commands::file_ops::file_export_compact,
             commands::file_ops::recent_files_add,
             commands::file_ops::recent_files_list,
             commands::file_ops::recent_files_remove,

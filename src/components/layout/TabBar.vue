@@ -140,9 +140,10 @@ interface MenuItem {
 
 const menuItems: MenuItem[] = [
   { label: t('app.title'), separator: true },
-  { label: t('fileMenu.open'), shortcut: 'Ctrl+O', action: () => fileOps.openFile() },
+  { label: t('fileMenu.open'), shortcut: 'Ctrl+O', action: () => fileOps.importFile() },
   { label: t('fileMenu.save'), shortcut: 'Ctrl+S', action: () => fileOps.saveFile() },
   { label: t('fileMenu.saveAs'), shortcut: 'Ctrl+Shift+S', action: () => fileOps.saveFileAs() },
+  { label: t('fileMenu.exportCompact'), action: () => fileOps.exportCompact() },
   { label: '', separator: true },
   { label: t('fileMenu.recentFiles'), submenu: true },
   { label: '', separator: true },

@@ -270,6 +270,7 @@
     "open": "Open File",
     "save": "Save",
     "saveAs": "Save As...",
+    "exportCompact": "Export Compact (LLM)",
     "recentFiles": "Recent Files",
     "clearRecent": "Clear Recent",
     "noRecent": "No recent files"

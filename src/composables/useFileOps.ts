@@ -16,6 +16,10 @@ const recentFiles = shallowRef<RecentFile[]>([])
 const lastError = ref<string | null>(null)
 
 const FILTERS = [{ name: 'Mimicry Workflow', extensions: ['mimicry.json'] }]
+const IMPORT_FILTERS = [
+  { name: 'Mimicry Workflow', extensions: ['mimicry.json', 'json'] },
+]
+const COMPACT_FILTERS = [{ name: 'Compact Workflow', extensions: ['compact.json', 'json'] }]
 
 export function useFileOps() {
   const workflow = useWorkflowStore()
@@ -73,6 +77,19 @@ export function useFileOps() {
     }
   }
 
+  /** Open any workflow file (Canonical / Compact / Recording / Legacy) via Rust transform. */
+  async function importFile(): Promise<boolean> {
+    try {
+      const path = await open({ filters: IMPORT_FILTERS, multiple: false, directory: false })
+      if (!path) return false
+      await readFileTransform(path as string)
+      return true
+    } catch (e) {
+      setError(`Import failed: ${e}`)
+      return false
+    }
+  }
+
   async function openRecentFile(path: string): Promise<boolean> {
     try {
       await readFile(path)
@@ -100,6 +117,27 @@ export function useFileOps() {
     await loadRecentFiles()
   }
 
+  /** Read any format via Rust auto-detect + transform to Canonical. */
+  async function readFileTransform(path: string) {
+    const data = await invoke<{ name?: string; nodes: unknown[]; edges: unknown[] }>('file_import', { path })
+    if (!data || !Array.isArray(data.nodes)) {
+      throw new Error('Invalid workflow file format')
+    }
+    workflow.fromJSON({
+      name: data.name,
+      nodes: data.nodes as never[],
+      edges: (data.edges ?? []) as never[],
+    })
+    currentFilePath.value = path
+
+    const displayName = data.name || path.split(/[\\/]/).pop() || 'Imported'
+    workspace.renameTab(workspace.activeTabId, displayName)
+
+    const fileName = path.split(/[\\/]/).pop() || displayName
+    await invoke('recent_files_add', { path, name: fileName })
+    await loadRecentFiles()
+  }
+
   async function writeFile(path: string) {
     const json = workflow.toJSON()
     await invoke('file_write', {
@@ -110,6 +148,23 @@ export function useFileOps() {
     const name = path.split(/[\\/]/).pop() || json.name
     await invoke('recent_files_add', { path, name })
     await loadRecentFiles()
+  }
+
+  /** Export current workflow as Compact format (LLM-friendly, no positions/edges). */
+  async function exportCompact(): Promise<boolean> {
+    try {
+      const path = await save({
+        filters: COMPACT_FILTERS,
+        defaultPath: `${workflow.name}.compact.json`,
+      })
+      if (!path) return false
+      const json = workflow.toJSON()
+      await invoke('file_export_compact', { path, workflow: json })
+      return true
+    } catch (e) {
+      setError(`Export Compact failed: ${e}`)
+      return false
+    }
   }
 
   async function removeRecent(path: string) {
@@ -142,6 +197,8 @@ export function useFileOps() {
     saveFile,
     saveFileAs,
     openFile,
+    importFile,
+    exportCompact,
     openRecentFile,
     removeRecent,
     clearRecent,

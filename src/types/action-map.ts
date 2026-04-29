@@ -53,10 +53,6 @@ export const BACKEND_TO_FRONTEND: Record<string, string> = Object.fromEntries(
   Object.entries(FRONTEND_TO_BACKEND).map(([k, v]) => [v, k])
 );
 
-export function toBackend(name: string): string {
-  return FRONTEND_TO_BACKEND[name] ?? name;
-}
-
 export function toFrontend(name: string): string {
   return BACKEND_TO_FRONTEND[name] ?? name;
 }

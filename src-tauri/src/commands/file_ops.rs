@@ -4,6 +4,19 @@ use tokio::sync::Mutex;
 use crate::db;
 use crate::AppError;
 
+/// Validate that a file path ends with one of the allowed extensions.
+fn validate_file_extension(path: &str, allowed: &[&str]) -> Result<(), AppError> {
+    let lower = path.to_lowercase();
+    if allowed.iter().any(|ext| lower.ends_with(&format!(".{ext}"))) {
+        Ok(())
+    } else {
+        Err(AppError::Transform(format!(
+            "Invalid file extension. Expected: {}",
+            allowed.join(", ")
+        )))
+    }
+}
+
 #[derive(serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct WorkspaceFile {
@@ -21,6 +34,47 @@ pub async fn file_read(path: String) -> Result<WorkspaceFile, AppError> {
     let wf: WorkspaceFile = serde_json::from_str(&content)
         .map_err(|e| AppError::Sidecar(format!("Invalid JSON: {e}")))?;
     Ok(wf)
+}
+
+/// Read any workflow file, auto-detect format, and return Canonical.
+/// Supports Canonical, Compact, Recording, Legacy formats.
+#[tauri::command]
+pub async fn file_import(path: String) -> Result<serde_json::Value, AppError> {
+    use crate::transform::*;
+
+    validate_file_extension(&path, &["json", "mimicry.json"])?;
+    let content = tokio::fs::read_to_string(&path).await?;
+    let raw: serde_json::Value = serde_json::from_str(&content)?;
+
+    let fmt = detect_format(&raw);
+    let canonical = match fmt {
+        WorkflowFormat::Canonical => serde_json::from_value::<CanonicalWorkflow>(raw)?,
+        WorkflowFormat::Compact | WorkflowFormat::Recording => {
+            let compact: CompactWorkflow = serde_json::from_value(raw)?;
+            compact_to_canonical(&compact)?
+        }
+        WorkflowFormat::Legacy => legacy_to_canonical(&raw)?,
+        WorkflowFormat::Unknown => {
+            return Err(AppError::Transform(
+                "Unknown workflow format. Expected Canonical, Compact, Recording, or Legacy.".into(),
+            ));
+        }
+    };
+
+    Ok(serde_json::to_value(&canonical)?)
+}
+
+/// Export a Canonical workflow to Compact format and write to disk.
+#[tauri::command]
+pub async fn file_export_compact(path: String, workflow: serde_json::Value) -> Result<(), AppError> {
+    use crate::transform::*;
+
+    validate_file_extension(&path, &["json", "compact.json"])?;
+    let canonical: CanonicalWorkflow = serde_json::from_value(workflow)?;
+    let compact = canonical_to_compact(&canonical)?;
+    let json = serde_json::to_string_pretty(&compact)?;
+    tokio::fs::write(&path, json).await?;
+    Ok(())
 }
 
 /// Write a .mimicry.json workspace file to disk

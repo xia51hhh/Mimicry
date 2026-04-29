@@ -270,6 +270,7 @@
     "open": "打开文件",
     "save": "保存",
     "saveAs": "另存为...",
+    "exportCompact": "导出精简格式 (LLM)",
     "recentFiles": "最近文件",
     "clearRecent": "清除最近记录",
     "noRecent": "暂无最近文件"
