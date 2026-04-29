@@ -262,25 +262,39 @@ Stop, LoopBreakpoint, WaitConnections, Delay, Log, Comment, Fail, UploadFile
 
 ## 检测站点测试结果
 
+> 测试环境：AWS Tokyo EC2（数据中心 IP），Linux x86_64，Camoufox v0.4.11
+
 ### 搜索引擎
 
-| 检测站点 | 结果 | 测试方法 | 详情 |
-|----------|------|---------|------|
-| Google | ✅ PASS | 逐字符输入搜索 "zlib python" | 无 CAPTCHA，搜索结果正常返回 |
-| Bing | ✅ PASS | 逐字符输入搜索 "playwright automation" | 搜索结果正常 |
-| DuckDuckGo | ✅ PASS | 逐字符输入搜索 "mimicry browser automation" | 搜索结果正常 |
+| 站点 | 结果 | 测试方法 | 详情 |
+|------|------|---------|------|
+| Google | ✅ PASS | 逐字符输入 "zlib python" | 无 CAPTCHA，搜索结果正常返回 |
+| Bing | ❌ FAIL | 逐字符输入 "playwright automation" | 触发 "One last step — Verify you are human" 复选框 |
+| DuckDuckGo | ✅ PASS | 逐字符输入 "camoufox browser" | 搜索结果正常 |
 
 ### 反机器人/指纹检测
 
-| 检测站点 | 结果 | 详情 |
-|----------|------|------|
-| [Cloudflare Turnstile](https://peet.ws/turnstile-test/) | ✅ PASS | 页面正常加载，无拦截 |
+| 站点 | 结果 | 详情 |
+|------|------|------|
+| [Cloudflare Turnstile](https://nopecha.com/demo/cloudflare) | ❌ FAIL | Turnstile 复选框挑战未自动通过 |
 | [BrowserScan](https://www.browserscan.net/) | ✅ PASS | 指纹扫描完成（截图已保存） |
 | [SannySoft](https://bot.sannysoft.com/) | ✅ PASS | 0 项红色标记 |
 | [BrowserLeaks WebRTC](https://browserleaks.com/webrtc) | ✅ PASS | 无 IP 泄露 |
 | [PixelScan](https://pixelscan.net/) | ✅ PASS | 指纹一致性通过 |
 
-> 测试环境：AWS Tokyo EC2 (数据中心 IP)，Linux x86_64，Camoufox v0.4.11
+### 失败原因分析
+
+**Bing CAPTCHA**:
+- Bing 使用类似 Cloudflare 的挑战机制
+- 数据中心 IP 是主要触发因素（住宅 IP 大概率通过）
+- 与 Camoufox 指纹无关 — 同 IP 下 Edge 浏览器也会触发
+- 挑战类型为交互式复选框，无法自动绕过
+
+**Cloudflare Turnstile**:
+- Turnstile 需要点击复选框并通过 JS 行为分析验证
+- Camoufox（Firefox 内核）在 Turnstile 上的通过率低于 Chromium
+- 数据中心 IP 大幅增加触发概率
+- 搭配住宅代理 + 浏览器 Profile 预热可改善
 
 ### 自动化测试命令
 ```bash

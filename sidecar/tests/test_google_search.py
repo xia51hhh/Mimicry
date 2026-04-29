@@ -62,7 +62,7 @@ def test_google_search_via_typing():
 
 @pytest.mark.skipif(True, reason="Manual E2E test — run explicitly")
 def test_bing_search():
-    """Bing search — less aggressive than Google but still validates basics."""
+    """Bing search — validates no CAPTCHA/challenge on search."""
     with _launch_browser() as browser:
         page = browser.new_page()
         page.goto("https://www.bing.com", wait_until="domcontentloaded")
@@ -72,12 +72,26 @@ def test_bing_search():
         _human_type(page, search_input, "playwright browser automation")
         page.wait_for_timeout(800)
         page.keyboard.press("Enter")
-        page.wait_for_timeout(3000)
+
+        # Wait for potential challenge to auto-resolve or results to load
+        page.wait_for_timeout(8000)
 
         content = page.content()
         page.screenshot(path="tests/screenshots/bing_search_result.png")
 
-        # Bing bot detection typically redirects or shows empty results
+        # Detect Bing challenge page
+        challenge_markers = ["one last step", "solve the challenge", "verifying"]
+        is_challenged = any(m in content.lower() for m in challenge_markers)
+        if is_challenged:
+            # Wait extra time for auto-resolution
+            page.wait_for_timeout(10000)
+            content = page.content()
+            page.screenshot(path="tests/screenshots/bing_search_result_retry.png")
+            is_challenged = any(m in content.lower() for m in challenge_markers)
+
+        if is_challenged:
+            pytest.fail("Bing CAPTCHA/challenge triggered — 'One last step' page shown")
+
         assert "playwright" in content.lower() or "automation" in content.lower(), \
             "Bing search results did not load — possible detection"
         print("✅ Bing search passed")
@@ -110,16 +124,46 @@ def test_cloudflare_turnstile():
     with _launch_browser() as browser:
         page = browser.new_page()
         page.goto("https://nopecha.com/demo/cloudflare", wait_until="domcontentloaded")
-        page.wait_for_timeout(8000)  # Turnstile needs time
+        page.wait_for_timeout(5000)
 
         content = page.content()
+
+        # Detect Turnstile challenge
+        challenge_markers = [
+            "verify you are human",
+            "performing security verification",
+            "checking if the site connection is secure",
+        ]
+        is_challenged = any(m in content.lower() for m in challenge_markers)
+
+        if is_challenged:
+            # Try clicking the Turnstile checkbox if visible
+            try:
+                turnstile_frame = page.frame_locator('iframe[src*="challenges.cloudflare.com"]')
+                checkbox = turnstile_frame.locator('input[type="checkbox"], .cb-i')
+                if checkbox.count() > 0:
+                    checkbox.first.click()
+                    page.wait_for_timeout(8000)
+                    content = page.content()
+            except Exception:
+                pass
+
+            # Wait more for potential auto-resolution
+            page.wait_for_timeout(8000)
+            content = page.content()
+
         page.screenshot(path="tests/screenshots/cloudflare_turnstile.png")
 
-        # Check if challenge was solved (success indicator varies by site)
+        # Re-check after waiting
+        is_challenged = any(m in content.lower() for m in challenge_markers)
         is_blocked = "blocked" in content.lower() and "ray id" in content.lower()
+
         if is_blocked:
-            pytest.fail("Cloudflare blocked the request")
-        print("✅ Cloudflare Turnstile page loaded (check screenshot for challenge status)")
+            pytest.fail("Cloudflare blocked the request (Ray ID page)")
+        if is_challenged:
+            pytest.fail("Cloudflare Turnstile challenge not auto-resolved")
+
+        print("✅ Cloudflare Turnstile passed")
 
 
 @pytest.mark.skipif(True, reason="Manual E2E test — run explicitly")
