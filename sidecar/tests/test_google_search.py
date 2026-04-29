@@ -22,12 +22,19 @@ def _launch_browser():
 
 
 def _human_type(page, locator, text):
-    """Type text character by character with random delays."""
-    locator.click()
-    page.wait_for_timeout(300)
+    """Type text character by character with random delays and human-like click."""
+    # Click with slight offset from center to mimic real user
+    box = locator.bounding_box()
+    if box:
+        x_offset = random.randint(-int(box["width"] * 0.2), int(box["width"] * 0.2))
+        y_offset = random.randint(-int(box["height"] * 0.2), int(box["height"] * 0.2))
+        locator.click(position={"x": box["width"] / 2 + x_offset, "y": box["height"] / 2 + y_offset})
+    else:
+        locator.click()
+    page.wait_for_timeout(random.randint(300, 600))
     for char in text:
-        locator.type(char, delay=random.randint(50, 150))
-        time.sleep(random.uniform(0.03, 0.12))
+        locator.type(char, delay=random.randint(80, 200))
+        time.sleep(random.uniform(0.05, 0.18))
 
 
 @pytest.mark.skipif(True, reason="Manual E2E test — run explicitly")
@@ -66,11 +73,15 @@ def test_bing_search():
     with _launch_browser() as browser:
         page = browser.new_page()
         page.goto("https://www.bing.com", wait_until="domcontentloaded")
-        page.wait_for_timeout(3000)
+        page.wait_for_timeout(random.randint(3000, 5000))
+
+        # Move mouse naturally before interacting
+        page.mouse.move(random.randint(200, 600), random.randint(150, 400))
+        page.wait_for_timeout(random.randint(500, 1000))
 
         search_input = page.locator('#sb_form_q')
-        _human_type(page, search_input, "playwright browser automation")
-        page.wait_for_timeout(1000)
+        _human_type(page, search_input, "zlib compression library")
+        page.wait_for_timeout(random.randint(800, 1500))
         page.keyboard.press("Enter")
         page.wait_for_timeout(5000)
 
@@ -90,7 +101,7 @@ def test_bing_search():
         if is_challenged:
             pytest.fail("Bing CAPTCHA/challenge triggered — 'One last step' page shown")
 
-        assert "playwright" in content.lower() or "automation" in content.lower(), \
+        assert "zlib" in content.lower() or "compression" in content.lower(), \
             "Bing search results did not load — possible detection"
         print("✅ Bing search passed")
 
