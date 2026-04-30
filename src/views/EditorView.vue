@@ -32,6 +32,9 @@ onMounted(async () => {
   const result = await browser.checkCamoufox()
   if (!result.installed) {
     showCamoufoxSetup.value = true
+  } else {
+    // Silently check for updates in background
+    browser.checkCamoufoxUpdate()
   }
 })
 

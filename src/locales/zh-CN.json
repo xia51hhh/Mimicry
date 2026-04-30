@@ -319,7 +319,11 @@
     "status": "状态",
     "installed": "已安装",
     "notInstalledShort": "未安装",
-    "checking": "检测中..."
+    "checking": "检测中...",
+    "checkUpdate": "检查更新",
+    "updating": "更新中...",
+    "updateAvailable": "有新版本: v{version}",
+    "upToDate": "已是最新版本"
   },
   "profile": {
     "title": "浏览器配置",

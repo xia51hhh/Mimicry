@@ -1,0 +1,118 @@
+{
+  "name": "Demo: Google搜索GitHub → 进入Mimicry仓库",
+  "nodes": [
+    {
+      "id": "n1",
+      "kind": "action",
+      "action": "open",
+      "data": {
+        "url": "https://www.google.com"
+      }
+    },
+    {
+      "id": "n2",
+      "kind": "action",
+      "action": "wait_for_page",
+      "data": {
+        "state": "domcontentloaded",
+        "timeout": 30000
+      }
+    },
+    {
+      "id": "n3",
+      "kind": "action",
+      "action": "wait",
+      "data": {
+        "selector": "textarea[name='q']",
+        "timeout": "10s"
+      }
+    },
+    {
+      "id": "n4",
+      "kind": "action",
+      "action": "type",
+      "data": {
+        "selector": "textarea[name='q']",
+        "value": "github"
+      }
+    },
+    {
+      "id": "n5",
+      "kind": "action",
+      "action": "press_key",
+      "data": {
+        "selector": "textarea[name='q']",
+        "key": "Enter"
+      }
+    },
+    {
+      "id": "n6",
+      "kind": "action",
+      "action": "wait_for_page",
+      "data": {
+        "state": "domcontentloaded",
+        "timeout": 30000
+      }
+    },
+    {
+      "id": "n7",
+      "kind": "action",
+      "action": "wait",
+      "data": {
+        "selector": "#rso h3, #search h3, .g h3",
+        "timeout": "15s"
+      }
+    },
+    {
+      "id": "n8",
+      "kind": "action",
+      "action": "click",
+      "data": {
+        "selector": "#rso h3, #search h3, .g h3"
+      }
+    },
+    {
+      "id": "n9",
+      "kind": "action",
+      "action": "wait_for_page",
+      "data": {
+        "state": "domcontentloaded",
+        "timeout": 30000
+      }
+    },
+    {
+      "id": "n10",
+      "kind": "action",
+      "action": "open",
+      "data": {
+        "url": "https://github.com/xia51hhh/Mimicry"
+      }
+    },
+    {
+      "id": "n11",
+      "kind": "action",
+      "action": "wait_for_page",
+      "data": {
+        "state": "domcontentloaded",
+        "timeout": 30000
+      }
+    },
+    {
+      "id": "n12",
+      "kind": "action",
+      "action": "wait",
+      "data": {
+        "selector": "article, [data-testid='repository-container'], .repository-content, .Box-body, main",
+        "timeout": "10s"
+      }
+    },
+    {
+      "id": "n13",
+      "kind": "action",
+      "action": "screenshot",
+      "data": {
+        "path": "tests/screenshots/demo_google_github.png"
+      }
+    }
+  ]
+}

@@ -35,6 +35,12 @@ mimicry --mcp              # MCP 模式（52 个工具）
 
 ---
 
+### LLM 驱动与交互式调试
+
+针对基于 LLM 与 Agent 构建交互工作流的情况，请参阅专门的 **[LLM 交互式驱动与自动化开发指南](llm-interactive-guide.md)**，介绍如何结合 CLI 和 MCP 逐步调试浏览器。
+
+---
+
 ### 旧版 Dev CLI (`dev_cli.py`)
 
 `dev_cli.py` 是开发调试命令行工具，允许直接操控 sidecar 组件（浏览器、工作流引擎、RPC），无需启动 Tauri 前端。

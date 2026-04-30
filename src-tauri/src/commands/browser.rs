@@ -353,6 +353,16 @@ pub async fn camoufox_install(sidecar: State<'_, Mutex<Sidecar>>) -> Result<serd
 }
 
 #[tauri::command]
+pub async fn camoufox_check_update(sidecar: State<'_, Mutex<Sidecar>>) -> Result<serde_json::Value, AppError> {
+    sidecar_call(sidecar, "camoufox.check_update", None).await
+}
+
+#[tauri::command]
+pub async fn camoufox_update(sidecar: State<'_, Mutex<Sidecar>>) -> Result<serde_json::Value, AppError> {
+    sidecar_call(sidecar, "camoufox.update", None).await
+}
+
+#[tauri::command]
 pub fn workflow_validate(workflow: serde_json::Value) -> Result<serde_json::Value, AppError> {
     let diags = crate::workflow_validator::validate(&workflow);
     Ok(serde_json::to_value(&diags).unwrap_or_default())

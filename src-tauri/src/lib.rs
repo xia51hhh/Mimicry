@@ -112,6 +112,8 @@ pub fn run() {
             commands::browser::workflow_execution_status,
             commands::browser::camoufox_check,
             commands::browser::camoufox_install,
+            commands::browser::camoufox_check_update,
+            commands::browser::camoufox_update,
             commands::browser::workflow_validate,
             commands::workflow::workflow_list,
             commands::workflow::workflow_get,

@@ -14,6 +14,7 @@ const showCamoufoxSetup = ref(false)
 const appVersion = ref('')
 const updateChecking = ref(false)
 const updateResult = ref<string | null>(null)
+const browserUpdateChecking = ref(false)
 
 const checkForUpdate = inject<(manual?: boolean) => Promise<boolean>>('checkForUpdate')
 
@@ -27,6 +28,19 @@ async function handleCheckUpdate() {
     updateResult.value = '检查失败'
   } finally {
     updateChecking.value = false
+  }
+}
+
+async function handleBrowserUpdate() {
+  browserUpdateChecking.value = true
+  try {
+    const result = await browser.checkCamoufoxUpdate()
+    if (result.update_available) {
+      // Update is available, trigger update
+      await browser.updateCamoufox()
+    }
+  } finally {
+    browserUpdateChecking.value = false
   }
 }
 
@@ -147,6 +161,18 @@ onMounted(async () => {
               <Download :size="12" />
               {{ t('camoufox.install') }}
             </button>
+            <button
+              v-if="browser.camoufoxInstalled"
+              class="camoufox-update-btn"
+              :disabled="browser.camoufoxUpdating || browserUpdateChecking"
+              @click="handleBrowserUpdate"
+            >
+              <RefreshCw :size="12" :class="{ spinning: browserUpdateChecking || browser.camoufoxUpdating }" />
+              {{ browser.camoufoxUpdating ? t('camoufox.updating') : t('camoufox.checkUpdate') }}
+            </button>
+            <span v-if="browser.camoufoxUpdateAvailable" class="camoufox-update-badge">
+              {{ t('camoufox.updateAvailable', { version: browser.camoufoxLatestVersion }) }}
+            </span>
           </div>
         </div>
       </div>
@@ -411,6 +437,45 @@ onMounted(async () => {
 .camoufox-install-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+.camoufox-update-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 12px;
+  font-size: 12px;
+  background: var(--color-bg-elevated);
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+
+.camoufox-update-btn:hover {
+  opacity: 0.9;
+  border-color: var(--color-primary);
+}
+
+.camoufox-update-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.camoufox-update-badge {
+  font-size: 11px;
+  color: var(--color-primary);
+  font-weight: 500;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.spinning {
+  animation: spin 1s linear infinite;
 }
 
 .version-text {

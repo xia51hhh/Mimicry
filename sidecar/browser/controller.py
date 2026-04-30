@@ -359,6 +359,9 @@ class BrowserController:
                 pass
         logger.info(f"Browser PID: {self._browser_pid}")
 
+        # Inject anti-detection patches before any navigation
+        self._inject_stealth_scripts()
+
         # Navigate to startup URL if configured
         startup_url = (profile or {}).get("browser_config", {}).get("startup_url")
         if startup_url and startup_url.startswith(("http://", "https://")):
@@ -392,6 +395,66 @@ class BrowserController:
                 self._on_disconnected()
             except Exception as e:
                 logger.warning(f"on_disconnected callback error: {e}")
+
+    # -- Anti-detection stealth patches --
+    _STEALTH_JS = """\
+    (() => {
+        // Ensure navigator.webdriver descriptor consistency across all frames.
+        // Camoufox patches this at C++ level but dynamically-created iframes
+        // may have a slightly different descriptor. This script normalizes them.
+        const patchFrame = (win) => {
+            try {
+                const Nav = win.Navigator.prototype;
+                const desc = Object.getOwnPropertyDescriptor(Nav, 'webdriver');
+                if (!desc) return;
+                // If it's already a getter returning false, ensure native appearance
+                if (desc.get) {
+                    const nativeGet = desc.get;
+                    Object.defineProperty(Nav, 'webdriver', {
+                        get: function webdriver() { return false; },
+                        set: undefined,
+                        enumerable: true,
+                        configurable: true,
+                    });
+                    // Make toString look native
+                    const getDesc = Object.getOwnPropertyDescriptor(Nav, 'webdriver');
+                    if (getDesc && getDesc.get) {
+                        getDesc.get.toString = () => 'function get webdriver() {\\n    [native code]\\n}';
+                    }
+                }
+            } catch(e) {}
+        };
+        patchFrame(window);
+        // Patch iframes as they are added to DOM
+        const observer = new MutationObserver((mutations) => {
+            for (const m of mutations) {
+                for (const node of m.addedNodes) {
+                    if (node.tagName === 'IFRAME' && node.contentWindow) {
+                        patchFrame(node.contentWindow);
+                    }
+                }
+            }
+        });
+        if (document.documentElement) {
+            observer.observe(document.documentElement, {childList: true, subtree: true});
+        } else {
+            document.addEventListener('DOMContentLoaded', () => {
+                observer.observe(document.documentElement, {childList: true, subtree: true});
+            });
+        }
+    })();
+    """
+
+    def _inject_stealth_scripts(self):
+        """Inject anti-detection scripts into the browser context."""
+        ctx = self._context
+        if not ctx:
+            return
+        try:
+            ctx.add_init_script(self._STEALTH_JS)
+            logger.debug("Stealth scripts injected")
+        except Exception as e:
+            logger.warning(f"Failed to inject stealth scripts: {e}")
 
     def _register_page(self, page) -> TabInfo:
         """Register a page in the tab registry and return its TabInfo.
@@ -523,8 +586,8 @@ class BrowserController:
             if wait_until != "load":
                 self._page.goto(url, wait_until="load")
 
-    def click(self, selector: str):
-        self._page.click(selector)
+    def click(self, selector: str, force: bool = False):
+        self._page.click(selector, force=force)
 
     def type_text(self, selector: str, text: str, humanize: bool = True):
         locator = self._page.locator(selector)

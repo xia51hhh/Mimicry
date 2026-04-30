@@ -95,14 +95,14 @@ def browser_navigate(url: str, session_id: str = "default"):
 
 
 @rpc_method("browser.click")
-def browser_click(selector: str, session_id: str = "default"):
-    _mgr.get(session_id).click(selector)
+def browser_click(selector: str, session_id: str = "default", force: bool = False):
+    _mgr.get(session_id).click(selector, force=force)
     return {"clicked": selector}
 
 
 @rpc_method("browser.type")
-def browser_type(selector: str, text: str, session_id: str = "default"):
-    _mgr.get(session_id).type_text(selector, text)
+def browser_type(selector: str, text: str, session_id: str = "default", humanize: bool = True):
+    _mgr.get(session_id).type_text(selector, text, humanize=humanize)
     return {"typed": selector}
 
 
@@ -427,6 +427,18 @@ def camoufox_check():
 @rpc_method("camoufox.install")
 def camoufox_install():
     return CamoufoxEnv.install()
+
+
+@rpc_method("camoufox.check_update")
+def camoufox_check_update():
+    """Check if a newer Camoufox browser version is available upstream."""
+    return CamoufoxEnv.check_update()
+
+
+@rpc_method("camoufox.update")
+def camoufox_update():
+    """Update Camoufox browser binary to the latest version."""
+    return CamoufoxEnv.update_browser()
 
 
 @rpc_method("shutdown")

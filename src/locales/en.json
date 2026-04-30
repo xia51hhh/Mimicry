@@ -319,7 +319,11 @@
     "status": "Status",
     "installed": "Installed",
     "notInstalledShort": "Not Installed",
-    "checking": "Checking..."
+    "checking": "Checking...",
+    "checkUpdate": "Check Update",
+    "updating": "Updating...",
+    "updateAvailable": "New version: v{version}",
+    "upToDate": "Up to date"
   },
   "profile": {
     "title": "Browser Profiles",

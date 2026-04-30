@@ -110,6 +110,9 @@ export const useBrowserStore = defineStore("browser", () => {
   const camoufoxVersion = ref<string | null>(null);
   const camoufoxChecking = ref(false);
   const camoufoxInstalling = ref(false);
+  const camoufoxUpdateAvailable = ref(false);
+  const camoufoxLatestVersion = ref<string | null>(null);
+  const camoufoxUpdating = ref(false);
 
   let recordingPollTimer: ReturnType<typeof setInterval> | null = null;
 
@@ -161,6 +164,42 @@ export const useBrowserStore = defineStore("browser", () => {
       return { success: false, error: errorMessage(e) };
     } finally {
       camoufoxInstalling.value = false;
+    }
+  }
+
+  async function checkCamoufoxUpdate() {
+    try {
+      const result = await invoke<{
+        current_version: string | null;
+        latest_version: string | null;
+        latest_tag: string | null;
+        update_available: boolean;
+        error: string | null;
+      }>("camoufox_check_update");
+      camoufoxUpdateAvailable.value = result.update_available;
+      camoufoxLatestVersion.value = result.latest_version;
+      return result;
+    } catch (e) {
+      console.error("Failed to check camoufox update:", e);
+      return { update_available: false, error: errorMessage(e) };
+    }
+  }
+
+  async function updateCamoufox() {
+    if (camoufoxUpdating.value) return { success: false, error: "Already updating" };
+    camoufoxUpdating.value = true;
+    try {
+      const result = await invoke<{ success: boolean; version?: string; release?: string; error?: string }>("camoufox_update");
+      if (result.success) {
+        camoufoxVersion.value = result.version ?? null;
+        camoufoxUpdateAvailable.value = false;
+      }
+      return result;
+    } catch (e) {
+      console.error("Failed to update camoufox:", e);
+      return { success: false, error: errorMessage(e) };
+    } finally {
+      camoufoxUpdating.value = false;
     }
   }
 
@@ -443,12 +482,14 @@ export const useBrowserStore = defineStore("browser", () => {
     connected, launching, recording, recordedNodes,
     setupPhase, setupError, installStep, installProgress, installDetail, systemPkgName,
     camoufoxInstalled, camoufoxVersion, camoufoxChecking, camoufoxInstalling,
+    camoufoxUpdateAvailable, camoufoxLatestVersion, camoufoxUpdating,
     launch, close, navigate, fetchStatus, listSessions, setActiveSession,
     startRecording, stopRecording, pollRecording,
     startRecordingPreview, stopRecordingPreview,
     installBrowser, installSystemPkg, launchAfterSetup,
     checkEnvironment, resetSetup,
     checkCamoufox, installCamoufox,
+    checkCamoufoxUpdate, updateCamoufox,
     startSessionHeartbeat, stopSessionHeartbeat,
   };
 });

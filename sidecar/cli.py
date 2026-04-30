@@ -202,12 +202,18 @@ def cmd_navigate(args):
 
 
 def cmd_click(args):
-    resp = _call("browser.click", {"selector": args.selector, "session_id": args.session})
+    params = {"selector": args.selector, "session_id": args.session}
+    if args.force:
+        params["force"] = True
+    resp = _call("browser.click", params)
     _print_result(resp, args.json)
 
 
 def cmd_type(args):
-    resp = _call("browser.type", {"selector": args.selector, "text": args.text, "session_id": args.session})
+    params = {"selector": args.selector, "text": args.text, "session_id": args.session}
+    if args.no_humanize:
+        params["humanize"] = False
+    resp = _call("browser.type", params)
     _print_result(resp, args.json)
 
 
@@ -372,10 +378,12 @@ def build_parser() -> argparse.ArgumentParser:
 
     click = sub.add_parser("click", help="Click element")
     click.add_argument("selector")
+    click.add_argument("--force", action="store_true", help="Skip actionability checks")
 
     typ = sub.add_parser("type", help="Type text")
     typ.add_argument("selector")
     typ.add_argument("text")
+    typ.add_argument("--no-humanize", action="store_true", help="Use fill() instead of keystroke simulation")
 
     ev = sub.add_parser("eval", help="Evaluate JS")
     ev.add_argument("expression")
