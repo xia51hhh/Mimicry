@@ -354,14 +354,16 @@ def cmd_breakpoint(args):
 
 def cmd_validate(args):
     """Validate a workflow JSON file (local, no daemon needed)."""
+    # validate always outputs JSON for machine-parseable results
+    json_mode = True
     try:
         with open(args.workflow, "r", encoding="utf-8") as f:
             data = json.load(f)
     except json.JSONDecodeError as e:
-        _print_payload({"valid": False, "errors": [f"Invalid JSON: {e}"]}, json_mode=args.json)
+        _print_payload({"valid": False, "errors": [f"Invalid JSON: {e}"]}, json_mode=json_mode)
         sys.exit(1)
     except FileNotFoundError:
-        _print_payload({"valid": False, "errors": [f"File not found: {args.workflow}"]}, json_mode=args.json)
+        _print_payload({"valid": False, "errors": [f"File not found: {args.workflow}"]}, json_mode=json_mode)
         sys.exit(1)
 
     errors = []
@@ -380,7 +382,7 @@ def cmd_validate(args):
             errors.append(f"Node {i}: unknown action '{action}'")
 
     result = {"valid": len(errors) == 0, "errors": errors, "node_count": len(data.get("nodes", []))}
-    _print_payload(result, json_mode=args.json)
+    _print_payload(result, json_mode=json_mode)
     sys.exit(0 if result["valid"] else 1)
 
 

@@ -151,6 +151,7 @@ export function useFileOps() {
       path,
       workspace: { name: json.name, nodes: json.nodes, edges: json.edges },
     });
+    workflow.markClean();
 
     const name = path.split(/[\\/]/).pop() || json.name;
     await invoke('recent_files_add', { path, name });

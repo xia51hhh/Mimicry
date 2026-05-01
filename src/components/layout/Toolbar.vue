@@ -4,6 +4,7 @@
   import { useWorkflowStore } from '../../stores/workflow';
   import { useExecutionStore } from '../../stores/execution';
   import { useProfileStore } from '../../stores/profiles';
+  import { Pause, Play, StepForward } from 'lucide-vue-next';
 
   const { t } = useI18n();
   const browser = useBrowserStore();
@@ -99,6 +100,32 @@
       <span v-if="execution.running" class="text-xs text-[var(--color-text-muted)]">
         {{ execution.step }}/{{ execution.total }}
       </span>
+
+      <!-- Debug controls (visible during execution) -->
+      <template v-if="execution.running">
+        <div class="flex items-center gap-1 ml-1 border-l border-[var(--color-border)] pl-2">
+          <button
+            class="rounded p-1 text-xs hover:bg-[var(--color-surface-hover)]"
+            :class="
+              execution.paused
+                ? 'text-yellow-400'
+                : 'text-[var(--color-text-muted)]'
+            "
+            :title="execution.paused ? t('toolbar.resume') : t('toolbar.pause')"
+            @click="execution.paused ? execution.resume() : execution.pause()"
+          >
+            <component :is="execution.paused ? Play : Pause" :size="14" :stroke-width="2" />
+          </button>
+          <button
+            class="rounded p-1 text-xs text-[var(--color-text-muted)] hover:bg-[var(--color-surface-hover)]"
+            :disabled="!execution.paused"
+            :title="t('toolbar.step')"
+            @click="execution.stepForward()"
+          >
+            <StepForward :size="14" :stroke-width="2" />
+          </button>
+        </div>
+      </template>
 
       <!-- Humanize delay controls -->
       <button

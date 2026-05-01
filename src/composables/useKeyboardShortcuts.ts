@@ -96,11 +96,19 @@ export function useKeyboardShortcuts() {
     }
   }
 
+  function onBeforeUnload(e: BeforeUnloadEvent) {
+    if (workflow.isDirty) {
+      e.preventDefault();
+    }
+  }
+
   onMounted(() => {
     window.addEventListener('keydown', onKeyDown);
+    window.addEventListener('beforeunload', onBeforeUnload);
   });
 
   onUnmounted(() => {
     window.removeEventListener('keydown', onKeyDown);
+    window.removeEventListener('beforeunload', onBeforeUnload);
   });
 }

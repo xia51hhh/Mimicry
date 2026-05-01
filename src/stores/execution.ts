@@ -52,6 +52,9 @@ export const useExecutionStore = defineStore('execution', () => {
   const humanize = ref(true);
   const delayMultiplier = ref(1.0);
 
+  // Debug state
+  const breakpointIds = ref<Set<string>>(new Set());
+
   let pollTimer: ReturnType<typeof setInterval> | null = null;
   let progressUnlisten: UnlistenFn | null = null;
   let logUnlisten: UnlistenFn | null = null;
@@ -67,6 +70,7 @@ export const useExecutionStore = defineStore('execution', () => {
 
   function reset() {
     running.value = false;
+    paused.value = false;
     step.value = 0;
     total.value = 0;
     currentNodeId.value = null;
@@ -75,6 +79,7 @@ export const useExecutionStore = defineStore('execution', () => {
     logs.value = [];
     completedNodeIds.value = new Set();
     failedNodeIds.value = new Set();
+    breakpointIds.value = new Set();
   }
 
   async function pollStatus() {
@@ -244,8 +249,64 @@ export const useExecutionStore = defineStore('execution', () => {
     return 'idle';
   }
 
+  // ── Debug controls ──────────────────────────────────────────────
+
+  const paused = ref(false);
+
+  async function pause() {
+    try {
+      await invoke('workflow_pause');
+      paused.value = true;
+      addLog('info', 'debug.paused');
+    } catch (e: unknown) {
+      addLog('error', `debug.pauseFailed: ${e}`);
+    }
+  }
+
+  async function resume() {
+    try {
+      await invoke('workflow_unpause');
+      paused.value = false;
+      addLog('info', 'debug.resumed');
+    } catch (e: unknown) {
+      addLog('error', `debug.resumeFailed: ${e}`);
+    }
+  }
+
+  async function stepForward(count = 1) {
+    try {
+      await invoke('workflow_step', { count });
+      addLog('info', `debug.step: ${count}`);
+    } catch (e: unknown) {
+      addLog('error', `debug.stepFailed: ${e}`);
+    }
+  }
+
+  async function toggleBreakpoint(nodeId: string) {
+    try {
+      if (breakpointIds.value.has(nodeId)) {
+        await invoke('workflow_remove_breakpoint', { nodeId });
+        const next = new Set(breakpointIds.value);
+        next.delete(nodeId);
+        breakpointIds.value = next;
+        addLog('info', `debug.breakpointRemoved: ${nodeId}`);
+      } else {
+        await invoke('workflow_set_breakpoint', { nodeId });
+        breakpointIds.value = new Set([...breakpointIds.value, nodeId]);
+        addLog('info', `debug.breakpointSet: ${nodeId}`);
+      }
+    } catch (e: unknown) {
+      addLog('error', `debug.breakpointFailed: ${e}`);
+    }
+  }
+
+  function hasBreakpoint(nodeId: string): boolean {
+    return breakpointIds.value.has(nodeId);
+  }
+
   return {
     running,
+    paused,
     step,
     total,
     currentNodeId,
@@ -254,11 +315,17 @@ export const useExecutionStore = defineStore('execution', () => {
     logs,
     completedNodeIds,
     failedNodeIds,
+    breakpointIds,
     humanize,
     delayMultiplier,
     execute,
     stop,
     reset,
     getNodeStatus,
+    pause,
+    resume,
+    stepForward,
+    toggleBreakpoint,
+    hasBreakpoint,
   };
 });

@@ -5,8 +5,12 @@
   import ShortcutToast from './components/ui/ShortcutToast.vue';
   import SetupDialog from './components/ui/SetupDialog.vue';
   import { useShortcutToast } from './composables/useShortcutToast';
+  import { useWorkspaceStore } from './stores/workspace';
+  import { useWorkflowStore } from './stores/workflow';
 
   const { message, shortcut, visible } = useShortcutToast();
+  const workspace = useWorkspaceStore();
+  const workflow = useWorkflowStore();
 
   const updaterRef = ref<InstanceType<typeof UpdateNotifier>>();
 
@@ -16,7 +20,17 @@
 
   provide('checkForUpdate', checkForUpdate);
 
-  onMounted(() => {
+  onMounted(async () => {
+    workspace.restoreTabs();
+    // Restore active tab's workflow from DB if it has a workflowId
+    const activeTab = workspace.activeTab;
+    if (activeTab?.workflowId) {
+      try {
+        await workflow.loadWorkflow(activeTab.workflowId);
+      } catch {
+        // DB entry may have been deleted — keep empty canvas
+      }
+    }
     checkForUpdate();
   });
 </script>

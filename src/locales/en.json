@@ -175,7 +175,11 @@
     "installing": "Installing...",
     "humanize": "Humanize",
     "humanizeTooltip": "Toggle random delays and humanized input between actions",
-    "delayMultiplier": "Delay multiplier"
+    "delayMultiplier": "Delay multiplier",
+    "pause": "Pause",
+    "resume": "Resume",
+    "step": "Step Forward",
+    "breakpoint": "Breakpoint"
   },
   "shortcut": {
     "undo": "Undo",
@@ -192,13 +196,15 @@
     "disconnect": "Disconnect",
     "delete": "Delete",
     "selectAll": "Select All",
-    "fitView": "Fit View"
+    "fitView": "Fit View",
+    "toggleBreakpoint": "Toggle Breakpoint"
   },
   "bottomPanel": {
     "json": "JSON",
     "logs": "Logs",
     "variables": "Variables",
     "problems": "Problems",
+    "debug": "Debug",
     "noLogs": "Run workflow to see logs",
     "noVariables": "Run workflow to see variables",
     "noProblems": "No problems detected",
@@ -207,7 +213,13 @@
     "varType": "Type",
     "validateNow": "Validate",
     "errorsCount": "{count} error(s)",
-    "warningsCount": "{count} warning(s)"
+    "warningsCount": "{count} warning(s)",
+    "debugIdle": "Idle",
+    "debugRunning": "Running",
+    "debugPaused": "Paused",
+    "debugCurrentNode": "Current",
+    "debugBreakpoints": "Breakpoints",
+    "debugNoBreakpoints": "Click the red dot on a node to add a breakpoint"
   },
   "settings": {
     "title": "Settings",

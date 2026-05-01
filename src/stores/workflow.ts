@@ -35,6 +35,16 @@ export const useWorkflowStore = defineStore('workflow', () => {
   const redoStack = shallowRef<Snapshot[]>([]);
   const maxHistory = 50;
 
+  /** Dirty flag — true when unsaved changes exist */
+  const isDirty = ref(false);
+
+  function markDirty() {
+    isDirty.value = true;
+  }
+  function markClean() {
+    isDirty.value = false;
+  }
+
   function pushSnapshot() {
     undoStack.value = [
       ...undoStack.value.slice(-maxHistory + 1),
@@ -44,6 +54,7 @@ export const useWorkflowStore = defineStore('workflow', () => {
       },
     ];
     redoStack.value = [];
+    markDirty();
   }
 
   function undo() {
@@ -210,6 +221,7 @@ export const useWorkflowStore = defineStore('workflow', () => {
         edges: record.edges as never[],
       });
       persisted.value = true;
+      markClean();
     }
   }
 
@@ -220,6 +232,7 @@ export const useWorkflowStore = defineStore('workflow', () => {
     nodes.value = [];
     edges.value = [];
     persisted.value = true;
+    markClean();
     await fetchList();
   }
 
@@ -237,6 +250,7 @@ export const useWorkflowStore = defineStore('workflow', () => {
         updatedAt: now,
       },
     });
+    markClean();
     await fetchList();
   }
 
@@ -323,6 +337,9 @@ export const useWorkflowStore = defineStore('workflow', () => {
     nodes,
     edges,
     persisted,
+    isDirty,
+    markDirty,
+    markClean,
     selectedNodeId,
     selectedNode,
     selectNode,

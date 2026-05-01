@@ -106,17 +106,21 @@
 
   function onTabClick(tabId: string) {
     if (tabId === workspace.activeTabId) return;
-    // Save current tab's workflow data
+    // Save current tab's workflow data + dirty state
     workspace.saveTabData(workspace.activeTabId, workflow.toJSON());
+    const currentTab = workspace.tabs.find((t) => t.id === workspace.activeTabId);
+    if (currentTab) currentTab.dirty = workflow.isDirty;
     // Switch tab
     workspace.switchTab(tabId);
-    // Restore target tab's workflow data
+    // Restore target tab's workflow data + dirty state
     const data = workspace.getTabData(tabId);
     if (data) {
       workflow.fromJSON(data);
     } else {
       workflow.clear();
     }
+    const targetTab = workspace.tabs.find((t) => t.id === tabId);
+    workflow.isDirty = targetTab?.dirty ?? false;
     router.push('/');
   }
 
@@ -265,6 +269,11 @@
         @click="onTabClick(tab.id)"
       >
         <span class="tab-name">{{ tab.name }}</span>
+        <span
+          v-if="tab.id === workspace.activeTabId ? workflow.isDirty : tab.dirty"
+          class="tab-dirty"
+          >●</span
+        >
         <button
           v-if="workspace.tabs.length > 1"
           class="tab-close"
@@ -533,6 +542,13 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+
+  .tab-dirty {
+    color: var(--color-text-muted);
+    font-size: 8px;
+    margin-left: 2px;
+    flex-shrink: 0;
   }
 
   .tab-close {

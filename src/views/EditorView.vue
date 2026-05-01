@@ -6,6 +6,7 @@
   import '@vue-flow/core/dist/theme-default.css';
   import { useWorkflowStore } from '../stores/workflow';
   import { useBrowserStore } from '../stores/browser';
+  import { useExecutionStore } from '../stores/execution';
   import ActionNode from '../components/nodes/ActionNode.vue';
   import ConditionNode from '../components/nodes/ConditionNode.vue';
   import LoopNode from '../components/nodes/LoopNode.vue';
@@ -21,6 +22,7 @@
   const { t } = useI18n();
   const store = useWorkflowStore();
   const browser = useBrowserStore();
+  const execution = useExecutionStore();
   const {
     onConnect,
     addEdges,
@@ -71,6 +73,8 @@
     { id: 'sep1', label: '', separator: true },
     { id: 'disconnect', label: t('contextMenu.disconnect') },
     { id: 'delete', label: t('contextMenu.delete'), shortcut: 'Delete' },
+    { id: 'sep2', label: '', separator: true },
+    { id: 'toggleBreakpoint', label: t('contextMenu.toggleBreakpoint') },
   ]);
 
   const paneContextItems = computed<ContextMenuItem[]>(() => [
@@ -175,6 +179,10 @@
       }
       case 'fitView': {
         fitView();
+        break;
+      }
+      case 'toggleBreakpoint': {
+        if (nodeId) execution.toggleBreakpoint(nodeId);
         break;
       }
     }
