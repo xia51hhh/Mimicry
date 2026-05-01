@@ -436,6 +436,103 @@ def _build_workflow_overview(workflow_path: Path) -> str:
     return "\n".join(out_lines).rstrip()
 
 
+def _build_peer_worktrees_block(trellis_dir: Path) -> str:
+    """Return a <peer-worktrees> block with git status for each active worktree.
+
+    Runs at session start (not per-turn), so subprocess git calls are acceptable.
+    Empty string when no active worktrees.
+    """
+    tasks_dir = trellis_dir / "tasks"
+    if not tasks_dir.is_dir():
+        return ""
+
+    repo_root = trellis_dir.parent
+
+    rows: list[str] = []
+    try:
+        entries = sorted(tasks_dir.iterdir())
+    except OSError:
+        return ""
+
+    for task_dir in entries:
+        if not task_dir.is_dir() or task_dir.name == "archive":
+            continue
+        task_json = task_dir / "task.json"
+        if not task_json.is_file():
+            continue
+        try:
+            data = json.loads(task_json.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            continue
+        if not isinstance(data, dict):
+            continue
+        wt_rel = data.get("worktree_path")
+        if not wt_rel:
+            continue
+
+        slug = data.get("id") or data.get("name") or task_dir.name
+        branch = data.get("branch") or "?"
+        base_branch = data.get("base_branch") or "main"
+        wt_abs = repo_root / wt_rel
+
+        # ahead / behind base
+        ahead_behind = "?/?"
+        if branch != "?":
+            try:
+                rc = subprocess.run(
+                    ["git", "rev-list", "--left-right", "--count",
+                     f"{base_branch}...{branch}"],
+                    cwd=str(repo_root),
+                    capture_output=True,
+                    text=True,
+                    encoding="utf-8",
+                    errors="replace",
+                    timeout=3,
+                )
+                if rc.returncode == 0 and rc.stdout.strip():
+                    parts = rc.stdout.strip().split()
+                    if len(parts) == 2:
+                        ahead_behind = f"+{parts[1]}/-{parts[0]}"
+            except (subprocess.TimeoutExpired, FileNotFoundError):
+                pass
+
+        # dirty?
+        dirty = "missing"
+        if wt_abs.is_dir():
+            try:
+                rc = subprocess.run(
+                    ["git", "status", "--porcelain"],
+                    cwd=str(wt_abs),
+                    capture_output=True,
+                    text=True,
+                    encoding="utf-8",
+                    errors="replace",
+                    timeout=3,
+                )
+                if rc.returncode == 0:
+                    dirty = "dirty" if rc.stdout.strip() else "clean"
+                else:
+                    dirty = "?"
+            except (subprocess.TimeoutExpired, FileNotFoundError):
+                dirty = "?"
+
+        rows.append(f"  - {slug} ({branch}, {ahead_behind}, {dirty}) at {wt_rel}")
+
+    if not rows:
+        return ""
+
+    return (
+        "<peer-worktrees>\n"
+        f"{len(rows)} active peer worktree(s) — what OTHER agents are doing right now:\n"
+        + "\n".join(rows)
+        + "\nProtocol: `.trellis/spec/cross-layer/parallel-development.md`. "
+        "Coordinate via `python3 .trellis/scripts/task.py list --hotfile <path>` "
+        "before claiming any hot file. Per-turn updates appear in <peer-worktrees> "
+        "blocks via UserPromptSubmit hook.\n"
+        "</peer-worktrees>"
+    )
+
+
 def main():
     if should_skip_injection():
         sys.exit(0)
@@ -555,6 +652,12 @@ Read and follow all instructions below carefully.
     # Check task status and inject structured tag
     task_status = _get_task_status(trellis_dir)
     output.write(f"<task-status>\n{task_status}\n</task-status>\n\n")
+
+    # Peer worktrees — what OTHER agents are doing right now
+    peer_block = _build_peer_worktrees_block(trellis_dir)
+    if peer_block:
+        output.write(peer_block)
+        output.write("\n\n")
 
     output.write("""<ready>
 Context loaded. Workflow index, project state, and guidelines are already injected above — do NOT re-read them.
