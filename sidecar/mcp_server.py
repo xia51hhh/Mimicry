@@ -186,7 +186,7 @@ def _rpc_to_tool_name(rpc_name: str) -> str:
 def _rebuild_name_map() -> None:
     _TOOL_NAME_TO_RPC.clear()
     for rpc_name in METHOD_REGISTRY:
-        if rpc_name in _SKIP_METHODS:
+        if rpc_name in _SKIP_METHODS or rpc_name.startswith("test."):
             continue
         _TOOL_NAME_TO_RPC[_rpc_to_tool_name(rpc_name)] = rpc_name
 
