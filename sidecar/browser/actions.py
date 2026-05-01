@@ -323,7 +323,19 @@ def browser_new_tab(url: str = "", session_id: str = "default"):
     return {**ctrl.status(), "tab": tab_info}
 
 
-@rpc_method("browser.switch_tab")
+@rpc_method(
+    "browser.switch_tab",
+    description=(
+        "Switch the active tab in a browser session. `target` may be a tab id, "
+        "an integer index, or a substring of url/title; additional free-form "
+        "hint kwargs (e.g. url_origin, url_path, title) are accepted at runtime "
+        "for fuzzy matching but are not part of the MCP schema."
+    ),
+    param_descriptions={
+        "target": "Tab id (int), index (int), or url/title substring (str). Optional when hint kwargs identify the tab.",
+        "session_id": "Browser session id; defaults to 'default'.",
+    },
+)
 def browser_switch_tab(target=None, session_id: str = "default", **match_hints):
     ctrl = _mgr.get(session_id)
     # Accept legacy 'index' param for backward compat
