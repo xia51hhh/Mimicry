@@ -158,7 +158,6 @@ def cmd_rpc(args):
     """直接调用 RPC 方法"""
     from rpc.methods import METHOD_REGISTRY
     import browser.actions  # ensure registered
-    import dsl.rpc_methods
 
     method = args.method
     if method not in METHOD_REGISTRY:
