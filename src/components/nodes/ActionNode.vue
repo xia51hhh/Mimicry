@@ -1,6 +1,6 @@
 <script setup lang="ts">
   import { Handle, Position } from '@vue-flow/core';
-  import { computed, markRaw, type Component } from 'vue';
+  import { computed, ref, markRaw, type Component } from 'vue';
   import { useI18n } from 'vue-i18n';
   import { useExecutionStore } from '../../stores/execution';
   import { useWorkflowStore } from '../../stores/workflow';
@@ -130,6 +130,18 @@
     const translated = t(key);
     return translated !== key ? translated : props.data.action || 'Action';
   });
+
+  const showTooltip = ref(false);
+  const tooltipText = computed(() => {
+    const status = nodeStatus.value;
+    if (status === 'idle') return '';
+    const parts: string[] = [];
+    parts.push(`${t('tooltip.status')}: ${t(`tooltip.${status}`)}`);
+    if (props.data.action) parts.push(`${t('tooltip.action')}: ${props.data.action}`);
+    if (props.data.selector) parts.push(`${t('tooltip.selector')}: ${props.data.selector}`);
+    if (props.data.url) parts.push(`URL: ${props.data.url}`);
+    return parts.join('\n');
+  });
 </script>
 
 <template>
@@ -140,7 +152,11 @@
       { 'node-selected': isSelected, 'node-paused': isPaused, 'has-breakpoint': hasBreakpoint },
       diagLevel && `diag-${diagLevel}`,
     ]"
+    @mouseenter="showTooltip = true"
+    @mouseleave="showTooltip = false"
   >
+    <!-- Execution data tooltip -->
+    <div v-if="showTooltip && tooltipText" class="node-tooltip">{{ tooltipText }}</div>
     <!-- Breakpoint indicator (red dot on left) -->
     <span
       v-if="hasBreakpoint"
@@ -313,5 +329,24 @@
   .diag-badge-info {
     background: #42a5f5;
     color: #fff;
+  }
+
+  /* Execution data tooltip */
+  .node-tooltip {
+    position: absolute;
+    bottom: calc(100% + 8px);
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(0, 0, 0, 0.85);
+    color: #e0e0e0;
+    font-size: 11px;
+    padding: 6px 10px;
+    border-radius: 6px;
+    white-space: pre-line;
+    pointer-events: none;
+    z-index: 100;
+    max-width: 260px;
+    line-height: 1.5;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
   }
 </style>

@@ -1,6 +1,6 @@
 <script setup lang="ts">
   import { Handle, Position } from '@vue-flow/core';
-  import { computed } from 'vue';
+  import { computed, ref } from 'vue';
   import { useI18n } from 'vue-i18n';
   import { useExecutionStore } from '../../stores/execution';
   import { useWorkflowStore } from '../../stores/workflow';
@@ -30,6 +30,18 @@
   const isPaused = computed(
     () => execution.paused && execution.currentNodeId === props.id,
   );
+
+  const showTooltip = ref(false);
+  const tooltipText = computed(() => {
+    const status = nodeStatus.value;
+    if (status === 'idle') return '';
+    const parts: string[] = [];
+    parts.push(`${t('tooltip.status')}: ${t(`tooltip.${status}`)}`);
+    parts.push(`${t('tooltip.loopType')}: ${props.data.loopType}`);
+    if (props.data.count != null) parts.push(`${t('tooltip.count')}: ${props.data.count}`);
+    if (props.data.selector) parts.push(`${t('tooltip.selector')}: ${props.data.selector}`);
+    return parts.join('\n');
+  });
 </script>
 
 <template>
@@ -40,7 +52,10 @@
       { 'node-selected': isSelected, 'node-paused': isPaused, 'has-breakpoint': hasBreakpoint },
       diagLevel && `diag-${diagLevel}`,
     ]"
+    @mouseenter="showTooltip = true"
+    @mouseleave="showTooltip = false"
   >
+    <div v-if="showTooltip && tooltipText" class="node-tooltip">{{ tooltipText }}</div>
     <span
       v-if="hasBreakpoint"
       class="breakpoint-dot"
@@ -239,5 +254,23 @@
   .diag-badge-info {
     background: #42a5f5;
     color: #fff;
+  }
+
+  .node-tooltip {
+    position: absolute;
+    bottom: calc(100% + 8px);
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(0, 0, 0, 0.85);
+    color: #e0e0e0;
+    font-size: 11px;
+    padding: 6px 10px;
+    border-radius: 6px;
+    white-space: pre-line;
+    pointer-events: none;
+    z-index: 100;
+    max-width: 260px;
+    line-height: 1.5;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
   }
 </style>

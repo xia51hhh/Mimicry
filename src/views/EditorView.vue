@@ -2,8 +2,10 @@
   import { ref, computed, onMounted } from 'vue';
   import { VueFlow, useVueFlow } from '@vue-flow/core';
   import { Background } from '@vue-flow/background';
+  import { MiniMap } from '@vue-flow/minimap';
   import '@vue-flow/core/dist/style.css';
   import '@vue-flow/core/dist/theme-default.css';
+  import '@vue-flow/minimap/dist/style.css';
   import { useWorkflowStore } from '../stores/workflow';
   import { useBrowserStore } from '../stores/browser';
   import { useExecutionStore } from '../stores/execution';
@@ -236,7 +238,10 @@
           :selection-key-code="'Control'"
           :nodes-selectable="true"
           fit-view-on-init
-          class="h-full editor-canvas"
+          :class="['h-full editor-canvas', {
+            'execution-running': execution.running && !execution.paused,
+            'execution-paused': execution.running && execution.paused,
+          }]"
         >
           <template #node-action="props">
             <ActionNode v-bind="props" />
@@ -251,6 +256,7 @@
             <GroupNode v-bind="props" />
           </template>
           <Background />
+          <MiniMap v-if="showMinimap" pannable zoomable />
         </VueFlow>
 
         <!-- Context Menu -->

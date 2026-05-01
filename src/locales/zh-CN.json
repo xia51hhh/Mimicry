@@ -188,7 +188,8 @@
     "toggleSidebar": "切换侧栏",
     "toggleBottom": "切换底栏",
     "toggleRight": "切换右侧栏",
-    "deleteNode": "删除节点"
+    "deleteNode": "删除节点",
+    "toggleBreakpoint": "切换断点"
   },
   "contextMenu": {
     "copy": "复制",
@@ -389,5 +390,16 @@
     "active": "活动中",
     "target": "目标会话",
     "inherit": "默认 (工作流会话)"
+  },
+  "tooltip": {
+    "status": "状态",
+    "action": "操作",
+    "selector": "选择器",
+    "condition": "条件",
+    "loopType": "循环类型",
+    "count": "次数",
+    "running": "执行中",
+    "success": "成功",
+    "error": "错误"
   }
 }

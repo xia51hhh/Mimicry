@@ -148,6 +148,37 @@ class WorkflowExecutor:
     def context(self) -> ExecutionContext:
         return self._ctx
 
+    def _resolve_selector(self, node: dict, action_fn, *args) -> Any:
+        """Execute action_fn with primary selector; on failure try fallbacks.
+
+        action_fn receives (resolved_selector, *args) as arguments.
+        node['data'] may contain 'selectorFallbacks' — a list of backup selectors.
+        Returns the result of action_fn on the first successful selector.
+        """
+        data = node.get("data") or {}
+        primary = self._ctx.resolve(data.get("selector", ""))
+        try:
+            return action_fn(primary, *args)
+        except Exception as primary_err:
+            fallbacks = data.get("selectorFallbacks", [])
+            if not fallbacks:
+                raise
+            node_id = node.get("id", "")
+            for i, fb in enumerate(fallbacks):
+                resolved_fb = self._ctx.resolve(fb)
+                try:
+                    result = action_fn(resolved_fb, *args)
+                    self._emit_log(
+                        "warn",
+                        f"Self-heal: primary selector failed, "
+                        f"fallback[{i}] '{resolved_fb}' succeeded",
+                        node_id,
+                    )
+                    return result
+                except Exception:
+                    continue
+            raise primary_err
+
     def _normalize_node(self, node: dict) -> dict:
         """Normalize canonical workflow nodes into executor shape.
 
@@ -445,23 +476,23 @@ class WorkflowExecutor:
             case "reload":
                 ctrl.reload()
             case "click":
-                ctrl.click(ctx.resolve(data["selector"]))
+                self._resolve_selector(node, ctrl.click)
             case "dblclick":
-                ctrl.dblclick(ctx.resolve(data["selector"]))
+                self._resolve_selector(node, ctrl.dblclick)
             case "type":
                 h = self._humanize if data.get("humanize") is None else data["humanize"]
-                ctrl.type_text(ctx.resolve(data["selector"]), ctx.resolve(data.get("value", "")), humanize=h)
+                self._resolve_selector(node, lambda sel, v, hm: ctrl.type_text(sel, v, humanize=hm), ctx.resolve(data.get("value", "")), h)
             case "clear":
-                ctrl.clear(ctx.resolve(data["selector"]))
+                self._resolve_selector(node, ctrl.clear)
             case "select":
-                ctrl.select_option(ctx.resolve(data["selector"]), ctx.resolve(data.get("value", "")), humanize=self._humanize)
+                self._resolve_selector(node, lambda sel, v: ctrl.select_option(sel, v, humanize=self._humanize), ctx.resolve(data.get("value", "")))
             case "hover":
-                ctrl.hover(ctx.resolve(data["selector"]))
+                self._resolve_selector(node, ctrl.hover)
+            case "focus":
+                self._resolve_selector(node, ctrl.focus)
             case "scroll":
                 sel = ctx.resolve(data.get("selector", "window"))
                 ctrl.scroll(sel, data.get("direction", "down"), data.get("amount", 300), humanize=self._humanize)
-            case "focus":
-                ctrl.focus(ctx.resolve(data["selector"]))
             case "press_key":
                 sel = ctx.resolve(data.get("selector", "body"))
                 ctrl.press_key(sel, ctx.resolve(data["key"]))

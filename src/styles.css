@@ -89,6 +89,37 @@ body,
   stroke-width: 2;
 }
 
+/* Edge animation during execution */
+.editor-canvas.execution-running .vue-flow__edge-path {
+  stroke: #42a5f5;
+  stroke-width: 2;
+  stroke-dasharray: 6 4;
+  animation: edge-flow 0.6s linear infinite;
+}
+
+.editor-canvas.execution-paused .vue-flow__edge-path {
+  stroke: #ffa726;
+  stroke-width: 2;
+  stroke-dasharray: 6 4;
+  animation: edge-pulse 2s ease-in-out infinite;
+}
+
+@keyframes edge-flow {
+  to {
+    stroke-dashoffset: -10;
+  }
+}
+
+@keyframes edge-pulse {
+  0%,
+  100% {
+    opacity: 0.5;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
 .editor-canvas .vue-flow__connection-line {
   stroke: var(--color-primary);
   stroke-width: 2;
