@@ -56,6 +56,7 @@ LLM Agent → shell commands → cli.py → UDS socket → daemon.py → Camoufo
 |---------|-------------|
 | `cli.py launch` | Launch Camoufox browser |
 | `cli.py launch --headless` | Launch headless |
+| `cli.py launch --proxy <url>` | Launch with proxy (e.g. `http://user:pass@host:port`) |
 | `cli.py close` | Close browser session |
 | `cli.py sessions` | List active sessions |
 
@@ -67,7 +68,7 @@ LLM Agent → shell commands → cli.py → UDS socket → daemon.py → Camoufo
 | `cli.py click <selector>` | Click element by CSS selector |
 | `cli.py type <selector> <text>` | Type text into element |
 | `cli.py eval <js>` | Execute JavaScript, returns result |
-| `cli.py screenshot [path]` | Take screenshot (default: `/tmp/mimicry_screenshot.png`) |
+| `cli.py screenshot [path]` | Take screenshot (default: `screenshot.png` in cwd) |
 | `cli.py scroll <up\|down> [amount]` | Scroll page |
 
 ### Workflow Execution
@@ -76,6 +77,8 @@ LLM Agent → shell commands → cli.py → UDS socket → daemon.py → Camoufo
 |---------|-------------|
 | `cli.py run <file.json>` | Execute workflow file |
 | `cli.py run <file.json> --step` | Execute in step mode (pause after each node) |
+| `cli.py run <file.json> --break-at <node_id> [<node_id> ...]` | Set breakpoints before run |
+| `cli.py run <file.json> --no-humanize` | Disable humanized typing/scrolling |
 | `cli.py pause` | Pause running workflow |
 | `cli.py resume` | Resume paused workflow |
 | `cli.py stop` | Abort workflow |
@@ -191,7 +194,7 @@ CSS selectors work directly. Common patterns:
 For LLM clients that support MCP (Claude Desktop, Cursor, etc.):
 
 ```bash
-$P cli.py --mcp   # Starts MCP stdio server with 52 tools
+$P cli.py --mcp   # Starts MCP stdio server with 68 tools
 ```
 
 All CLI commands are also available as MCP tools with auto-generated JSON schemas.

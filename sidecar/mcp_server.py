@@ -10,16 +10,20 @@ Usage:
 """
 from __future__ import annotations
 
+import enum
 import inspect
 import json
 import os
 import sys
+import types
+import typing
+from typing import Any, Union
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from mcp.server import Server
 from mcp.server.stdio import stdio_server
-from mcp.types import TextContent, Tool
+from mcp.types import CallToolResult, TextContent, Tool
 
 # Import all RPC methods (side-effect: registers into METHOD_REGISTRY)
 import browser.actions  # noqa: F401
@@ -28,47 +32,127 @@ from rpc.methods import METHOD_METADATA, METHOD_REGISTRY
 # Methods that should NOT be exposed as MCP tools
 _SKIP_METHODS = {"shutdown", "echo"}
 
+# Server-level instructions surfaced to the LLM client at handshake.
+_SERVER_INSTRUCTIONS = (
+    "Mimicry is a workflow-first browser automation toolkit built on Camoufox. "
+    "These MCP tools let an LLM (a) list and execute recorded workflow JSON, "
+    "(b) drive the browser interactively to test selectors and pages, "
+    "(c) author new workflow nodes, and (d) debug execution with breakpoints, "
+    "step, pause/resume and runtime block injection. "
+    "Three top-level RPC namespaces are exposed: `browser.*` for atomic "
+    "actions across multiple isolated sessions, `workflow.*` for execute / "
+    "pause / step / inject / breakpoint control, and `recording.*` for "
+    "capturing user actions into workflow JSON. "
+    "Most browser tools accept a `session_id` argument that defaults to "
+    '"default"; pass distinct ids to keep multiple browsers isolated.'
+)
+
+
+# ---------------------------------------------------------------------------
+# JSON-Schema generation from Python type hints
+# ---------------------------------------------------------------------------
+
+_PRIMITIVE_MAP = {
+    str: {"type": "string"},
+    int: {"type": "integer"},
+    float: {"type": "number"},
+    bool: {"type": "boolean"},
+    dict: {"type": "object"},
+    list: {"type": "array"},
+    type(None): {"type": "null"},
+    Any: {},
+}
+
+
+def _annotation_to_schema(annotation: Any) -> dict:
+    """Convert a Python type annotation to a JSON Schema fragment."""
+    if annotation is inspect.Parameter.empty or annotation is Any:
+        return {"type": "string"}
+
+    if annotation in _PRIMITIVE_MAP:
+        # Copy so callers can mutate (e.g. add description) safely.
+        return dict(_PRIMITIVE_MAP[annotation])
+
+    origin = typing.get_origin(annotation)
+    args = typing.get_args(annotation)
+
+    # Optional[T] / Union[T, None] / T | None
+    if origin is Union or origin is types.UnionType:
+        non_none = [a for a in args if a is not type(None)]
+        if len(non_none) == 1:
+            return _annotation_to_schema(non_none[0])
+        # Genuine multi-type union → anyOf
+        return {"anyOf": [_annotation_to_schema(a) for a in non_none]}
+
+    # list[T] / List[T]
+    if origin in (list, tuple, set, frozenset):
+        if args:
+            return {"type": "array", "items": _annotation_to_schema(args[0])}
+        return {"type": "array"}
+
+    # dict[K, V] / Dict[K, V]
+    if origin is dict:
+        if len(args) == 2:
+            return {"type": "object", "additionalProperties": _annotation_to_schema(args[1])}
+        return {"type": "object"}
+
+    # Literal[...]
+    if origin is typing.Literal:
+        values = list(args)
+        # Infer JSON type from first literal value if homogeneous strings
+        if all(isinstance(v, str) for v in values):
+            return {"type": "string", "enum": values}
+        if all(isinstance(v, bool) for v in values):
+            return {"type": "boolean", "enum": values}
+        if all(isinstance(v, int) for v in values):
+            return {"type": "integer", "enum": values}
+        return {"enum": values}
+
+    # Enum subclasses
+    if isinstance(annotation, type) and issubclass(annotation, enum.Enum):
+        values = [m.value for m in annotation]
+        return {"enum": values}
+
+    # Unknown / custom class → fall back to string
+    return {"type": "string"}
+
 
 def _build_tool_schema(name: str, fn) -> dict:
-    """Build a JSON Schema 'properties' dict from function signature."""
+    """Build a JSON Schema 'object' from function signature + metadata.
+
+    Skips `self`/`cls`, `*args` (VAR_POSITIONAL) and `**kwargs` (VAR_KEYWORD)
+    entirely — they cannot be expressed as fixed schema properties.
+    """
     sig = inspect.signature(fn)
     meta = METHOD_METADATA.get(name, {})
     param_descriptions = meta.get("param_descriptions", {}) or {}
-    properties = {}
-    required = []
+    properties: dict[str, dict] = {}
+    required: list[str] = []
     for pname, param in sig.parameters.items():
         if pname in ("self", "cls"):
             continue
-        prop: dict = {}
-        annotation = param.annotation
-        if annotation == inspect.Parameter.empty:
-            prop["type"] = "string"
-        elif annotation is str:
-            prop["type"] = "string"
-        elif annotation is int:
-            prop["type"] = "integer"
-        elif annotation is float:
-            prop["type"] = "number"
-        elif annotation is bool:
-            prop["type"] = "boolean"
-        elif annotation is dict:
-            prop["type"] = "object"
-        elif annotation is list:
-            prop["type"] = "array"
-        else:
-            prop["type"] = "string"
+        # **kwargs / *args have no fixed schema shape — drop them.
+        if param.kind in (inspect.Parameter.VAR_KEYWORD, inspect.Parameter.VAR_POSITIONAL):
+            continue
+
+        prop = _annotation_to_schema(param.annotation)
 
         if param.default is inspect.Parameter.empty:
             required.append(pname)
         else:
-            prop["default"] = param.default
+            # Only emit JSON-serializable defaults; otherwise skip.
+            try:
+                json.dumps(param.default)
+                prop["default"] = param.default
+            except (TypeError, ValueError):
+                pass
 
         if pname in param_descriptions:
             prop["description"] = param_descriptions[pname]
 
         properties[pname] = prop
 
-    schema = {"type": "object", "properties": properties}
+    schema: dict = {"type": "object", "properties": properties}
     if required:
         schema["required"] = required
     return schema
@@ -84,17 +168,43 @@ def _make_description(name: str, fn) -> str:
     return f"Mimicry: {name}"
 
 
-app = Server("mimicry")
+# ---------------------------------------------------------------------------
+# Tool name <-> RPC name bidirectional map
+# ---------------------------------------------------------------------------
+
+# Convention: dotted RPC name → tool name = replace ALL "." with "_".
+# E.g. "browser.navigate" → "browser_navigate", "workflow.set_breakpoint" →
+# "workflow_set_breakpoint". The reverse map is built once and used for O(1)
+# dispatch in call_tool, eliminating the brittle replace heuristic.
+_TOOL_NAME_TO_RPC: dict[str, str] = {}
+
+
+def _rpc_to_tool_name(rpc_name: str) -> str:
+    return rpc_name.replace(".", "_")
+
+
+def _rebuild_name_map() -> None:
+    _TOOL_NAME_TO_RPC.clear()
+    for rpc_name in METHOD_REGISTRY:
+        if rpc_name in _SKIP_METHODS:
+            continue
+        _TOOL_NAME_TO_RPC[_rpc_to_tool_name(rpc_name)] = rpc_name
+
+
+# Build at import time so call_tool can dispatch even before list_tools is hit.
+_rebuild_name_map()
+
+
+app = Server("mimicry", instructions=_SERVER_INSTRUCTIONS)
 
 
 @app.list_tools()
 async def list_tools() -> list[Tool]:
+    # Refresh in case methods were registered after import.
+    _rebuild_name_map()
     tools = []
-    for method_name, fn in METHOD_REGISTRY.items():
-        if method_name in _SKIP_METHODS:
-            continue
-        # Convert dotted name to underscore for MCP tool naming
-        tool_name = method_name.replace(".", "_")
+    for tool_name, method_name in _TOOL_NAME_TO_RPC.items():
+        fn = METHOD_REGISTRY[method_name]
         schema = _build_tool_schema(method_name, fn)
         tools.append(Tool(
             name=tool_name,
@@ -105,24 +215,33 @@ async def list_tools() -> list[Tool]:
 
 
 @app.call_tool()
-async def call_tool(name: str, arguments: dict) -> list[TextContent]:
-    # Convert underscore back to dotted name
-    method_name = name.replace("_", ".", 1) if "_" in name else name
+async def call_tool(name: str, arguments: dict) -> list[TextContent] | CallToolResult:
+    """Dispatch an MCP tool call to the underlying RPC method.
 
-    # Try exact match first, then try full underscore-to-dot conversion
+    Returns a plain list[TextContent] on success (the SDK wraps it with
+    isError=False), and a CallToolResult with isError=True on any failure
+    path — unknown tool/method or exception raised by the RPC handler.
+    Surfacing isError at the protocol level lets MCP clients distinguish
+    failures without parsing the JSON payload.
+    """
+    def _err(message: str) -> CallToolResult:
+        return CallToolResult(
+            content=[TextContent(type="text", text=json.dumps({"error": message}, ensure_ascii=False))],
+            isError=True,
+        )
+
+    method_name = _TOOL_NAME_TO_RPC.get(name)
+    if method_name is None:
+        return _err(f"Unknown tool: {name}")
     fn = METHOD_REGISTRY.get(method_name)
     if fn is None:
-        # Try replacing all underscores
-        method_name = name.replace("_", ".")
-        fn = METHOD_REGISTRY.get(method_name)
-    if fn is None:
-        return [TextContent(type="text", text=json.dumps({"error": f"Unknown method: {name}"}))]
+        return _err(f"Unknown method: {method_name}")
 
     try:
         result = fn(**arguments) if arguments else fn()
         return [TextContent(type="text", text=json.dumps(result, ensure_ascii=False, default=str))]
     except Exception as e:
-        return [TextContent(type="text", text=json.dumps({"error": str(e)}))]
+        return _err(str(e))
 
 
 async def _run():
