@@ -382,6 +382,20 @@ class BrowserController:
         # Inject anti-detection patches before any navigation
         self._inject_stealth_scripts()
 
+        # Flush any init_scripts registered before launch (e.g. workflow-level
+        # scripts registered by executor.execute() before the first
+        # browser.launch node). _apply_init_script_to_context early-returns
+        # when _context is None, so without this flush those scripts would
+        # silently never be applied to Playwright.
+        if self._init_scripts:
+            ctx = self._context
+            if ctx is not None:
+                for _name, body in self._init_scripts.items():
+                    try:
+                        ctx.add_init_script(body)
+                    except Exception as e:
+                        logger.warning(f"Failed to flush pre-launch init script {_name}: {e}")
+
         # Navigate to startup URL if configured
         startup_url = (profile or {}).get("browser_config", {}).get("startup_url")
         if startup_url and startup_url.startswith(("http://", "https://")):
@@ -1026,6 +1040,11 @@ class BrowserController:
             return
         self._pages_with_net_hooks.add(id(page))
 
+        # Resource types whose bodies are almost never useful for LLM-driven
+        # workflow debugging. Reading their bodies blocks the page event loop
+        # under Playwright sync API (resp.body() is synchronous).
+        _SKIP_BODY_RESOURCE_TYPES = frozenset({"image", "media", "font", "stylesheet"})
+
         def _on_request(req, _self=self):
             if not _self._network_capture_enabled:
                 return
@@ -1042,7 +1061,11 @@ class BrowserController:
                     "request_headers": dict(req.headers) if req.headers else {},
                     "response_headers": None,
                     "post_data": req.post_data,
-                    "response_body": None,
+                    "response_body": None,           # raw bytes (capped) or None
+                    "response_body_skipped": None,   # reason if not captured
+                    "original_size": None,           # actual response byte length (best-effort)
+                    "body_truncated": False,
+                    "_req": req,
                     "_started": time.time(),
                 })
             except Exception as e:
@@ -1052,31 +1075,74 @@ class BrowserController:
             if not _self._network_capture_enabled:
                 return
             try:
-                # Find the most recent matching request entry without a status yet
-                for entry in reversed(_self._network_requests):
-                    if entry.get("status") is None and entry.get("url") == resp.url:
-                        entry["status"] = resp.status
-                        try:
-                            entry["response_headers"] = dict(resp.headers) if resp.headers else {}
-                        except Exception:
-                            entry["response_headers"] = {}
-                        started = entry.pop("_started", None)
-                        if started:
-                            entry["duration_ms"] = int((time.time() - started) * 1000)
-                        # Best-effort body capture (sync API; cap size)
-                        try:
-                            body_bytes = resp.body()
-                            if body_bytes is not None:
-                                if len(body_bytes) > _RESPONSE_BODY_MAX_BYTES:
-                                    body_bytes = body_bytes[:_RESPONSE_BODY_MAX_BYTES]
-                                    entry["response_body_truncated"] = True
-                                try:
-                                    entry["response_body"] = body_bytes.decode("utf-8")
-                                except UnicodeDecodeError:
-                                    entry["response_body"] = body_bytes.decode("latin-1", errors="replace")
-                        except Exception:
-                            entry["response_body"] = None
+                # Match by request identity — robust against duplicate URLs
+                # (redirects, polling endpoints). Falls back to URL match for
+                # entries that pre-date the _req field.
+                req = resp.request
+                entry = None
+                for e in reversed(_self._network_requests):
+                    if e.get("_req") is req:
+                        entry = e
                         break
+                if entry is None:
+                    for e in reversed(_self._network_requests):
+                        if e.get("status") is None and e.get("url") == resp.url:
+                            entry = e
+                            break
+                if entry is None:
+                    return
+
+                entry["status"] = resp.status
+                try:
+                    entry["response_headers"] = dict(resp.headers) if resp.headers else {}
+                except Exception:
+                    entry["response_headers"] = {}
+                started = entry.pop("_started", None)
+                if started:
+                    entry["duration_ms"] = int((time.time() - started) * 1000)
+
+                # Determine declared content length
+                declared_size: int | None = None
+                cl = (entry["response_headers"] or {}).get("content-length")
+                if cl:
+                    try:
+                        declared_size = int(cl)
+                    except (TypeError, ValueError):
+                        declared_size = None
+                if declared_size is not None:
+                    entry["original_size"] = declared_size
+
+                # Skip body for filtered resource types
+                rtype = entry.get("resource_type") or ""
+                if rtype in _SKIP_BODY_RESOURCE_TYPES:
+                    entry["response_body_skipped"] = "filtered_resource_type"
+                    return
+
+                # Skip body if declared size > cap — avoid pulling huge payloads
+                # which would block the sync page event loop.
+                if declared_size is not None and declared_size > _RESPONSE_BODY_MAX_BYTES:
+                    entry["response_body_skipped"] = "too_large"
+                    entry["body_truncated"] = True
+                    return
+
+                # Best-effort body capture (sync API; cap size)
+                try:
+                    body_bytes = resp.body()
+                except Exception as e:  # noqa: BLE001 — Playwright raises various concrete types
+                    entry["response_body_skipped"] = f"error:{type(e).__name__}"
+                    return
+
+                if body_bytes is None:
+                    return
+                actual = len(body_bytes)
+                if entry.get("original_size") is None:
+                    entry["original_size"] = actual
+                if actual > _RESPONSE_BODY_MAX_BYTES:
+                    body_bytes = body_bytes[:_RESPONSE_BODY_MAX_BYTES]
+                    entry["body_truncated"] = True
+                # Store raw bytes; defer decoding to network.get so we don't
+                # corrupt UTF-8 multi-byte sequences at the truncation boundary.
+                entry["response_body"] = body_bytes
             except Exception as e:
                 logger.debug(f"net response hook error: {e}")
 
@@ -1112,10 +1178,13 @@ class BrowserController:
             items = [e for e in items if (e.get("method") or "").upper() == mu]
         if status is not None:
             items = [e for e in items if e.get("status") == status]
-        # Strip large body field from list output to keep payload small
+        # Strip body / internal refs from list output to keep payload small.
+        # Surface original_size + body_truncated so LLMs can decide whether
+        # network.get is worth calling.
         slim = []
+        _hidden = ("response_body", "_started", "_req")
         for e in items:
-            slim.append({k: v for k, v in e.items() if k not in ("response_body", "_started")})
+            slim.append({k: v for k, v in e.items() if k not in _hidden})
         total = len(slim)
         slim = slim[offset: offset + max(0, limit)]
         return {"total": total, "items": slim}
@@ -1123,7 +1192,14 @@ class BrowserController:
     def get_network_request(self, request_id: int) -> dict | None:
         for entry in self._network_requests:
             if entry.get("id") == request_id:
-                return {k: v for k, v in entry.items() if k != "_started"}
+                out = {k: v for k, v in entry.items() if k not in ("_started", "_req")}
+                # Lazy-decode bytes here so we never corrupt UTF-8 at the
+                # 256KB truncation boundary. errors='replace' yields U+FFFD
+                # for truncated/binary payloads.
+                body = out.get("response_body")
+                if isinstance(body, (bytes, bytearray)):
+                    out["response_body"] = bytes(body).decode("utf-8", errors="replace")
+                return out
         return None
 
     def clear_network_requests(self) -> None:

@@ -844,7 +844,7 @@ def network_list(session_id: str = "default", url_contains: str | None = None,
 
 @rpc_method(
     "network.get",
-    description="Fetch a single captured request by id, including request/response headers and the (possibly truncated) response body.",
+    description="Fetch a single captured request by id, including request/response headers and the response body. Bodies are capped at 256KB; if the response was larger, body_truncated=True and original_size shows the full byte count. Bodies are decoded with errors='replace' so truncated UTF-8 sequences or binary payloads will contain U+FFFD characters. Bodies may be omitted (response_body_skipped reason set) for image/media/font/stylesheet resource types or when the response was too large to safely read under the sync Playwright API.",
     param_descriptions={
         "request_id": "Numeric id from the network.list output.",
         "session_id": "Browser session ID; defaults to 'default'.",
