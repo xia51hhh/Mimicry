@@ -109,6 +109,61 @@ def cmd_worktree_create(args: argparse.Namespace) -> int:
 
     _worktree_root(repo_root).mkdir(parents=True, exist_ok=True)
 
+    # Ensure task dir exists on base_branch — otherwise the new worktree
+    # (forked from base_branch) won't see it, and `task.py start <slug>`
+    # inside the worktree would fail to resolve the task.
+    task_json_rel = (task_dir / FILE_TASK_JSON).relative_to(repo_root).as_posix()
+    rc, ls_out, _ = run_git(
+        ["ls-tree", base_branch, "--", task_json_rel], cwd=repo_root
+    )
+    if rc != 0 or not ls_out.strip():
+        # task.json not on base_branch → need to bootstrap
+        rc, current_out, _ = run_git(["branch", "--show-current"], cwd=repo_root)
+        current_branch = current_out.strip() if rc == 0 else ""
+
+        if current_branch != base_branch:
+            print(
+                colored(
+                    f"Error: Task dir '{task_dir.relative_to(repo_root).as_posix()}' "
+                    f"is not committed on base branch '{base_branch}', "
+                    f"and you are on '{current_branch}'.",
+                    Colors.RED,
+                ),
+                file=sys.stderr,
+            )
+            print(
+                f"Fix: `git checkout {base_branch}` and re-run, "
+                f"or change base via `task.py set-base-branch {slug} {current_branch}`.",
+                file=sys.stderr,
+            )
+            return 1
+
+        # On base_branch — safe to auto-commit the task dir so the new
+        # worktree (forked from this commit) can see it.
+        task_dir_rel = task_dir.relative_to(repo_root).as_posix()
+        rc, _, err = run_git(["add", task_dir_rel], cwd=repo_root)
+        if rc != 0:
+            print(
+                colored(f"Error: git add failed: {err.strip()}", Colors.RED),
+                file=sys.stderr,
+            )
+            return 1
+        rc, _, err = run_git(
+            ["commit", "-m", f"chore(task): bootstrap {slug} 任务目录"],
+            cwd=repo_root,
+        )
+        if rc != 0:
+            print(
+                colored(f"Error: auto-commit failed: {err.strip()}", Colors.RED),
+                file=sys.stderr,
+            )
+            return 1
+        print(
+            colored(
+                f"✓ Auto-committed {task_dir_rel} on {base_branch}", Colors.GREEN
+            )
+        )
+
     if _branch_exists_local(branch, repo_root):
         rc, _, err = run_git(
             ["worktree", "add", str(wt_abs), branch],
