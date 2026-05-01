@@ -1,0 +1,6 @@
+{"file": ".trellis/tasks/05-01-mcp-cli-camoufox-gap-analysis/prd.md", "reason": "Locked scope + 5-phase plan; LLM CLI 定位、init-script 存储位置"}
+{"file": ".trellis/tasks/05-01-mcp-cli-camoufox-gap-analysis/research/mcp-tool-design.md", "reason": "P0 bugs 详证：schema 推断 11 处缺陷、命名 round-trip、isError、描述覆盖率 27.8%"}
+{"file": ".trellis/tasks/05-01-mcp-cli-camoufox-gap-analysis/research/capability-gap.md", "reason": "Top3 移植清单（network capture / console buffer / init-scripts）的源行号"}
+{"file": ".trellis/tasks/05-01-mcp-cli-camoufox-gap-analysis/research/cli-ux.md", "reason": "三 CLI 现状 + --json 不一致点 + SKILL.md 漂移清单"}
+{"file": ".trellis/spec/cross-layer/index.md", "reason": "cross-layer 通用约定入口"}
+{"file": "CLAUDE.md", "reason": "三入口共享 actions.py 的硬约束 + action-map sync 规则"}

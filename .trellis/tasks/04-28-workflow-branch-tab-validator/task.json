@@ -1,7 +1,7 @@
 {
   "id": "04-28-workflow-branch-tab-validator",
   "title": "工作流静态分析与实时验证系统（调试器+画布集成）",
-  "status": "done",
+  "status": "completed",
   "priority": "medium",
   "created": "2026-04-28",
   "completed": "2026-04-29",
