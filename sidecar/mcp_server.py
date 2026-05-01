@@ -23,7 +23,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from mcp.server import Server
 from mcp.server.stdio import stdio_server
-from mcp.types import TextContent, Tool
+from mcp.types import CallToolResult, TextContent, Tool
 
 # Import all RPC methods (side-effect: registers into METHOD_REGISTRY)
 import browser.actions  # noqa: F401
@@ -215,19 +215,33 @@ async def list_tools() -> list[Tool]:
 
 
 @app.call_tool()
-async def call_tool(name: str, arguments: dict) -> list[TextContent]:
+async def call_tool(name: str, arguments: dict) -> list[TextContent] | CallToolResult:
+    """Dispatch an MCP tool call to the underlying RPC method.
+
+    Returns a plain list[TextContent] on success (the SDK wraps it with
+    isError=False), and a CallToolResult with isError=True on any failure
+    path — unknown tool/method or exception raised by the RPC handler.
+    Surfacing isError at the protocol level lets MCP clients distinguish
+    failures without parsing the JSON payload.
+    """
+    def _err(message: str) -> CallToolResult:
+        return CallToolResult(
+            content=[TextContent(type="text", text=json.dumps({"error": message}, ensure_ascii=False))],
+            isError=True,
+        )
+
     method_name = _TOOL_NAME_TO_RPC.get(name)
     if method_name is None:
-        return [TextContent(type="text", text=json.dumps({"error": f"Unknown tool: {name}"}))]
+        return _err(f"Unknown tool: {name}")
     fn = METHOD_REGISTRY.get(method_name)
     if fn is None:
-        return [TextContent(type="text", text=json.dumps({"error": f"Unknown method: {method_name}"}))]
+        return _err(f"Unknown method: {method_name}")
 
     try:
         result = fn(**arguments) if arguments else fn()
         return [TextContent(type="text", text=json.dumps(result, ensure_ascii=False, default=str))]
     except Exception as e:
-        return [TextContent(type="text", text=json.dumps({"error": str(e)}))]
+        return _err(str(e))
 
 
 async def _run():
