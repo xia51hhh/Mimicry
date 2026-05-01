@@ -1,1 +1,10 @@
-{"_example": "Fill with {\"file\": \"<path>\", \"reason\": \"<why>\"}. Put spec/research files only — no code paths. Run `python3 .trellis/scripts/get_context.py --mode packages` to list available specs. Delete this line once real entries are added."}
+{"file": ".trellis/spec/cross-layer/index.md", "reason": "跨层转换契约和数据流规范"}
+{"file": ".trellis/spec/cross-layer/block-schema.md", "reason": "Block JSON Schema — Compact↔Canonical 转换的核心参照"}
+{"file": ".trellis/spec/frontend/index.md", "reason": "前端 Vue/TS 编码规范"}
+{"file": ".trellis/spec/frontend/type-safety.md", "reason": "类型安全要求，涉及新增 CompactWorkflow 类型"}
+{"file": ".trellis/spec/frontend/state-management.md", "reason": "Pinia store 模式，导入导出涉及 workflowStore"}
+{"file": ".trellis/spec/sidecar/index.md", "reason": "Python sidecar 规范，Backend 格式要与 executor 协调"}
+{"file": ".trellis/spec/sidecar/mcp-rpc-cli.md", "reason": "MCP/RPC 契约，Compact 格式需兼容 CLI/MCP 调用路径"}
+{"file": "docs/design/transform-layer.md", "reason": "860行完整设计文档 — 四种格式定义、Rust 结构体、转换算法、自动布局、API 设计"}
+{"file": "shared/action-map.json", "reason": "PascalCase↔snake_case 映射源文件，Rust 编译时加载"}
+{"file": ".trellis/tasks/04-28-workflow-interchange-layer/prd.md", "reason": "需求文档，含验收标准"}

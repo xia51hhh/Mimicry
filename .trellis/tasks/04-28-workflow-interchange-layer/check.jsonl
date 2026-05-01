@@ -1,1 +1,7 @@
-{"_example": "Fill with {\"file\": \"<path>\", \"reason\": \"<why>\"}. Put spec/research files only — no code paths. Run `python3 .trellis/scripts/get_context.py --mode packages` to list available specs. Delete this line once real entries are added."}
+{"file": ".trellis/spec/cross-layer/index.md", "reason": "跨层数据流校验基准"}
+{"file": ".trellis/spec/cross-layer/block-schema.md", "reason": "Block Schema 一致性校验"}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "前端质量标准"}
+{"file": ".trellis/spec/frontend/type-safety.md", "reason": "TypeScript 严格模式校验"}
+{"file": ".trellis/spec/sidecar/mcp-rpc-cli.md", "reason": "CLI/MCP 路径兼容性校验"}
+{"file": "docs/design/transform-layer.md", "reason": "设计文档作为 spec compliance 参照"}
+{"file": ".trellis/tasks/04-28-workflow-interchange-layer/prd.md", "reason": "验收标准参照"}
