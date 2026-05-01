@@ -1,0 +1,4 @@
+{"file": ".trellis/spec/cross-layer/block-schema.md", "reason": "Style baseline for the new parallel-development.md — check sections, table density, Forbidden Patterns row count"}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "Style baseline for the new parallel-task-thinking-guide.md — check checklist density and Common Mistakes table shape"}
+{"file": ".trellis/spec/guides/code-reuse-thinking-guide.md", "reason": "Verify common/worktree.py reuses existing common/* helpers (run_git / read_json / write_json / resolve_task_dir / iter_active_tasks) rather than re-implementing them"}
+{"file": ".trellis/workflow.md", "reason": "Verify the addendum to workflow.md does not duplicate or contradict the existing 3-phase flow; it should be a pointer section, not a rewrite"}

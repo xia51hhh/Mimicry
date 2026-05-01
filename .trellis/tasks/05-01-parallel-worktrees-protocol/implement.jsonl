@@ -1,0 +1,6 @@
+{"file": ".trellis/spec/cross-layer/index.md", "reason": "Entry point for cross-layer specs; the new parallel-development.md must be added to its Files table"}
+{"file": ".trellis/spec/cross-layer/block-schema.md", "reason": "Style template for the new parallel-development.md hard-contract doc — mirror its structure (Scope / contract tables / Forbidden Patterns)"}
+{"file": ".trellis/spec/guides/index.md", "reason": "Entry point for thinking guides; the new parallel-task-thinking-guide.md must be added to Available Guides table and Quick Reference"}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "Style template for the new parallel-task-thinking-guide.md — mirror its structure (Problem / Before Implementing / Common Mistakes / Checklist)"}
+{"file": ".trellis/spec/guides/code-reuse-thinking-guide.md", "reason": "Mandatory reuse rules — the new common/worktree.py MUST reuse run_git, read_json/write_json, resolve_task_dir, iter_active_tasks, etc. from existing common/* modules; do not re-implement"}
+{"file": ".trellis/workflow.md", "reason": "Existing phase/flow document; the implementer must add a 'Parallel Development' section after Phase Index without disrupting the existing 3-phase flow"}
