@@ -72,6 +72,8 @@ def _start_daemon_bg():
     """Fork the daemon as a background process."""
     python = sys.executable
     sidecar_dir = os.path.dirname(os.path.abspath(__file__))
+    log_dir = os.path.join(sidecar_dir, "logs")
+    os.makedirs(log_dir, exist_ok=True)
     env = os.environ.copy()
     env["PYTHONPATH"] = sidecar_dir
     subprocess.Popen(
@@ -79,7 +81,7 @@ def _start_daemon_bg():
         cwd=sidecar_dir,
         env=env,
         stdout=subprocess.DEVNULL,
-        stderr=open(os.path.join(sidecar_dir, "daemon.log"), "a"),
+        stderr=open(os.path.join(log_dir, "daemon.log"), "a"),
         start_new_session=True,  # detach from terminal
     )
 
@@ -201,7 +203,7 @@ def cmd_daemon(args):
             if check():
                 print("Daemon started")
             else:
-                print("Daemon failed to start, check daemon.log", file=sys.stderr)
+                print("Daemon failed to start, check sidecar/logs/daemon.log", file=sys.stderr)
                 sys.exit(1)
     elif sub == "stop":
         resp = _call("shutdown", timeout=5)
