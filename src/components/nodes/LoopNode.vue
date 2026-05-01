@@ -26,6 +26,10 @@
   const nodeStatus = computed(() => execution.getNodeStatus(props.id));
   const isSelected = computed(() => props.selected || workflow.selectedNodeId === props.id);
   const diagLevel = computed(() => validation.getNodeMaxLevel(props.id));
+  const hasBreakpoint = computed(() => execution.hasBreakpoint(props.id));
+  const isPaused = computed(
+    () => execution.paused && execution.currentNodeId === props.id,
+  );
 </script>
 
 <template>
@@ -33,10 +37,15 @@
     class="node-loop"
     :class="[
       `status-${nodeStatus}`,
-      { 'node-selected': isSelected },
+      { 'node-selected': isSelected, 'node-paused': isPaused, 'has-breakpoint': hasBreakpoint },
       diagLevel && `diag-${diagLevel}`,
     ]"
   >
+    <span
+      v-if="hasBreakpoint"
+      class="breakpoint-dot"
+      @click.stop="execution.toggleBreakpoint(id)"
+    />
     <Handle type="target" :position="Position.Left" class="handle handle-target" />
     <div class="node-inner">
       <div class="node-icon">
@@ -173,6 +182,32 @@
   }
   .status-error {
     border-color: #ef5350;
+  }
+
+  .breakpoint-dot {
+    position: absolute;
+    left: -12px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: #ef5350;
+    box-shadow: 0 0 4px rgba(239, 83, 80, 0.6);
+    cursor: pointer;
+    z-index: 10;
+  }
+  .breakpoint-dot:hover {
+    transform: translateY(-50%) scale(1.3);
+  }
+  .node-paused {
+    border-color: #ffa726;
+    box-shadow: 0 0 12px rgba(255, 167, 38, 0.5);
+    animation: pulse-paused 2s ease-in-out infinite;
+  }
+  @keyframes pulse-paused {
+    0%, 100% { box-shadow: 0 0 8px rgba(255, 167, 38, 0.4); }
+    50% { box-shadow: 0 0 16px rgba(255, 167, 38, 0.7); }
   }
 
   .diag-error {

@@ -16,7 +16,7 @@
   const validation = useValidationStore();
   const workflow = useWorkflowStore();
   const fileOps = useFileOps();
-  const activeTab = ref<'json' | 'logs' | 'variables' | 'problems'>('json');
+  const activeTab = ref<'json' | 'logs' | 'variables' | 'problems' | 'debug'>('json');
   const logContainer = ref<HTMLElement>();
 
   const {
@@ -166,6 +166,18 @@
             {{ validation.totalCount }}
           </span>
         </button>
+        <button
+          :class="['tab-btn', activeTab === 'debug' && 'active']"
+          @click="
+            activeTab = 'debug';
+            collapsed = false;
+          "
+        >
+          {{ t('bottomPanel.debug') }}
+          <span v-if="execution.breakpointIds.size > 0" class="badge badge-debug">
+            {{ execution.breakpointIds.size }}
+          </span>
+        </button>
       </div>
       <div class="flex items-center gap-1">
         <button class="collapse-btn" @click="toggleCollapse">
@@ -254,6 +266,51 @@
             <span class="problem-msg">{{ diag.message }}</span>
             <span v-if="diag.action" class="problem-action">{{ diag.action }}</span>
             <span v-if="diag.suggestion" class="problem-suggestion">{{ diag.suggestion }}</span>
+          </div>
+        </div>
+      </div>
+
+      <div v-else-if="activeTab === 'debug'" class="debug-panel">
+        <!-- Status bar -->
+        <div class="debug-status-bar">
+          <span
+            class="debug-state-indicator"
+            :class="{
+              'state-running': execution.running && !execution.paused,
+              'state-paused': execution.paused,
+              'state-idle': !execution.running,
+            }"
+          >
+            {{
+              execution.paused
+                ? t('bottomPanel.debugPaused')
+                : execution.running
+                  ? t('bottomPanel.debugRunning')
+                  : t('bottomPanel.debugIdle')
+            }}
+          </span>
+          <span v-if="execution.currentNodeId" class="debug-current-node">
+            {{ t('bottomPanel.debugCurrentNode') }}: {{ execution.currentNodeId }}
+          </span>
+        </div>
+        <!-- Breakpoints list -->
+        <div class="debug-section">
+          <div class="debug-section-title">
+            {{ t('bottomPanel.debugBreakpoints') }} ({{ execution.breakpointIds.size }})
+          </div>
+          <div v-if="execution.breakpointIds.size === 0" class="empty-hint">
+            {{ t('bottomPanel.debugNoBreakpoints') }}
+          </div>
+          <div v-else class="breakpoint-list">
+            <div
+              v-for="bpId in [...execution.breakpointIds]"
+              :key="bpId"
+              class="breakpoint-item"
+            >
+              <span class="bp-dot" />
+              <span class="bp-id">{{ bpId }}</span>
+              <button class="bp-remove" @click="execution.toggleBreakpoint(bpId)">✕</button>
+            </div>
           </div>
         </div>
       </div>
@@ -524,5 +581,129 @@
   .badge-warning {
     background: #ffa726;
     color: #fff;
+  }
+
+  .badge-debug {
+    background: #ef5350;
+    color: #fff;
+  }
+
+  /* Debug panel */
+  .debug-panel {
+    height: 100%;
+    overflow-y: auto;
+    padding: 8px 12px;
+    font-size: 12px;
+  }
+
+  .debug-status-bar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 6px 10px;
+    background: var(--color-surface-hover);
+    border-radius: 6px;
+    margin-bottom: 8px;
+  }
+
+  .debug-state-indicator {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-weight: 600;
+    font-size: 11px;
+  }
+
+  .debug-state-indicator::before {
+    content: '';
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+  }
+
+  .state-idle::before {
+    background: var(--color-text-muted);
+  }
+  .state-running::before {
+    background: #42a5f5;
+    animation: pulse-dot 1.5s ease-in-out infinite;
+  }
+  .state-paused::before {
+    background: #ffa726;
+  }
+
+  @keyframes pulse-dot {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+
+  .debug-current-node {
+    color: var(--color-text-muted);
+    font-family: 'JetBrains Mono', 'Fira Code', monospace;
+    font-size: 11px;
+  }
+
+  .debug-section {
+    margin-top: 8px;
+  }
+
+  .debug-section-title {
+    font-weight: 600;
+    font-size: 11px;
+    color: var(--color-text-muted);
+    text-transform: uppercase;
+    margin-bottom: 4px;
+  }
+
+  .breakpoint-list {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .breakpoint-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 3px 8px;
+    border-radius: 4px;
+    transition: background 0.15s;
+  }
+  .breakpoint-item:hover {
+    background: var(--color-surface-hover);
+  }
+
+  .bp-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #ef5350;
+    flex-shrink: 0;
+  }
+
+  .bp-id {
+    font-family: 'JetBrains Mono', 'Fira Code', monospace;
+    font-size: 11px;
+    color: var(--color-text);
+  }
+
+  .bp-remove {
+    margin-left: auto;
+    background: none;
+    border: none;
+    color: var(--color-text-muted);
+    cursor: pointer;
+    font-size: 10px;
+    padding: 2px 4px;
+    border-radius: 3px;
+    opacity: 0;
+    transition: opacity 0.15s;
+  }
+  .breakpoint-item:hover .bp-remove {
+    opacity: 1;
+  }
+  .bp-remove:hover {
+    color: #ef5350;
+    background: rgba(239, 83, 80, 0.1);
   }
 </style>

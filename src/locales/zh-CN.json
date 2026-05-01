@@ -178,7 +178,8 @@
     "delayMultiplier": "延迟倍率",
     "pause": "暂停",
     "resume": "继续",
-    "step": "单步执行"
+    "step": "单步执行",
+    "breakpoint": "断点"
   },
   "shortcut": {
     "undo": "撤销",
@@ -195,22 +196,30 @@
     "disconnect": "断开连接",
     "delete": "删除",
     "selectAll": "全选",
-    "fitView": "适应视图"
+    "fitView": "适应视图",
+    "toggleBreakpoint": "切换断点"
   },
   "bottomPanel": {
     "json": "JSON",
     "logs": "日志",
     "variables": "变量",
     "problems": "问题",
+    "debug": "调试",
     "noLogs": "执行工作流后查看日志",
     "noVariables": "执行工作流后查看变量",
     "noProblems": "未检测到问题",
-    "varName": "变量名",
+    "varName": "名称",
     "varValue": "值",
     "varType": "类型",
     "validateNow": "验证",
     "errorsCount": "{count} 个错误",
-    "warningsCount": "{count} 个警告"
+    "warningsCount": "{count} 个警告",
+    "debugIdle": "空闲",
+    "debugRunning": "运行中",
+    "debugPaused": "已暂停",
+    "debugCurrentNode": "当前节点",
+    "debugBreakpoints": "断点",
+    "debugNoBreakpoints": "点击节点左侧红点添加断点"
   },
   "settings": {
     "title": "设置",
