@@ -10,6 +10,6 @@ pub use action_map::{to_backend, to_frontend};
 pub use backend::canonical_to_backend;
 pub use compact::{canonical_to_compact, compact_to_canonical};
 pub use detect::{detect_format, WorkflowFormat};
-pub use layout::{auto_layout, LayoutConfig};
+pub use layout::{auto_layout, BranchAwareLayout, EdgeDef, LayoutConfig};
 pub use legacy::legacy_to_canonical;
 pub use types::*;
