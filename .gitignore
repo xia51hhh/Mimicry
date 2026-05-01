@@ -43,3 +43,6 @@ sidecar/dist/
 
 # External project clones for research/comparison (not part of source tree)
 examples/external/
+
+# Trellis parallel-development worktrees (each is its own checked-out branch)
+.trellis/worktrees/

@@ -56,6 +56,12 @@ from common.task_context import (
     cmd_validate,
     cmd_list_context,
 )
+from common.worktree import (
+    cmd_worktree_create,
+    cmd_worktree_remove,
+    cmd_worktree_list,
+    cmd_worktree_status,
+)
 
 
 # =============================================================================
@@ -131,6 +137,57 @@ def cmd_finish(args: argparse.Namespace) -> int:
 # Command: list
 # =============================================================================
 
+def _prd_declares_hotfile(prd_path, hotfile: str) -> bool:
+    """Return True if the PRD's `hotfiles_touched:` block contains the path.
+
+    Accepts the YAML-list form embedded under any heading:
+        parallel:
+          hotfiles_touched:
+            - shared/action-map.json
+            - .trellis/spec/cross-layer/block-schema.md
+
+    Quoted entries (`"path"`) and trailing inline comments (`# ...`) are stripped.
+    """
+    if not prd_path.is_file():
+        return False
+    try:
+        content = prd_path.read_text(encoding="utf-8")
+    except OSError:
+        return False
+
+    in_block = False
+    for raw in content.splitlines():
+        stripped = raw.strip()
+        if stripped.startswith("hotfiles_touched:"):
+            in_block = True
+            # Inline form: hotfiles_touched: [a, b]
+            after = stripped[len("hotfiles_touched:"):].strip()
+            if after.startswith("[") and after.endswith("]"):
+                items = [s.strip().strip('"').strip("'") for s in after[1:-1].split(",")]
+                if hotfile in items:
+                    return True
+                in_block = False
+            continue
+        if not in_block:
+            continue
+        if stripped.startswith("- "):
+            entry = stripped[2:].strip()
+            if "#" in entry:
+                entry = entry.split("#", 1)[0].strip()
+            if (entry.startswith('"') and entry.endswith('"')) or (
+                entry.startswith("'") and entry.endswith("'")
+            ):
+                entry = entry[1:-1]
+            if entry == hotfile:
+                return True
+        elif stripped == "" or stripped.startswith("#"):
+            # blank / comment lines inside the YAML list — keep scanning
+            continue
+        else:
+            in_block = False
+    return False
+
+
 def cmd_list(args: argparse.Namespace) -> int:
     """List active tasks."""
     repo_root = get_repo_root()
@@ -139,12 +196,15 @@ def cmd_list(args: argparse.Namespace) -> int:
     developer = get_developer(repo_root)
     filter_mine = args.mine
     filter_status = args.status
+    filter_hotfile = getattr(args, "hotfile", None)
 
     if filter_mine:
         if not developer:
             print(colored("Error: No developer set. Run init_developer.py first", Colors.RED), file=sys.stderr)
             return 1
         print(colored(f"My tasks (assignee: {developer}):", Colors.BLUE))
+    elif filter_hotfile:
+        print(colored(f"Tasks claiming hotfile '{filter_hotfile}':", Colors.BLUE))
     else:
         print(colored("All active tasks:", Colors.BLUE))
     print()
@@ -166,6 +226,10 @@ def cmd_list(args: argparse.Namespace) -> int:
 
         # Apply --status filter
         if filter_status and t.status != filter_status:
+            return
+
+        # Apply --hotfile filter (matches PRD `hotfiles_touched:` declarations)
+        if filter_hotfile and not _prd_declares_hotfile(t.directory / "prd.md", filter_hotfile):
             return
 
         relative_path = f"{DIR_WORKFLOW}/{DIR_TASKS}/{dir_name}"
@@ -390,6 +454,7 @@ def main() -> int:
     p_list = subparsers.add_parser("list", help="List tasks")
     p_list.add_argument("--mine", "-m", action="store_true", help="My tasks only")
     p_list.add_argument("--status", "-s", help="Filter by status")
+    p_list.add_argument("--hotfile", help="Filter to tasks declaring this path in PRD `hotfiles_touched`")
 
     # add-subtask
     p_addsub = subparsers.add_parser("add-subtask", help="Link child task to parent")
@@ -404,6 +469,23 @@ def main() -> int:
     # list-archive
     p_listarch = subparsers.add_parser("list-archive", help="List archived tasks")
     p_listarch.add_argument("month", nargs="?", help="Month (YYYY-MM)")
+
+    # worktree (subcommand group)
+    p_worktree = subparsers.add_parser("worktree", help="Manage git worktrees for tasks")
+    wt_subparsers = p_worktree.add_subparsers(dest="worktree_action", help="Worktree action")
+
+    p_wt_create = wt_subparsers.add_parser("create", help="Create worktree for task")
+    p_wt_create.add_argument("slug", help="Task slug or directory")
+    p_wt_create.add_argument("--branch", help="Override branch name (default: task.json.branch or feat/<slug>)")
+
+    p_wt_remove = wt_subparsers.add_parser("remove", help="Remove task's worktree")
+    p_wt_remove.add_argument("slug", help="Task slug or directory")
+    p_wt_remove.add_argument("--force", action="store_true", help="Skip dirty/ahead-of-base safety checks")
+
+    wt_subparsers.add_parser("list", help="List active worktrees")
+
+    p_wt_status = wt_subparsers.add_parser("status", help="Show worktree status")
+    p_wt_status.add_argument("slug", help="Task slug or directory")
 
     args = parser.parse_args()
 
@@ -426,6 +508,7 @@ def main() -> int:
         "remove-subtask": cmd_remove_subtask,
         "list": cmd_list,
         "list-archive": cmd_list_archive,
+        "worktree": _cmd_worktree_dispatch,
     }
 
     if args.command in commands:
@@ -433,6 +516,29 @@ def main() -> int:
     else:
         show_usage()
         return 1
+
+
+_WORKTREE_ACTIONS = {
+    "create": cmd_worktree_create,
+    "remove": cmd_worktree_remove,
+    "list": cmd_worktree_list,
+    "status": cmd_worktree_status,
+}
+
+
+def _cmd_worktree_dispatch(args: argparse.Namespace) -> int:
+    """Dispatch nested `task.py worktree {create|remove|list|status}` subcommand."""
+    action = getattr(args, "worktree_action", None)
+    if action not in _WORKTREE_ACTIONS:
+        print(
+            colored(
+                "Usage: task.py worktree {create|remove|list|status}",
+                Colors.RED,
+            ),
+            file=sys.stderr,
+        )
+        return 1
+    return _WORKTREE_ACTIONS[action](args)
 
 
 if __name__ == "__main__":
