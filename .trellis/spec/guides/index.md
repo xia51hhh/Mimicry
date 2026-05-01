@@ -23,6 +23,7 @@ These guides help you **ask the right questions before coding**.
 |-------|---------|-------------|
 | [Code Reuse Thinking Guide](./code-reuse-thinking-guide.md) | Identify patterns and reduce duplication | When you notice repeated patterns |
 | [Cross-Layer Thinking Guide](./cross-layer-thinking-guide.md) | Think through data flow across layers | Features spanning multiple layers |
+| [Parallel Task Thinking Guide](./parallel-task-thinking-guide.md) | Decide whether to open a peer worktree task running concurrently in another terminal | Before opening a parallel task; covers 5-step entry flow, decision tree, and merge-conflict pitfalls |
 
 ---
 
@@ -46,6 +47,14 @@ These guides help you **ask the right questions before coding**.
 - [ ] **You're creating a new utility/helper function** ← Search first!
 
 → Read [Code Reuse Thinking Guide](./code-reuse-thinking-guide.md)
+
+### When to Think About Opening a Peer Task
+
+- [ ] You're tempted to "spin up a second agent in another terminal to parallelize"
+- [ ] You have ≥2 concurrent agents/terminals actually running
+- [ ] The work touches files no in-flight peer task currently claims (`task.py list --hotfile <path>`)
+
+→ Read [Parallel Task Thinking Guide](./parallel-task-thinking-guide.md)
 
 ---
 
