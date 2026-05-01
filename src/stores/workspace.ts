@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia';
-import { ref, computed } from 'vue';
+import { ref, computed, watch } from 'vue';
 import type { Workflow } from '../types/workflow';
 
 export interface WorkspaceTab {
@@ -7,7 +7,21 @@ export interface WorkspaceTab {
   name: string;
   /** persisted workflow id from DB, null for unsaved */
   workflowId: string | null;
+  /** file path on disk, null for DB-only workflows */
+  filePath?: string | null;
+  /** dirty flag synced from workflow store */
+  dirty?: boolean;
 }
+
+/** Serialized tab metadata for localStorage */
+interface PersistedTab {
+  id: string;
+  name: string;
+  workflowId: string | null;
+  filePath?: string | null;
+}
+
+const STORAGE_KEY = 'mimicry-workspace-tabs';
 
 /** Per-tab serialized workflow snapshot */
 export type TabWorkflowData = Workflow;
@@ -22,6 +36,46 @@ export const useWorkspaceStore = defineStore('workspace', () => {
   const activeTab = computed(
     () => tabs.value.find((t) => t.id === activeTabId.value) || tabs.value[0],
   );
+
+  // ── Persistence ───────────────────────────────────────────────────
+
+  function persistTabs() {
+    try {
+      const data: { tabs: PersistedTab[]; activeTabId: string } = {
+        tabs: tabs.value.map((t) => ({
+          id: t.id,
+          name: t.name,
+          workflowId: t.workflowId,
+          filePath: t.filePath,
+        })),
+        activeTabId: activeTabId.value,
+      };
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    } catch {
+      // localStorage may be full or unavailable
+    }
+  }
+
+  function restoreTabs() {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return;
+      const data = JSON.parse(raw) as { tabs: PersistedTab[]; activeTabId: string };
+      if (!Array.isArray(data.tabs) || data.tabs.length === 0) return;
+      tabs.value = data.tabs.map((t) => ({
+        id: t.id,
+        name: t.name,
+        workflowId: t.workflowId,
+        filePath: t.filePath ?? null,
+      }));
+      activeTabId.value = data.activeTabId || data.tabs[0].id;
+    } catch {
+      // Corrupted data — keep defaults
+    }
+  }
+
+  // Auto-persist on tab changes
+  watch([tabs, activeTabId], persistTabs, { deep: true });
 
   function saveTabData(tabId: string, data: TabWorkflowData) {
     tabDataMap.value[tabId] = data;
@@ -80,5 +134,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     closeTab,
     switchTab,
     renameTab,
+    persistTabs,
+    restoreTabs,
   };
 });

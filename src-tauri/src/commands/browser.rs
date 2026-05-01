@@ -502,3 +502,122 @@ pub fn workflow_validate(workflow: serde_json::Value) -> Result<serde_json::Valu
     let diags = crate::workflow_validator::validate(&workflow);
     Ok(serde_json::to_value(&diags).unwrap_or_default())
 }
+
+// ── Workflow debug commands ─────────────────────────────────────────
+
+#[tauri::command]
+pub async fn workflow_pause(
+    sidecar: State<'_, Mutex<Sidecar>>,
+    session_id: Option<String>,
+) -> Result<serde_json::Value, AppError> {
+    let sid = session_id.unwrap_or_else(|| "default".into());
+    sidecar_call(
+        sidecar,
+        "workflow.pause",
+        Some(serde_json::json!({"session_id": sid})),
+    )
+    .await
+}
+
+#[tauri::command]
+pub async fn workflow_unpause(
+    sidecar: State<'_, Mutex<Sidecar>>,
+    session_id: Option<String>,
+) -> Result<serde_json::Value, AppError> {
+    let sid = session_id.unwrap_or_else(|| "default".into());
+    sidecar_call(
+        sidecar,
+        "workflow.unpause",
+        Some(serde_json::json!({"session_id": sid})),
+    )
+    .await
+}
+
+#[tauri::command]
+pub async fn workflow_step(
+    sidecar: State<'_, Mutex<Sidecar>>,
+    count: Option<u32>,
+    session_id: Option<String>,
+) -> Result<serde_json::Value, AppError> {
+    let sid = session_id.unwrap_or_else(|| "default".into());
+    let n = count.unwrap_or(1);
+    sidecar_call(
+        sidecar,
+        "workflow.step",
+        Some(serde_json::json!({"count": n, "session_id": sid})),
+    )
+    .await
+}
+
+#[tauri::command]
+pub async fn workflow_inject(
+    sidecar: State<'_, Mutex<Sidecar>>,
+    block: serde_json::Value,
+    session_id: Option<String>,
+) -> Result<serde_json::Value, AppError> {
+    let sid = session_id.unwrap_or_else(|| "default".into());
+    sidecar_call(
+        sidecar,
+        "workflow.inject",
+        Some(serde_json::json!({"block": block, "session_id": sid})),
+    )
+    .await
+}
+
+#[tauri::command]
+pub async fn workflow_set_breakpoint(
+    sidecar: State<'_, Mutex<Sidecar>>,
+    node_id: String,
+    session_id: Option<String>,
+) -> Result<serde_json::Value, AppError> {
+    let sid = session_id.unwrap_or_else(|| "default".into());
+    sidecar_call(
+        sidecar,
+        "workflow.set_breakpoint",
+        Some(serde_json::json!({"node_id": node_id, "session_id": sid})),
+    )
+    .await
+}
+
+#[tauri::command]
+pub async fn workflow_remove_breakpoint(
+    sidecar: State<'_, Mutex<Sidecar>>,
+    node_id: String,
+    session_id: Option<String>,
+) -> Result<serde_json::Value, AppError> {
+    let sid = session_id.unwrap_or_else(|| "default".into());
+    sidecar_call(
+        sidecar,
+        "workflow.remove_breakpoint",
+        Some(serde_json::json!({"node_id": node_id, "session_id": sid})),
+    )
+    .await
+}
+
+#[tauri::command]
+pub async fn workflow_list_breakpoints(
+    sidecar: State<'_, Mutex<Sidecar>>,
+    session_id: Option<String>,
+) -> Result<serde_json::Value, AppError> {
+    let sid = session_id.unwrap_or_else(|| "default".into());
+    sidecar_call(
+        sidecar,
+        "workflow.list_breakpoints",
+        Some(serde_json::json!({"session_id": sid})),
+    )
+    .await
+}
+
+#[tauri::command]
+pub async fn workflow_state(
+    sidecar: State<'_, Mutex<Sidecar>>,
+    session_id: Option<String>,
+) -> Result<serde_json::Value, AppError> {
+    let sid = session_id.unwrap_or_else(|| "default".into());
+    sidecar_call(
+        sidecar,
+        "workflow.state",
+        Some(serde_json::json!({"session_id": sid})),
+    )
+    .await
+}
