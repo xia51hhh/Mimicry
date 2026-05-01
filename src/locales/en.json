@@ -188,7 +188,8 @@
     "toggleSidebar": "Toggle Sidebar",
     "toggleBottom": "Toggle Bottom",
     "toggleRight": "Toggle Right",
-    "deleteNode": "Delete Node"
+    "deleteNode": "Delete Node",
+    "toggleBreakpoint": "Toggle Breakpoint"
   },
   "contextMenu": {
     "copy": "Copy",
@@ -389,5 +390,16 @@
     "active": "Active",
     "target": "Target Session",
     "inherit": "Default (workflow session)"
+  },
+  "tooltip": {
+    "status": "Status",
+    "action": "Action",
+    "selector": "Selector",
+    "condition": "Condition",
+    "loopType": "Loop Type",
+    "count": "Count",
+    "running": "Running",
+    "success": "Success",
+    "error": "Error"
   }
 }
