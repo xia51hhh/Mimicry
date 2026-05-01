@@ -23,7 +23,7 @@ from mcp.types import TextContent, Tool
 
 # Import all RPC methods (side-effect: registers into METHOD_REGISTRY)
 import browser.actions  # noqa: F401
-from rpc.methods import METHOD_REGISTRY
+from rpc.methods import METHOD_METADATA, METHOD_REGISTRY
 
 # Methods that should NOT be exposed as MCP tools
 _SKIP_METHODS = {"shutdown", "echo"}
@@ -32,6 +32,8 @@ _SKIP_METHODS = {"shutdown", "echo"}
 def _build_tool_schema(name: str, fn) -> dict:
     """Build a JSON Schema 'properties' dict from function signature."""
     sig = inspect.signature(fn)
+    meta = METHOD_METADATA.get(name, {})
+    param_descriptions = meta.get("param_descriptions", {}) or {}
     properties = {}
     required = []
     for pname, param in sig.parameters.items():
@@ -61,6 +63,9 @@ def _build_tool_schema(name: str, fn) -> dict:
         else:
             prop["default"] = param.default
 
+        if pname in param_descriptions:
+            prop["description"] = param_descriptions[pname]
+
         properties[pname] = prop
 
     schema = {"type": "object", "properties": properties}
@@ -70,7 +75,10 @@ def _build_tool_schema(name: str, fn) -> dict:
 
 
 def _make_description(name: str, fn) -> str:
-    """Generate a description from docstring or method name."""
+    """Generate a description from registered metadata, docstring, or method name."""
+    meta = METHOD_METADATA.get(name, {})
+    if meta.get("description"):
+        return meta["description"]
     if fn.__doc__:
         return fn.__doc__.strip().split("\n")[0]
     return f"Mimicry: {name}"

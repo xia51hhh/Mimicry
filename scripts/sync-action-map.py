@@ -39,7 +39,8 @@ def parse_typescript() -> dict[str, str]:
         sys.exit(2)
     block = block_match.group(1)
     pairs: dict[str, str] = {}
-    for m in re.finditer(r'(\w+)\s*:\s*"(\w+)"', block):
+    # Accept both single and double quotes (Prettier uses single in this repo).
+    for m in re.finditer(r"""(\w+)\s*:\s*['"](\w+)['"]""", block):
         pairs[m.group(1)] = m.group(2)
     return pairs
 
@@ -84,6 +85,7 @@ def generate_python(mappings: dict[str, str]) -> str:
 
 
 def generate_typescript(mappings: dict[str, str]) -> str:
+    # Output uses single quotes to match this repo's Prettier config.
     lines = [
         "/**",
         " * Bidirectional mapping between frontend PascalCase and backend lowercase action names.",
@@ -93,11 +95,13 @@ def generate_typescript(mappings: dict[str, str]) -> str:
         "export const FRONTEND_TO_BACKEND: Record<string, string> = {",
     ]
     for key, value in mappings.items():
-        lines.append(f'  {key}: "{value}",')
+        lines.append(f"  {key}: '{value}',")
     lines.append("};")
     lines.append("")
-    lines.append("export const BACKEND_TO_FRONTEND: Record<string, string> = Object.fromEntries(")
-    lines.append('  Object.entries(FRONTEND_TO_BACKEND).map(([k, v]) => [v, k])')
+    lines.append(
+        "export const BACKEND_TO_FRONTEND: Record<string, string> = Object.fromEntries("
+    )
+    lines.append("  Object.entries(FRONTEND_TO_BACKEND).map(([k, v]) => [v, k]),")
     lines.append(");")
     lines.append("")
     lines.append("export function toFrontend(name: string): string {")

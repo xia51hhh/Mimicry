@@ -59,7 +59,16 @@ def browser_detect_screens():
     return BrowserController.get_monitors()
 
 
-@rpc_method("browser.launch")
+@rpc_method(
+    "browser.launch",
+    description="Launch a Camoufox browser session. Use this before any other browser action.",
+    param_descriptions={
+        "session_id": "Identifier for this browser session. Use 'default' for single-session use, or a unique name when running multiple browsers concurrently.",
+        "headless": "If true, run without a visible window. Default false (visible window) for interactive use; set true for server/CI environments.",
+        "proxy": "Optional proxy config dict: {server: 'http://...', username?: str, password?: str}. Supports http/https/socks5 schemes.",
+        "profile": "Optional profile config dict with keys like user_data_dir, os, locale, geoip, block_webrtc, etc. Persists cookies/storage between sessions when user_data_dir is set.",
+    },
+)
 def browser_launch(session_id: str = "default", headless: bool = False,
                    proxy: dict | None = None, profile: dict | None = None):
     logger.info(f"browser.launch: session_id={session_id}, headless={headless}, profile_keys={list(profile.keys()) if profile else None}")
@@ -73,7 +82,13 @@ def browser_launch(session_id: str = "default", headless: bool = False,
     return {"session_id": session_id, "warnings": ctrl.launch_warnings or None, **status}
 
 
-@rpc_method("browser.close")
+@rpc_method(
+    "browser.close",
+    description="Close a browser session and free its resources.",
+    param_descriptions={
+        "session_id": "The session_id used at launch. Defaults to 'default'.",
+    },
+)
 def browser_close(session_id: str = "default"):
     with _aux_lock:
         _recorders.pop(session_id, None)
@@ -87,37 +102,82 @@ def browser_list_sessions():
     return {"sessions": _mgr.list_sessions()}
 
 
-@rpc_method("browser.navigate")
+@rpc_method(
+    "browser.navigate",
+    description="Navigate the active page to a URL.",
+    param_descriptions={
+        "url": "Fully-qualified URL (e.g. 'https://example.com'). Relative paths are not supported.",
+        "session_id": "The session_id used at launch. Defaults to 'default'.",
+    },
+)
 def browser_navigate(url: str, session_id: str = "default"):
     ctrl = _mgr.get(session_id)
     ctrl.navigate(url)
     return {"url": ctrl.get_url()}
 
 
-@rpc_method("browser.click")
+@rpc_method(
+    "browser.click",
+    description="Click an element matched by a CSS selector.",
+    param_descriptions={
+        "selector": "CSS selector (e.g. 'button#submit', 'a[href*=\"login\"]'). For text-based matching, prefer Playwright text= or role= selectors via browser.evaluate.",
+        "session_id": "The session_id used at launch. Defaults to 'default'.",
+        "force": "If true, bypass actionability checks (visibility, stable position). Use sparingly — usually a sign the selector is wrong.",
+    },
+)
 def browser_click(selector: str, session_id: str = "default", force: bool = False):
     _mgr.get(session_id).click(selector, force=force)
     return {"clicked": selector}
 
 
-@rpc_method("browser.type")
+@rpc_method(
+    "browser.type",
+    description="Type text into an input/textarea element.",
+    param_descriptions={
+        "selector": "CSS selector for the input/textarea element.",
+        "text": "Text to type. Newlines are sent as Enter key presses.",
+        "session_id": "The session_id used at launch. Defaults to 'default'.",
+        "humanize": "If true, simulate human-like typing with delays between characters. Default true; set false for fastest input or when stealth is not needed.",
+    },
+)
 def browser_type(selector: str, text: str, session_id: str = "default", humanize: bool = True):
     _mgr.get(session_id).type_text(selector, text, humanize=humanize)
     return {"typed": selector}
 
 
-@rpc_method("browser.wait")
+@rpc_method(
+    "browser.wait",
+    description="Wait for a CSS selector to appear in the DOM.",
+    param_descriptions={
+        "selector": "CSS selector to wait for.",
+        "timeout": "Max wait time in milliseconds. Default 5000ms (5s).",
+        "session_id": "The session_id used at launch. Defaults to 'default'.",
+    },
+)
 def browser_wait(selector: str, timeout: int = 5000, session_id: str = "default"):
     _mgr.get(session_id).wait_for(selector, timeout=timeout)
     return {"found": selector}
 
 
-@rpc_method("browser.screenshot")
+@rpc_method(
+    "browser.screenshot",
+    description="Capture a screenshot of the current page.",
+    param_descriptions={
+        "path": "File path to save the PNG. Default 'screenshot.png' in the working directory.",
+        "session_id": "The session_id used at launch. Defaults to 'default'.",
+    },
+)
 def browser_screenshot(path: str = "screenshot.png", session_id: str = "default"):
     return {"path": _mgr.get(session_id).screenshot(path)}
 
 
-@rpc_method("browser.status")
+@rpc_method(
+    "browser.status",
+    description="Return browser session status: connected, current URL, number of pages.",
+    param_descriptions={
+        "session_id": "The session_id used at launch. Defaults to 'default'.",
+    },
+)
 def browser_status(session_id: str = "default"):
     try:
         return _mgr.get(session_id).status()
@@ -173,30 +233,69 @@ def browser_reload(session_id: str = "default"):
     return {"reloaded": True}
 
 
-@rpc_method("browser.press_key")
+@rpc_method(
+    "browser.press_key",
+    description="Press a keyboard key while focused on a selector (or body). Use for Enter, Escape, Tab, arrow keys, etc.",
+    param_descriptions={
+        "selector": "CSS selector to focus before key press. Default 'body' for global key.",
+        "key": "Key name per Playwright spec (e.g. 'Enter', 'Escape', 'ArrowDown', 'Control+A').",
+        "session_id": "The session_id used at launch. Defaults to 'default'.",
+    },
+)
 def browser_press_key(selector: str = "body", key: str = "", session_id: str = "default"):
     _mgr.get(session_id).press_key(selector, key)
     return {"pressed": key, "selector": selector}
 
 
-@rpc_method("browser.scroll")
+@rpc_method(
+    "browser.scroll",
+    description="Scroll the page or a specific element.",
+    param_descriptions={
+        "selector": "CSS selector of the scrollable element, or 'window' for page scroll. Default 'window'.",
+        "direction": "Scroll direction: 'up', 'down', 'left', or 'right'. Default 'down'.",
+        "amount": "Pixels to scroll. Default 300.",
+        "session_id": "The session_id used at launch. Defaults to 'default'.",
+    },
+)
 def browser_scroll(selector: str = "window", direction: str = "down",
                    amount: int = 300, session_id: str = "default"):
     _mgr.get(session_id).scroll(selector, direction, amount)
     return {"scrolled": selector, "direction": direction}
 
 
-@rpc_method("browser.evaluate")
+@rpc_method(
+    "browser.evaluate",
+    description="Execute a JavaScript expression in the page context and return the result.",
+    param_descriptions={
+        "expression": "JavaScript expression. Use 'document.title' or '() => Array.from(document.querySelectorAll(...)).map(e => e.innerText)' style.",
+        "session_id": "The session_id used at launch. Defaults to 'default'.",
+    },
+)
 def browser_evaluate(expression: str, session_id: str = "default"):
     return {"result": _mgr.get(session_id).evaluate(expression)}
 
 
-@rpc_method("browser.get_text")
+@rpc_method(
+    "browser.get_text",
+    description="Extract the visible text content of an element.",
+    param_descriptions={
+        "selector": "CSS selector of the target element.",
+        "session_id": "The session_id used at launch. Defaults to 'default'.",
+    },
+)
 def browser_get_text(selector: str, session_id: str = "default"):
     return {"text": _mgr.get(session_id).get_element_text(selector)}
 
 
-@rpc_method("browser.get_attribute")
+@rpc_method(
+    "browser.get_attribute",
+    description="Read an HTML attribute value from an element (e.g. href, src, data-id).",
+    param_descriptions={
+        "selector": "CSS selector of the target element.",
+        "attr": "Attribute name to read (e.g. 'href', 'src', 'value', 'data-id').",
+        "session_id": "The session_id used at launch. Defaults to 'default'.",
+    },
+)
 def browser_get_attribute(selector: str, attr: str, session_id: str = "default"):
     return {"value": _mgr.get(session_id).get_element_attribute(selector, attr)}
 
@@ -454,3 +553,66 @@ def shutdown():
     import threading
     threading.Timer(0.1, lambda: __import__('os')._exit(0)).start()
     return {"shutdown": True}
+
+
+# ---------------------------------------------------------------------------
+# Captcha (Cloudflare click solver MVP)
+# ---------------------------------------------------------------------------
+
+@rpc_method(
+    "captcha.detect_cloudflare",
+    description="Detect whether a Cloudflare challenge (Turnstile widget or full-page Interstitial) is present on the active page. Detection is DOM-only and does not interact with the page.",
+    param_descriptions={
+        "session_id": "The session_id used at launch. Defaults to 'default'.",
+        "challenge_type": "Which challenge to look for: 'turnstile' (small embedded widget) or 'interstitial' (full-page 'Just a moment'). Default 'turnstile'.",
+    },
+)
+def captcha_detect_cloudflare(
+    session_id: str = "default",
+    challenge_type: str = "turnstile",
+):
+    from captcha import detect_cloudflare_challenge
+    ctrl = _mgr.get(session_id)
+    page = ctrl._page  # noqa: SLF001 — controller exposes _page deliberately
+    if page is None:
+        return {"detected": False, "reason": "no_active_page"}
+    detected = detect_cloudflare_challenge(page, challenge_type)
+    return {"detected": detected, "challenge_type": challenge_type}
+
+
+@rpc_method(
+    "captcha.solve_cloudflare",
+    description="Click-solve a Cloudflare Turnstile or Interstitial challenge using the active session's stealth browser. Returns {solved: true} on success, raises CaptchaSolvingError otherwise. No external API key required.",
+    param_descriptions={
+        "session_id": "The session_id used at launch. Defaults to 'default'.",
+        "challenge_type": "'turnstile' (embedded widget) or 'interstitial' (full-page). Default 'turnstile'.",
+        "expected_content_selector": "Optional CSS selector that proves the challenge is over (e.g. main app content). If matched, treated as success even if challenge widget is still visible.",
+        "wait_checkbox_attempts": "Max attempts to find a clickable checkbox. Default 10.",
+        "wait_checkbox_delay_s": "Seconds between checkbox-find attempts. Default 6.",
+        "checkbox_click_attempts": "Max retries on the click itself. Default 3.",
+        "solve_click_delay_s": "Seconds to wait after clicking before verifying success. Default 6.",
+    },
+)
+def captcha_solve_cloudflare(
+    session_id: str = "default",
+    challenge_type: str = "turnstile",
+    expected_content_selector: str | None = None,
+    wait_checkbox_attempts: int = 10,
+    wait_checkbox_delay_s: int = 6,
+    checkbox_click_attempts: int = 3,
+    solve_click_delay_s: int = 6,
+):
+    from captcha import solve_cloudflare_by_click
+    ctrl = _mgr.get(session_id)
+    page = ctrl._page  # noqa: SLF001
+    if page is None:
+        raise RuntimeError("No active page in session; call browser.launch first")
+    return solve_cloudflare_by_click(
+        page=page,
+        challenge_type=challenge_type,
+        expected_content_selector=expected_content_selector,
+        wait_checkbox_attempts=wait_checkbox_attempts,
+        wait_checkbox_delay_s=wait_checkbox_delay_s,
+        checkbox_click_attempts=checkbox_click_attempts,
+        solve_click_delay_s=solve_click_delay_s,
+    )

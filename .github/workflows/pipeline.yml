@@ -31,7 +31,7 @@ jobs:
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
         with:
-          components: clippy
+          components: clippy, rustfmt
 
       - name: Rust cache
         uses: Swatinem/rust-cache@v2
@@ -49,8 +49,20 @@ jobs:
       - name: Install frontend dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Frontend lint
+        run: pnpm lint
+
+      - name: Frontend format check
+        run: pnpm format:check
+
       - name: Frontend type check
         run: pnpm typecheck
+
+      - name: Frontend build
+        run: pnpm build
+
+      - name: Rust format check
+        run: cd src-tauri && cargo fmt -- --check
 
       - name: Rust clippy
         run: cd src-tauri && cargo clippy --all-targets --all-features -- -D warnings
@@ -62,6 +74,9 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
+
+      - name: Cross-layer action map sync check
+        run: python scripts/sync-action-map.py
 
       - name: Sidecar tests
         working-directory: sidecar

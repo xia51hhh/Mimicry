@@ -3,13 +3,35 @@ import time
 from typing import Any, Callable
 
 METHOD_REGISTRY: dict[str, Callable[..., Any]] = {}
+# Per-method MCP metadata: tool description + per-param descriptions.
+# Populated by the @rpc_method decorator. Consumed by sidecar/mcp_server.py.
+METHOD_METADATA: dict[str, dict[str, Any]] = {}
 
 _start_time = time.time()
 
 
-def rpc_method(name: str):
+def rpc_method(
+    name: str,
+    *,
+    description: str | None = None,
+    param_descriptions: dict[str, str] | None = None,
+):
+    """Register a function as both an RPC method and an MCP tool.
+
+    Args:
+        name: dotted RPC method name (e.g. "browser.launch").
+        description: one-line tool description for MCP. Falls back to
+            the function's first docstring line.
+        param_descriptions: mapping of parameter name to a human-readable
+            description shown to LLMs in the MCP inputSchema. Parameters
+            not present here get no description (LLM has to guess).
+    """
     def decorator(fn):
         METHOD_REGISTRY[name] = fn
+        METHOD_METADATA[name] = {
+            "description": description,
+            "param_descriptions": param_descriptions or {},
+        }
         return fn
     return decorator
 

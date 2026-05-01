@@ -40,3 +40,6 @@ key/
 # Sidecar build artifacts
 sidecar/build/
 sidecar/dist/
+
+# External project clones for research/comparison (not part of source tree)
+examples/external/
