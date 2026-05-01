@@ -85,14 +85,13 @@ fn extract_children(
     default_session_id: &str,
 ) -> Result<Vec<BackendNode>, TransformError> {
     match val {
-        Some(serde_json::Value::Array(arr)) => {
-            arr.iter()
-                .map(|v| {
-                    let node: CanonicalNode = serde_json::from_value(v.clone())?;
-                    convert_node(&node, default_session_id)
-                })
-                .collect()
-        }
+        Some(serde_json::Value::Array(arr)) => arr
+            .iter()
+            .map(|v| {
+                let node: CanonicalNode = serde_json::from_value(v.clone())?;
+                convert_node(&node, default_session_id)
+            })
+            .collect(),
         _ => Ok(vec![]),
     }
 }

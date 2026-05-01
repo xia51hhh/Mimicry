@@ -1,13 +1,16 @@
+use crate::db;
+use crate::AppError;
 use rusqlite::Connection;
 use tauri::State;
 use tokio::sync::Mutex;
-use crate::db;
-use crate::AppError;
 
 /// Validate that a file path ends with one of the allowed extensions.
 fn validate_file_extension(path: &str, allowed: &[&str]) -> Result<(), AppError> {
     let lower = path.to_lowercase();
-    if allowed.iter().any(|ext| lower.ends_with(&format!(".{ext}"))) {
+    if allowed
+        .iter()
+        .any(|ext| lower.ends_with(&format!(".{ext}")))
+    {
         Ok(())
     } else {
         Err(AppError::Transform(format!(
@@ -56,7 +59,8 @@ pub async fn file_import(path: String) -> Result<serde_json::Value, AppError> {
         WorkflowFormat::Legacy => legacy_to_canonical(&raw)?,
         WorkflowFormat::Unknown => {
             return Err(AppError::Transform(
-                "Unknown workflow format. Expected Canonical, Compact, Recording, or Legacy.".into(),
+                "Unknown workflow format. Expected Canonical, Compact, Recording, or Legacy."
+                    .into(),
             ));
         }
     };
@@ -66,7 +70,10 @@ pub async fn file_import(path: String) -> Result<serde_json::Value, AppError> {
 
 /// Export a Canonical workflow to Compact format and write to disk.
 #[tauri::command]
-pub async fn file_export_compact(path: String, workflow: serde_json::Value) -> Result<(), AppError> {
+pub async fn file_export_compact(
+    path: String,
+    workflow: serde_json::Value,
+) -> Result<(), AppError> {
     use crate::transform::*;
 
     validate_file_extension(&path, &["json", "compact.json"])?;
@@ -97,11 +104,14 @@ pub async fn recent_files_add(
 ) -> Result<(), AppError> {
     let conn = db_conn.lock().await;
     let now = chrono::Utc::now().to_rfc3339();
-    db::recent_files::upsert(&conn, &db::recent_files::RecentFile {
-        path,
-        name,
-        opened_at: now,
-    })?;
+    db::recent_files::upsert(
+        &conn,
+        &db::recent_files::RecentFile {
+            path,
+            name,
+            opened_at: now,
+        },
+    )?;
     Ok(())
 }
 
@@ -126,9 +136,7 @@ pub async fn recent_files_remove(
 
 /// Clear all recent files
 #[tauri::command]
-pub async fn recent_files_clear(
-    db_conn: State<'_, Mutex<Connection>>,
-) -> Result<(), AppError> {
+pub async fn recent_files_clear(db_conn: State<'_, Mutex<Connection>>) -> Result<(), AppError> {
     let conn = db_conn.lock().await;
     Ok(db::recent_files::clear(&conn)?)
 }

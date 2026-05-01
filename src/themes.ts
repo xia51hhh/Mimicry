@@ -1,37 +1,37 @@
 export interface ThemeColors {
-  bg: string
-  surface: string
-  surfaceHover: string
-  surfaceActive: string
-  border: string
-  borderHover: string
-  text: string
-  textMuted: string
-  textInverse: string
-  primary: string
-  accent: string
+  bg: string;
+  surface: string;
+  surfaceHover: string;
+  surfaceActive: string;
+  border: string;
+  borderHover: string;
+  text: string;
+  textMuted: string;
+  textInverse: string;
+  primary: string;
+  accent: string;
   // Semantic
-  success: string
-  warning: string
-  error: string
-  info: string
+  success: string;
+  warning: string;
+  error: string;
+  info: string;
   // Separators
-  separator: string
-  separatorLight: string
+  separator: string;
+  separatorLight: string;
   // Node header colors
-  nodeAction: string
-  nodeCondition: string
-  nodeLoop: string
-  nodeGroup: string
+  nodeAction: string;
+  nodeCondition: string;
+  nodeLoop: string;
+  nodeGroup: string;
   // Monaco
-  monacoTheme: 'vs-dark' | 'vs' | string
+  monacoTheme: 'vs-dark' | 'vs' | string;
 }
 
 export interface ThemeDefinition {
-  id: string
-  name: string
-  type: 'dark' | 'light'
-  colors: ThemeColors
+  id: string;
+  name: string;
+  type: 'dark' | 'light';
+  colors: ThemeColors;
 }
 
 export const themes: ThemeDefinition[] = [
@@ -298,36 +298,36 @@ export const themes: ThemeDefinition[] = [
       monacoTheme: 'vs',
     },
   },
-]
+];
 
 export function getThemeById(id: string): ThemeDefinition {
-  return themes.find((t) => t.id === id) || themes[0]
+  return themes.find((t) => t.id === id) || themes[0];
 }
 
 export function applyThemeToDOM(theme: ThemeDefinition, accentColor?: string) {
-  const root = document.documentElement
-  const c = theme.colors
+  const root = document.documentElement;
+  const c = theme.colors;
 
-  root.setAttribute('data-theme', theme.type)
-  root.style.setProperty('--color-bg', c.bg)
-  root.style.setProperty('--color-surface', c.surface)
-  root.style.setProperty('--color-surface-hover', c.surfaceHover)
-  root.style.setProperty('--color-surface-active', c.surfaceActive)
-  root.style.setProperty('--color-border', c.border)
-  root.style.setProperty('--color-border-hover', c.borderHover)
-  root.style.setProperty('--color-text', c.text)
-  root.style.setProperty('--color-text-muted', c.textMuted)
-  root.style.setProperty('--color-text-inverse', c.textInverse)
-  root.style.setProperty('--color-primary', accentColor || c.primary)
-  root.style.setProperty('--color-accent', accentColor || c.accent)
-  root.style.setProperty('--color-success', c.success)
-  root.style.setProperty('--color-warning', c.warning)
-  root.style.setProperty('--color-error', c.error)
-  root.style.setProperty('--color-info', c.info)
-  root.style.setProperty('--color-separator', c.separator)
-  root.style.setProperty('--color-separator-light', c.separatorLight)
-  root.style.setProperty('--color-node-action', c.nodeAction)
-  root.style.setProperty('--color-node-condition', c.nodeCondition)
-  root.style.setProperty('--color-node-loop', c.nodeLoop)
-  root.style.setProperty('--color-node-group', c.nodeGroup)
+  root.setAttribute('data-theme', theme.type);
+  root.style.setProperty('--color-bg', c.bg);
+  root.style.setProperty('--color-surface', c.surface);
+  root.style.setProperty('--color-surface-hover', c.surfaceHover);
+  root.style.setProperty('--color-surface-active', c.surfaceActive);
+  root.style.setProperty('--color-border', c.border);
+  root.style.setProperty('--color-border-hover', c.borderHover);
+  root.style.setProperty('--color-text', c.text);
+  root.style.setProperty('--color-text-muted', c.textMuted);
+  root.style.setProperty('--color-text-inverse', c.textInverse);
+  root.style.setProperty('--color-primary', accentColor || c.primary);
+  root.style.setProperty('--color-accent', accentColor || c.accent);
+  root.style.setProperty('--color-success', c.success);
+  root.style.setProperty('--color-warning', c.warning);
+  root.style.setProperty('--color-error', c.error);
+  root.style.setProperty('--color-info', c.info);
+  root.style.setProperty('--color-separator', c.separator);
+  root.style.setProperty('--color-separator-light', c.separatorLight);
+  root.style.setProperty('--color-node-action', c.nodeAction);
+  root.style.setProperty('--color-node-condition', c.nodeCondition);
+  root.style.setProperty('--color-node-loop', c.nodeLoop);
+  root.style.setProperty('--color-node-group', c.nodeGroup);
 }

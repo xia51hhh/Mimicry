@@ -1,4 +1,4 @@
-@import "tailwindcss";
+@import 'tailwindcss';
 
 :root {
   --color-bg: #0f0f0f;
@@ -16,22 +16,28 @@
   --color-warning: #eab308;
   --color-error: #ef4444;
   --color-info: #60a5fa;
-  --color-separator: rgba(255,255,255,0.06);
-  --color-separator-light: rgba(255,255,255,0.03);
+  --color-separator: rgba(255, 255, 255, 0.06);
+  --color-separator-light: rgba(255, 255, 255, 0.03);
   --color-node-action: #2563eb;
   --color-node-condition: #d97706;
   --color-node-loop: #9333ea;
   --color-node-group: #64748b;
 }
 
-html, body, #app {
+html,
+body,
+#app {
   height: 100%;
   margin: 0;
   padding: 0;
   overflow: hidden;
   background: var(--color-bg);
   color: var(--color-text);
-  font-family: Inter, system-ui, -apple-system, sans-serif;
+  font-family:
+    Inter,
+    system-ui,
+    -apple-system,
+    sans-serif;
   user-select: none;
   -webkit-user-select: none;
 }
@@ -109,14 +115,16 @@ html, body, #app {
 
 /* Node drop animation */
 .editor-canvas .vue-flow__node {
-  transition: transform 0.15s ease-out, opacity 0.15s ease-out;
+  transition:
+    transform 0.15s ease-out,
+    opacity 0.15s ease-out;
 }
 
 /* Sidebar drag item style */
-.block-item[draggable="true"] {
+.block-item[draggable='true'] {
   cursor: grab;
 }
-.block-item[draggable="true"]:active {
+.block-item[draggable='true']:active {
   cursor: grabbing;
   opacity: 0.6;
 }
@@ -142,7 +150,9 @@ html, body, #app {
 
 /* Node execution status */
 .status-running {
-  box-shadow: 0 0 0 2px var(--color-info), 0 0 12px color-mix(in srgb, var(--color-info) 40%, transparent);
+  box-shadow:
+    0 0 0 2px var(--color-info),
+    0 0 12px color-mix(in srgb, var(--color-info) 40%, transparent);
   animation: pulse-running 1.5s ease-in-out infinite;
 }
 
@@ -151,10 +161,21 @@ html, body, #app {
 }
 
 .status-error {
-  box-shadow: 0 0 0 2px var(--color-error), 0 0 8px color-mix(in srgb, var(--color-error) 30%, transparent);
+  box-shadow:
+    0 0 0 2px var(--color-error),
+    0 0 8px color-mix(in srgb, var(--color-error) 30%, transparent);
 }
 
 @keyframes pulse-running {
-  0%, 100% { box-shadow: 0 0 0 2px var(--color-info), 0 0 12px color-mix(in srgb, var(--color-info) 40%, transparent); }
-  50% { box-shadow: 0 0 0 2px var(--color-info), 0 0 20px color-mix(in srgb, var(--color-info) 60%, transparent); }
+  0%,
+  100% {
+    box-shadow:
+      0 0 0 2px var(--color-info),
+      0 0 12px color-mix(in srgb, var(--color-info) 40%, transparent);
+  }
+  50% {
+    box-shadow:
+      0 0 0 2px var(--color-info),
+      0 0 20px color-mix(in srgb, var(--color-info) 60%, transparent);
+  }
 }

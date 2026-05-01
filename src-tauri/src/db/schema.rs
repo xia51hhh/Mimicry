@@ -32,7 +32,7 @@ pub fn init(conn: &Connection) -> rusqlite::Result<()> {
             browser_config TEXT NOT NULL DEFAULT '{}',
             created_at TEXT NOT NULL,
             updated_at TEXT NOT NULL
-        );"
+        );",
     )?;
     // Migration: add browser_config column if missing
     let _ = conn.execute(

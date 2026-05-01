@@ -1,69 +1,72 @@
-import { defineStore } from 'pinia'
-import { ref, computed } from 'vue'
-import type { Workflow } from '../types/workflow'
+import { defineStore } from 'pinia';
+import { ref, computed } from 'vue';
+import type { Workflow } from '../types/workflow';
 
 export interface WorkspaceTab {
-  id: string
-  name: string
+  id: string;
+  name: string;
   /** persisted workflow id from DB, null for unsaved */
-  workflowId: string | null
+  workflowId: string | null;
 }
 
 /** Per-tab serialized workflow snapshot */
-export type TabWorkflowData = Workflow
+export type TabWorkflowData = Workflow;
 
 export const useWorkspaceStore = defineStore('workspace', () => {
-  const tabs = ref<WorkspaceTab[]>([
-    { id: 'tab_1', name: 'Untitled Workflow', workflowId: null },
-  ])
-  const activeTabId = ref('tab_1')
+  const tabs = ref<WorkspaceTab[]>([{ id: 'tab_1', name: 'Untitled Workflow', workflowId: null }]);
+  const activeTabId = ref('tab_1');
 
   /** In-memory workflow data per tab */
-  const tabDataMap = ref<Record<string, TabWorkflowData>>({})
+  const tabDataMap = ref<Record<string, TabWorkflowData>>({});
 
-  const activeTab = computed(() =>
-    tabs.value.find((t) => t.id === activeTabId.value) || tabs.value[0]
-  )
+  const activeTab = computed(
+    () => tabs.value.find((t) => t.id === activeTabId.value) || tabs.value[0],
+  );
 
   function saveTabData(tabId: string, data: TabWorkflowData) {
-    tabDataMap.value[tabId] = data
+    tabDataMap.value[tabId] = data;
   }
 
   function getTabData(tabId: string): TabWorkflowData | undefined {
-    return tabDataMap.value[tabId]
+    return tabDataMap.value[tabId];
   }
 
   function addTab(name?: string) {
-    const id = `tab_${Date.now()}`
+    const id = `tab_${Date.now()}`;
     tabs.value.push({
       id,
       name: name || 'Untitled Workflow',
       workflowId: null,
-    })
+    });
     // Initialize empty workflow data for new tab
-    tabDataMap.value[id] = { id: `wf_${Date.now()}`, name: name || 'Untitled Workflow', nodes: [], edges: [] }
-    activeTabId.value = id
-    return id
+    tabDataMap.value[id] = {
+      id: `wf_${Date.now()}`,
+      name: name || 'Untitled Workflow',
+      nodes: [],
+      edges: [],
+    };
+    activeTabId.value = id;
+    return id;
   }
 
   function closeTab(tabId: string) {
-    const idx = tabs.value.findIndex((t) => t.id === tabId)
-    if (idx === -1 || tabs.value.length <= 1) return
+    const idx = tabs.value.findIndex((t) => t.id === tabId);
+    if (idx === -1 || tabs.value.length <= 1) return;
 
-    tabs.value.splice(idx, 1)
-    delete tabDataMap.value[tabId]
+    tabs.value.splice(idx, 1);
+    delete tabDataMap.value[tabId];
     if (activeTabId.value === tabId) {
-      activeTabId.value = tabs.value[Math.min(idx, tabs.value.length - 1)].id
+      activeTabId.value = tabs.value[Math.min(idx, tabs.value.length - 1)].id;
     }
   }
 
   function switchTab(tabId: string) {
-    activeTabId.value = tabId
+    activeTabId.value = tabId;
   }
 
   function renameTab(tabId: string, name: string) {
-    const tab = tabs.value.find((t) => t.id === tabId)
-    if (tab) tab.name = name
+    const tab = tabs.value.find((t) => t.id === tabId);
+    if (tab) tab.name = name;
   }
 
   return {
@@ -77,5 +80,5 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     closeTab,
     switchTab,
     renameTab,
-  }
-})
+  };
+});

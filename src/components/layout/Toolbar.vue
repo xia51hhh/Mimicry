@@ -1,51 +1,53 @@
 <script setup lang="ts">
-import { useI18n } from 'vue-i18n'
-import { useBrowserStore } from "../../stores/browser";
-import { useWorkflowStore } from "../../stores/workflow";
-import { useExecutionStore } from "../../stores/execution";
-import { useProfileStore } from "../../stores/profiles";
+  import { useI18n } from 'vue-i18n';
+  import { useBrowserStore } from '../../stores/browser';
+  import { useWorkflowStore } from '../../stores/workflow';
+  import { useExecutionStore } from '../../stores/execution';
+  import { useProfileStore } from '../../stores/profiles';
 
-const { t } = useI18n()
-const browser = useBrowserStore();
-const workflow = useWorkflowStore();
-const execution = useExecutionStore();
-const profiles = useProfileStore();
+  const { t } = useI18n();
+  const browser = useBrowserStore();
+  const workflow = useWorkflowStore();
+  const execution = useExecutionStore();
+  const profiles = useProfileStore();
 
-function launchBrowser() {
-  if (!profiles.selectedId && profiles.profiles.length > 0) {
-    browser.setupError = t('toolbar.selectProfileFirst');
-    return;
-  }
-  browser.launch(profiles.selectedId || undefined);
-}
-
-async function toggleRecording() {
-  if (browser.recording) {
-    const nodes = await browser.stopRecording();
-    if (nodes.length > 0) {
-      workflow.importRecordedNodes(nodes);
+  function launchBrowser() {
+    if (!profiles.selectedId && profiles.profiles.length > 0) {
+      browser.setupError = t('toolbar.selectProfileFirst');
+      return;
     }
-  } else {
-    await browser.startRecording();
+    browser.launch(profiles.selectedId || undefined);
   }
-}
 
-async function runWorkflow() {
-  if (execution.running) {
-    await execution.stop();
-    return;
+  async function toggleRecording() {
+    if (browser.recording) {
+      const nodes = await browser.stopRecording();
+      if (nodes.length > 0) {
+        workflow.importRecordedNodes(nodes);
+      }
+    } else {
+      await browser.startRecording();
+    }
   }
-  const workflowJson = workflow.toJSON();
-  try {
-    await execution.execute(workflowJson);
-  } catch (e) {
-    console.error("Workflow execution failed:", e);
+
+  async function runWorkflow() {
+    if (execution.running) {
+      await execution.stop();
+      return;
+    }
+    const workflowJson = workflow.toJSON();
+    try {
+      await execution.execute(workflowJson);
+    } catch (e) {
+      console.error('Workflow execution failed:', e);
+    }
   }
-}
 </script>
 
 <template>
-  <header class="flex h-11 items-center justify-between border-b border-[var(--color-border)] bg-[var(--color-surface)] px-4">
+  <header
+    class="flex h-11 items-center justify-between border-b border-[var(--color-border)] bg-[var(--color-surface)] px-4"
+  >
     <div class="flex items-center gap-3">
       <span class="text-sm font-semibold">Mimicry</span>
       <span class="text-xs text-[var(--color-text-muted)]">—</span>
@@ -56,24 +58,39 @@ async function runWorkflow() {
         :disabled="browser.launching"
         @click="browser.connected ? browser.close() : launchBrowser()"
       >
-        {{ browser.launching ? t('toolbar.launching') : browser.connected ? t('toolbar.closeBrowser') : t('toolbar.launchBrowser') }}
+        {{
+          browser.launching
+            ? t('toolbar.launching')
+            : browser.connected
+              ? t('toolbar.closeBrowser')
+              : t('toolbar.launchBrowser')
+        }}
       </button>
 
-      <span class="text-xs" :class="browser.connected ? 'text-green-400' : 'text-[var(--color-text-muted)]'">
+      <span
+        class="text-xs"
+        :class="browser.connected ? 'text-green-400' : 'text-[var(--color-text-muted)]'"
+      >
         {{ browser.connected ? t('toolbar.connected') : t('toolbar.disconnected') }}
       </span>
 
       <!-- Error display (non-setup errors only) -->
-      <span v-if="browser.setupError && browser.setupPhase === 'idle'" class="text-xs text-[var(--color-error)] max-w-60 truncate" :title="browser.setupError">
+      <span
+        v-if="browser.setupError && browser.setupPhase === 'idle'"
+        class="text-xs text-[var(--color-error)] max-w-60 truncate"
+        :title="browser.setupError"
+      >
         {{ browser.setupError }}
       </span>
     </div>
     <div class="flex items-center gap-2">
       <button
         class="rounded px-3 py-1 text-xs"
-        :class="execution.running
-          ? 'bg-orange-600 text-white'
-          : 'border border-[var(--color-border)] hover:bg-[var(--color-surface-hover)]'"
+        :class="
+          execution.running
+            ? 'bg-orange-600 text-white'
+            : 'border border-[var(--color-border)] hover:bg-[var(--color-surface-hover)]'
+        "
         :disabled="!browser.connected"
         @click="runWorkflow"
       >
@@ -86,9 +103,11 @@ async function runWorkflow() {
       <!-- Humanize delay controls -->
       <button
         class="rounded px-2 py-1 text-xs"
-        :class="execution.humanize
-          ? 'bg-green-700 text-white'
-          : 'border border-[var(--color-border)] text-[var(--color-text-muted)] hover:bg-[var(--color-surface-hover)]'"
+        :class="
+          execution.humanize
+            ? 'bg-green-700 text-white'
+            : 'border border-[var(--color-border)] text-[var(--color-text-muted)] hover:bg-[var(--color-surface-hover)]'
+        "
         :title="t('toolbar.humanizeTooltip')"
         @click="execution.humanize = !execution.humanize"
       >
@@ -105,14 +124,18 @@ async function runWorkflow() {
           :title="`${t('toolbar.delayMultiplier')}: ${execution.delayMultiplier}x`"
           @input="execution.delayMultiplier = parseFloat(($event.target as HTMLInputElement).value)"
         />
-        <span class="text-xs text-[var(--color-text-muted)] w-8 tabular-nums">{{ execution.delayMultiplier.toFixed(1) }}x</span>
+        <span class="text-xs text-[var(--color-text-muted)] w-8 tabular-nums"
+          >{{ execution.delayMultiplier.toFixed(1) }}x</span
+        >
       </div>
 
       <button
         class="rounded px-3 py-1 text-xs"
-        :class="browser.recording
-          ? 'bg-red-600 text-white animate-pulse'
-          : 'border border-[var(--color-border)] hover:bg-[var(--color-surface-hover)]'"
+        :class="
+          browser.recording
+            ? 'bg-red-600 text-white animate-pulse'
+            : 'border border-[var(--color-border)] hover:bg-[var(--color-surface-hover)]'
+        "
         :disabled="!browser.connected"
         @click="toggleRecording"
       >
@@ -122,5 +145,4 @@ async function runWorkflow() {
   </header>
 </template>
 
-<style scoped>
-</style>
+<style scoped></style>

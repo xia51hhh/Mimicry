@@ -101,7 +101,12 @@ fn import_pipeline_compact_to_backend() {
     assert!(canonical.nodes[0].position.y > 0.0);
     assert_eq!(canonical.nodes[0].action.as_deref(), Some("Navigate"));
     assert_eq!(
-        canonical.nodes[0].settings.as_ref().unwrap().note.as_deref(),
+        canonical.nodes[0]
+            .settings
+            .as_ref()
+            .unwrap()
+            .note
+            .as_deref(),
         Some("打开网站")
     );
     // Should have 4 sequential edges

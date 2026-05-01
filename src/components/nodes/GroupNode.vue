@@ -1,16 +1,16 @@
 <script setup lang="ts">
-import { NodeResizer } from '@vue-flow/node-resizer'
-import '@vue-flow/node-resizer/dist/style.css'
-import { useI18n } from 'vue-i18n'
+  import { NodeResizer } from '@vue-flow/node-resizer';
+  import '@vue-flow/node-resizer/dist/style.css';
+  import { useI18n } from 'vue-i18n';
 
-const { t } = useI18n()
+  const { t } = useI18n();
 
-defineProps<{
-  data: {
-    label?: string
-    color?: string
-  }
-}>()
+  defineProps<{
+    data: {
+      label?: string;
+      color?: string;
+    };
+  }>();
 </script>
 
 <template>
@@ -30,28 +30,28 @@ defineProps<{
 </template>
 
 <style scoped>
-.node-group {
-  width: 100%;
-  height: 100%;
-  border: 2px dashed;
-  border-radius: 10px;
-  background: var(--color-separator-light, rgba(100, 116, 139, 0.05));
-  position: relative;
-  transition: border-color 0.2s;
-}
+  .node-group {
+    width: 100%;
+    height: 100%;
+    border: 2px dashed;
+    border-radius: 10px;
+    background: var(--color-separator-light, rgba(100, 116, 139, 0.05));
+    position: relative;
+    transition: border-color 0.2s;
+  }
 
-.node-group:hover {
-  background: var(--color-separator, rgba(100, 116, 139, 0.08));
-}
+  .node-group:hover {
+    background: var(--color-separator, rgba(100, 116, 139, 0.08));
+  }
 
-.group-header {
-  position: absolute;
-  top: -10px;
-  left: 12px;
-  font-size: 11px;
-  font-weight: 600;
-  background: var(--color-bg);
-  padding: 0 6px;
-  border-radius: 3px;
-}
+  .group-header {
+    position: absolute;
+    top: -10px;
+    left: 12px;
+    font-size: 11px;
+    font-weight: 600;
+    background: var(--color-bg);
+    padding: 0 6px;
+    border-radius: 3px;
+  }
 </style>

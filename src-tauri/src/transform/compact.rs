@@ -1,6 +1,6 @@
+use super::action_map::{is_snake_case_action, to_frontend};
 use super::layout::{auto_layout, LayoutConfig};
 use super::types::*;
-use super::action_map::{is_snake_case_action, to_frontend};
 
 /// Infer NodeKind from action name
 fn infer_kind(action: &str) -> (NodeKind, Option<String>) {
@@ -39,7 +39,9 @@ fn normalize_action(action: &str) -> String {
 /// - auto-layout for positions
 /// - auto-generate edges from array order + nesting
 /// - snake_case action → PascalCase normalization
-pub fn compact_to_canonical(compact: &CompactWorkflow) -> Result<CanonicalWorkflow, TransformError> {
+pub fn compact_to_canonical(
+    compact: &CompactWorkflow,
+) -> Result<CanonicalWorkflow, TransformError> {
     let config = LayoutConfig::default();
 
     // First pass: convert nodes and collect for layout
@@ -169,7 +171,9 @@ fn convert_compact_nodes(
 ///
 /// Strips: position, edges, runtime, selected
 /// Promotes: settings.note → top-level note
-pub fn canonical_to_compact(canonical: &CanonicalWorkflow) -> Result<CompactWorkflow, TransformError> {
+pub fn canonical_to_compact(
+    canonical: &CanonicalWorkflow,
+) -> Result<CompactWorkflow, TransformError> {
     let nodes = canonical
         .nodes
         .iter()
@@ -185,33 +189,34 @@ pub fn canonical_to_compact(canonical: &CanonicalWorkflow) -> Result<CompactWork
 
 fn canonical_node_to_compact(node: &CanonicalNode) -> Result<CompactNode, TransformError> {
     // Determine action string: use action field, or capitalize kind for pseudo-actions
-    let action = node
-        .action
-        .clone()
-        .unwrap_or_else(|| match node.kind {
-            NodeKind::Condition => "Condition".into(),
-            NodeKind::Loop => "Loop".into(),
-            NodeKind::Group => "Group".into(),
-            NodeKind::Action => "Action".into(),
-        });
+    let action = node.action.clone().unwrap_or_else(|| match node.kind {
+        NodeKind::Condition => "Condition".into(),
+        NodeKind::Loop => "Loop".into(),
+        NodeKind::Group => "Group".into(),
+        NodeKind::Action => "Action".into(),
+    });
 
     // Extract note from settings
     let note = node.settings.as_ref().and_then(|s| s.note.clone());
 
     // Build settings without note (avoid duplication)
-    let settings = node.settings.as_ref().map(|s| {
-        let mut clean = s.clone();
-        clean.note = None;
-        clean
-    }).filter(|s| {
-        // Only include if there are meaningful settings beyond defaults
-        s.on_error.is_some()
-            || s.disabled.is_some_and(|d| d)
-            || s.retry_on_fail.is_some()
-            || s.retry_count.is_some()
-            || s.retry_interval.is_some()
-            || !s.extra.is_empty()
-    });
+    let settings = node
+        .settings
+        .as_ref()
+        .map(|s| {
+            let mut clean = s.clone();
+            clean.note = None;
+            clean
+        })
+        .filter(|s| {
+            // Only include if there are meaningful settings beyond defaults
+            s.on_error.is_some()
+                || s.disabled.is_some_and(|d| d)
+                || s.retry_on_fail.is_some()
+                || s.retry_count.is_some()
+                || s.retry_interval.is_some()
+                || !s.extra.is_empty()
+        });
 
     // Extract children from data
     let data_obj = node.data.as_object();
@@ -302,7 +307,12 @@ mod tests {
         assert_eq!(canonical.nodes[0].kind, NodeKind::Action);
         assert_eq!(canonical.nodes[0].action.as_deref(), Some("Navigate"));
         assert_eq!(
-            canonical.nodes[0].settings.as_ref().unwrap().note.as_deref(),
+            canonical.nodes[0]
+                .settings
+                .as_ref()
+                .unwrap()
+                .note
+                .as_deref(),
             Some("go to site")
         );
         // Should have 1 edge connecting node 0 → node 1
@@ -359,7 +369,7 @@ mod tests {
         let canonical = compact_to_canonical(&compact).unwrap();
         assert_eq!(canonical.nodes[0].kind, NodeKind::Condition);
         assert!(canonical.nodes[0].action.is_none()); // pseudo-action stripped
-        // children should be in data
+                                                      // children should be in data
         assert!(canonical.nodes[0].data.get("children").is_some());
     }
 

@@ -1,23 +1,31 @@
+use crate::db;
+use crate::AppError;
 use rusqlite::Connection;
 use tauri::State;
 use tokio::sync::Mutex;
-use crate::db;
-use crate::AppError;
 
 #[tauri::command]
-pub async fn workflow_list(db_conn: State<'_, Mutex<Connection>>) -> Result<Vec<db::workflow::Workflow>, AppError> {
+pub async fn workflow_list(
+    db_conn: State<'_, Mutex<Connection>>,
+) -> Result<Vec<db::workflow::Workflow>, AppError> {
     let conn = db_conn.lock().await;
     Ok(db::workflow::list(&conn)?)
 }
 
 #[tauri::command]
-pub async fn workflow_get(db_conn: State<'_, Mutex<Connection>>, id: String) -> Result<Option<db::workflow::Workflow>, AppError> {
+pub async fn workflow_get(
+    db_conn: State<'_, Mutex<Connection>>,
+    id: String,
+) -> Result<Option<db::workflow::Workflow>, AppError> {
     let conn = db_conn.lock().await;
     Ok(db::workflow::get(&conn, &id)?)
 }
 
 #[tauri::command]
-pub async fn workflow_create(db_conn: State<'_, Mutex<Connection>>, name: String) -> Result<db::workflow::Workflow, AppError> {
+pub async fn workflow_create(
+    db_conn: State<'_, Mutex<Connection>>,
+    name: String,
+) -> Result<db::workflow::Workflow, AppError> {
     let conn = db_conn.lock().await;
     let now = chrono::Utc::now().to_rfc3339();
     let wf = db::workflow::Workflow {
@@ -33,7 +41,10 @@ pub async fn workflow_create(db_conn: State<'_, Mutex<Connection>>, name: String
 }
 
 #[tauri::command]
-pub async fn workflow_save(db_conn: State<'_, Mutex<Connection>>, workflow: db::workflow::Workflow) -> Result<(), AppError> {
+pub async fn workflow_save(
+    db_conn: State<'_, Mutex<Connection>>,
+    workflow: db::workflow::Workflow,
+) -> Result<(), AppError> {
     let conn = db_conn.lock().await;
     let mut wf = workflow;
     wf.updated_at = chrono::Utc::now().to_rfc3339();
@@ -41,7 +52,10 @@ pub async fn workflow_save(db_conn: State<'_, Mutex<Connection>>, workflow: db::
 }
 
 #[tauri::command]
-pub async fn workflow_delete(db_conn: State<'_, Mutex<Connection>>, id: String) -> Result<(), AppError> {
+pub async fn workflow_delete(
+    db_conn: State<'_, Mutex<Connection>>,
+    id: String,
+) -> Result<(), AppError> {
     let conn = db_conn.lock().await;
     Ok(db::workflow::delete(&conn, &id)?)
 }
@@ -53,7 +67,10 @@ pub async fn workflow_export(db_conn: State<'_, Mutex<Connection>>) -> Result<St
 }
 
 #[tauri::command]
-pub async fn workflow_import(db_conn: State<'_, Mutex<Connection>>, json: String) -> Result<usize, AppError> {
+pub async fn workflow_import(
+    db_conn: State<'_, Mutex<Connection>>,
+    json: String,
+) -> Result<usize, AppError> {
     let conn = db_conn.lock().await;
     db::workflow::import_json(&conn, &json).map_err(|e| AppError::Sidecar(e.to_string()))
 }
@@ -66,18 +83,17 @@ pub fn workflow_transform_import(json: serde_json::Value) -> Result<serde_json::
 
     let fmt = detect_format(&json);
     let canonical = match fmt {
-        WorkflowFormat::Canonical => {
-            serde_json::from_value::<CanonicalWorkflow>(json)?
-        }
+        WorkflowFormat::Canonical => serde_json::from_value::<CanonicalWorkflow>(json)?,
         WorkflowFormat::Compact | WorkflowFormat::Recording => {
             let compact: CompactWorkflow = serde_json::from_value(json)?;
             compact_to_canonical(&compact)?
         }
-        WorkflowFormat::Legacy => {
-            legacy_to_canonical(&json)?
-        }
+        WorkflowFormat::Legacy => legacy_to_canonical(&json)?,
         WorkflowFormat::Unknown => {
-            return Err(AppError::Transform("Unknown workflow format. Expected Canonical, Compact, Recording, or Legacy.".into()));
+            return Err(AppError::Transform(
+                "Unknown workflow format. Expected Canonical, Compact, Recording, or Legacy."
+                    .into(),
+            ));
         }
     };
 

@@ -1,8 +1,8 @@
-import { defineStore } from "pinia";
-import { ref, computed } from "vue";
-import { invoke } from "@tauri-apps/api/core";
-import { listen, type UnlistenFn } from "@tauri-apps/api/event";
-import { errorMessage, SidecarEvent } from "../types/ipc";
+import { defineStore } from 'pinia';
+import { ref, computed } from 'vue';
+import { invoke } from '@tauri-apps/api/core';
+import { listen, type UnlistenFn } from '@tauri-apps/api/event';
+import { errorMessage, SidecarEvent } from '../types/ipc';
 
 export interface RecordedNode {
   kind: string;
@@ -16,19 +16,19 @@ interface RecordingResult {
 }
 
 export interface InstallProgress {
-  step: "venv" | "pip" | "browser";
+  step: 'venv' | 'pip' | 'browser';
   progress: number;
   detail: string;
 }
 
 export type SetupPhase =
-  | "idle"
-  | "checking"
-  | "prompt"          // Show install dialog
-  | "need_system_pkg" // Need system package (python3-venv)
-  | "installing"      // Installing in progress
-  | "completed"       // Done
-  | "failed";         // Error
+  | 'idle'
+  | 'checking'
+  | 'prompt' // Show install dialog
+  | 'need_system_pkg' // Need system package (python3-venv)
+  | 'installing' // Installing in progress
+  | 'completed' // Done
+  | 'failed'; // Error
 
 export interface BrowserSession {
   sessionId: string;
@@ -39,7 +39,7 @@ export interface BrowserSession {
   pages: number;
 }
 
-export const useBrowserStore = defineStore("browser", () => {
+export const useBrowserStore = defineStore('browser', () => {
   // Multi-session state
   const sessions = ref<Map<string, BrowserSession>>(new Map());
   const activeSessionId = ref<string | null>(null);
@@ -57,23 +57,23 @@ export const useBrowserStore = defineStore("browser", () => {
   const recordedNodes = ref<RecordedNode[]>([]);
 
   // Setup state
-  const setupPhase = ref<SetupPhase>("idle");
+  const setupPhase = ref<SetupPhase>('idle');
   const setupError = ref<string | null>(null);
-  const installStep = ref<InstallProgress["step"] | null>(null);
+  const installStep = ref<InstallProgress['step'] | null>(null);
   const installProgress = ref(0);
-  const installDetail = ref("");
-  const systemPkgName = ref("");
+  const installDetail = ref('');
+  const systemPkgName = ref('');
 
   let unlistenProgress: (() => void) | null = null;
 
   async function startProgressListener() {
     if (unlistenProgress) return;
-    unlistenProgress = await listen<InstallProgress>("install-progress", (event) => {
+    unlistenProgress = await listen<InstallProgress>('install-progress', (event) => {
       installStep.value = event.payload.step;
       installProgress.value = event.payload.progress;
       installDetail.value = event.payload.detail;
-      if (event.payload.detail === "need_system_pkg") {
-        setupPhase.value = "need_system_pkg";
+      if (event.payload.detail === 'need_system_pkg') {
+        setupPhase.value = 'need_system_pkg';
       }
     });
   }
@@ -84,23 +84,23 @@ export const useBrowserStore = defineStore("browser", () => {
   }
 
   async function checkEnvironment() {
-    setupPhase.value = "checking";
+    setupPhase.value = 'checking';
     try {
       const result = await invoke<{
         ready: boolean;
         hasVenv: boolean;
         hasDeps: boolean;
         hasBrowser: boolean;
-      }>("check_environment");
+      }>('check_environment');
 
       if (result.ready) {
-        setupPhase.value = "idle";
+        setupPhase.value = 'idle';
         return true;
       }
-      setupPhase.value = "prompt";
+      setupPhase.value = 'prompt';
       return false;
     } catch {
-      setupPhase.value = "prompt";
+      setupPhase.value = 'prompt';
       return false;
     }
   }
@@ -137,12 +137,12 @@ export const useBrowserStore = defineStore("browser", () => {
   async function checkCamoufox() {
     camoufoxChecking.value = true;
     try {
-      const result = await invoke<{ installed: boolean; version: string | null }>("camoufox_check");
+      const result = await invoke<{ installed: boolean; version: string | null }>('camoufox_check');
       camoufoxInstalled.value = result.installed;
       camoufoxVersion.value = result.version;
       return result;
     } catch (e) {
-      console.error("Failed to check camoufox:", e);
+      console.error('Failed to check camoufox:', e);
       return { installed: false, version: null };
     } finally {
       camoufoxChecking.value = false;
@@ -150,17 +150,19 @@ export const useBrowserStore = defineStore("browser", () => {
   }
 
   async function installCamoufox() {
-    if (camoufoxInstalling.value) return { success: false, error: "Already installing" };
+    if (camoufoxInstalling.value) return { success: false, error: 'Already installing' };
     camoufoxInstalling.value = true;
     try {
-      const result = await invoke<{ success: boolean; version?: string; error?: string }>("camoufox_install");
+      const result = await invoke<{ success: boolean; version?: string; error?: string }>(
+        'camoufox_install',
+      );
       if (result.success) {
         camoufoxInstalled.value = true;
         camoufoxVersion.value = result.version ?? null;
       }
       return result;
     } catch (e) {
-      console.error("Failed to install camoufox:", e);
+      console.error('Failed to install camoufox:', e);
       return { success: false, error: errorMessage(e) };
     } finally {
       camoufoxInstalling.value = false;
@@ -175,28 +177,33 @@ export const useBrowserStore = defineStore("browser", () => {
         latest_tag: string | null;
         update_available: boolean;
         error: string | null;
-      }>("camoufox_check_update");
+      }>('camoufox_check_update');
       camoufoxUpdateAvailable.value = result.update_available;
       camoufoxLatestVersion.value = result.latest_version;
       return result;
     } catch (e) {
-      console.error("Failed to check camoufox update:", e);
+      console.error('Failed to check camoufox update:', e);
       return { update_available: false, error: errorMessage(e) };
     }
   }
 
   async function updateCamoufox() {
-    if (camoufoxUpdating.value) return { success: false, error: "Already updating" };
+    if (camoufoxUpdating.value) return { success: false, error: 'Already updating' };
     camoufoxUpdating.value = true;
     try {
-      const result = await invoke<{ success: boolean; version?: string; release?: string; error?: string }>("camoufox_update");
+      const result = await invoke<{
+        success: boolean;
+        version?: string;
+        release?: string;
+        error?: string;
+      }>('camoufox_update');
       if (result.success) {
         camoufoxVersion.value = result.version ?? null;
         camoufoxUpdateAvailable.value = false;
       }
       return result;
     } catch (e) {
-      console.error("Failed to update camoufox:", e);
+      console.error('Failed to update camoufox:', e);
       return { success: false, error: errorMessage(e) };
     } finally {
       camoufoxUpdating.value = false;
@@ -216,11 +223,11 @@ export const useBrowserStore = defineStore("browser", () => {
     launching.value = true;
     setupError.value = null;
     try {
-      const result = await invoke<{ session_id: string; warnings?: string[] }>("browser_launch", {
+      const result = await invoke<{ session_id: string; warnings?: string[] }>('browser_launch', {
         profileId: profileId || null,
         sessionId: sessionId || null,
       });
-      const sid = result.session_id ?? sessionId ?? profileId ?? "default";
+      const sid = result.session_id ?? sessionId ?? profileId ?? 'default';
       const session: BrowserSession = {
         sessionId: sid,
         profileId: profileId ?? undefined,
@@ -234,25 +241,25 @@ export const useBrowserStore = defineStore("browser", () => {
       startSessionHeartbeat();
       // Show warnings as non-blocking error (auto-dismissed by next launch)
       if (result.warnings?.length) {
-        setupError.value = result.warnings.join("\n");
+        setupError.value = result.warnings.join('\n');
       }
-      setupPhase.value = "idle";
+      setupPhase.value = 'idle';
     } catch (e: unknown) {
       const msg = errorMessage(e);
       // Check if environment needs setup
       if (
-        msg.includes("ModuleNotFoundError") ||
-        msg.includes("No module named") ||
-        msg.includes("ImportError") ||
-        msg.includes("camoufox") ||
-        msg.includes("not found") ||
-        msg.includes("No such file") ||
-        msg.includes("not installed") ||
-        msg.includes("exited unexpectedly") ||
-        msg.includes("Failed to start sidecar") ||
-        msg.includes("Failed to spawn sidecar")
+        msg.includes('ModuleNotFoundError') ||
+        msg.includes('No module named') ||
+        msg.includes('ImportError') ||
+        msg.includes('camoufox') ||
+        msg.includes('not found') ||
+        msg.includes('No such file') ||
+        msg.includes('not installed') ||
+        msg.includes('exited unexpectedly') ||
+        msg.includes('Failed to start sidecar') ||
+        msg.includes('Failed to spawn sidecar')
       ) {
-        setupPhase.value = "prompt";
+        setupPhase.value = 'prompt';
       } else {
         setupError.value = msg;
       }
@@ -262,24 +269,24 @@ export const useBrowserStore = defineStore("browser", () => {
   }
 
   async function installBrowser() {
-    setupPhase.value = "installing";
+    setupPhase.value = 'installing';
     setupError.value = null;
-    installStep.value = "venv";
+    installStep.value = 'venv';
     installProgress.value = 0;
 
     await startProgressListener();
     try {
-      await invoke("browser_install");
-      setupPhase.value = "completed";
+      await invoke('browser_install');
+      setupPhase.value = 'completed';
     } catch (e: unknown) {
       const msg = errorMessage(e);
-      if (msg.includes("NEED_SYSTEM_PKG:")) {
-        const pkg = msg.split("NEED_SYSTEM_PKG:")[1]?.trim() || "python3-venv";
+      if (msg.includes('NEED_SYSTEM_PKG:')) {
+        const pkg = msg.split('NEED_SYSTEM_PKG:')[1]?.trim() || 'python3-venv';
         systemPkgName.value = pkg;
-        setupPhase.value = "need_system_pkg";
+        setupPhase.value = 'need_system_pkg';
       } else {
         setupError.value = msg;
-        setupPhase.value = "failed";
+        setupPhase.value = 'failed';
       }
     } finally {
       stopProgressListener();
@@ -289,51 +296,51 @@ export const useBrowserStore = defineStore("browser", () => {
   async function installSystemPkg(pkg: string) {
     setupError.value = null;
     try {
-      await invoke("install_system_pkg", { package: pkg });
+      await invoke('install_system_pkg', { package: pkg });
       // System pkg installed, retry full install
       await installBrowser();
     } catch (e: unknown) {
       setupError.value = errorMessage(e);
-      setupPhase.value = "need_system_pkg";
+      setupPhase.value = 'need_system_pkg';
     }
   }
 
   async function launchAfterSetup() {
-    setupPhase.value = "idle";
+    setupPhase.value = 'idle';
     await launch();
   }
 
   function resetSetup() {
-    setupPhase.value = "idle";
+    setupPhase.value = 'idle';
     setupError.value = null;
     installStep.value = null;
     installProgress.value = 0;
-    installDetail.value = "";
-    systemPkgName.value = "";
+    installDetail.value = '';
+    systemPkgName.value = '';
     stopProgressListener();
   }
 
   async function close(sessionId?: string) {
     const sid = sessionId ?? activeSessionId.value;
     try {
-      await invoke("browser_close", { sessionId: sid });
+      await invoke('browser_close', { sessionId: sid });
       if (sid) {
         const next = new Map(sessions.value);
         next.delete(sid);
         sessions.value = next;
         if (activeSessionId.value === sid) {
-          activeSessionId.value = next.size > 0 ? next.keys().next().value ?? null : null;
+          activeSessionId.value = next.size > 0 ? (next.keys().next().value ?? null) : null;
         }
       }
     } catch (e) {
-      console.error("Failed to close browser:", e);
+      console.error('Failed to close browser:', e);
     }
   }
 
   async function startRecording(sessionId?: string) {
     const sid = sessionId ?? activeSessionId.value;
     try {
-      await invoke("recording_start", { sessionId: sid });
+      await invoke('recording_start', { sessionId: sid });
       if (sid) {
         const s = sessions.value.get(sid);
         if (s) {
@@ -345,7 +352,7 @@ export const useBrowserStore = defineStore("browser", () => {
       recordedNodes.value = [];
       await startRecordingPreview();
     } catch (e) {
-      console.error("Failed to start recording:", e);
+      console.error('Failed to start recording:', e);
       setupError.value = errorMessage(e);
     }
   }
@@ -354,7 +361,7 @@ export const useBrowserStore = defineStore("browser", () => {
     stopRecordingPreview();
     const sid = sessionId ?? activeSessionId.value;
     try {
-      const result = await invoke<RecordingResult>("recording_stop", { sessionId: sid });
+      const result = await invoke<RecordingResult>('recording_stop', { sessionId: sid });
       if (sid) {
         const s = sessions.value.get(sid);
         if (s) {
@@ -366,7 +373,7 @@ export const useBrowserStore = defineStore("browser", () => {
       recordedNodes.value = result.nodes || [];
       return recordedNodes.value;
     } catch (e) {
-      console.error("Failed to stop recording:", e);
+      console.error('Failed to stop recording:', e);
       return [];
     }
   }
@@ -375,10 +382,10 @@ export const useBrowserStore = defineStore("browser", () => {
     if (!recording.value) return [];
     const sid = sessionId ?? activeSessionId.value;
     try {
-      const result = await invoke<RecordingResult>("recording_poll", { sessionId: sid });
+      const result = await invoke<RecordingResult>('recording_poll', { sessionId: sid });
       return result.nodes || [];
     } catch (e) {
-      console.error("Failed to poll recording:", e);
+      console.error('Failed to poll recording:', e);
       return [];
     }
   }
@@ -386,35 +393,50 @@ export const useBrowserStore = defineStore("browser", () => {
   async function navigate(url: string, sessionId?: string) {
     const sid = sessionId ?? activeSessionId.value;
     try {
-      await invoke("browser_navigate", { url, sessionId: sid });
+      await invoke('browser_navigate', { url, sessionId: sid });
     } catch (e) {
-      console.error("Failed to navigate:", e);
+      console.error('Failed to navigate:', e);
     }
   }
 
   async function fetchStatus(sessionId?: string) {
     const sid = sessionId ?? activeSessionId.value;
     try {
-      const result = await invoke<{ connected: boolean; url: string | null; pages: number }>("browser_status", { sessionId: sid });
+      const result = await invoke<{ connected: boolean; url: string | null; pages: number }>(
+        'browser_status',
+        { sessionId: sid },
+      );
       if (sid) {
         const s = sessions.value.get(sid);
         if (s) {
           const next = new Map(sessions.value);
-          next.set(sid, { ...s, connected: result.connected, url: result.url, pages: result.pages });
+          next.set(sid, {
+            ...s,
+            connected: result.connected,
+            url: result.url,
+            pages: result.pages,
+          });
           sessions.value = next;
         }
       }
       return result;
     } catch (e) {
-      console.error("Failed to get browser status:", e);
+      console.error('Failed to get browser status:', e);
     }
   }
 
   async function listSessions() {
     try {
-      return await invoke<{ sessions: Array<{ session_id: string; connected: boolean; url: string | null; pages: number }> }>("browser_list_sessions");
+      return await invoke<{
+        sessions: Array<{
+          session_id: string;
+          connected: boolean;
+          url: string | null;
+          pages: number;
+        }>;
+      }>('browser_list_sessions');
     } catch (e) {
-      console.error("Failed to list sessions:", e);
+      console.error('Failed to list sessions:', e);
       return { sessions: [] };
     }
   }
@@ -439,17 +461,19 @@ export const useBrowserStore = defineStore("browser", () => {
           next.delete(sid);
           sessions.value = next;
           if (activeSessionId.value === sid) {
-            activeSessionId.value = next.size > 0 ? next.keys().next().value ?? null : null;
+            activeSessionId.value = next.size > 0 ? (next.keys().next().value ?? null) : null;
           }
         }
-      }).then(fn => { sessionClosedUnlisten = fn; });
+      }).then((fn) => {
+        sessionClosedUnlisten = fn;
+      });
     }
     heartbeatTimer = setInterval(async () => {
       if (sessions.value.size === 0) return;
       try {
         const result = await listSessions();
         if (!result) return;
-        const alive = new Set(result.sessions.filter(s => s.connected).map(s => s.session_id));
+        const alive = new Set(result.sessions.filter((s) => s.connected).map((s) => s.session_id));
         const next = new Map(sessions.value);
         let changed = false;
         for (const [sid] of next) {
@@ -461,10 +485,12 @@ export const useBrowserStore = defineStore("browser", () => {
         if (changed) {
           sessions.value = next;
           if (activeSessionId.value && !next.has(activeSessionId.value)) {
-            activeSessionId.value = next.size > 0 ? next.keys().next().value ?? null : null;
+            activeSessionId.value = next.size > 0 ? (next.keys().next().value ?? null) : null;
           }
         }
-      } catch { /* ignore */ }
+      } catch {
+        /* ignore */
+      }
     }, 3000);
   }
 
@@ -478,18 +504,46 @@ export const useBrowserStore = defineStore("browser", () => {
   }
 
   return {
-    sessions, activeSessionId,
-    connected, launching, recording, recordedNodes,
-    setupPhase, setupError, installStep, installProgress, installDetail, systemPkgName,
-    camoufoxInstalled, camoufoxVersion, camoufoxChecking, camoufoxInstalling,
-    camoufoxUpdateAvailable, camoufoxLatestVersion, camoufoxUpdating,
-    launch, close, navigate, fetchStatus, listSessions, setActiveSession,
-    startRecording, stopRecording, pollRecording,
-    startRecordingPreview, stopRecordingPreview,
-    installBrowser, installSystemPkg, launchAfterSetup,
-    checkEnvironment, resetSetup,
-    checkCamoufox, installCamoufox,
-    checkCamoufoxUpdate, updateCamoufox,
-    startSessionHeartbeat, stopSessionHeartbeat,
+    sessions,
+    activeSessionId,
+    connected,
+    launching,
+    recording,
+    recordedNodes,
+    setupPhase,
+    setupError,
+    installStep,
+    installProgress,
+    installDetail,
+    systemPkgName,
+    camoufoxInstalled,
+    camoufoxVersion,
+    camoufoxChecking,
+    camoufoxInstalling,
+    camoufoxUpdateAvailable,
+    camoufoxLatestVersion,
+    camoufoxUpdating,
+    launch,
+    close,
+    navigate,
+    fetchStatus,
+    listSessions,
+    setActiveSession,
+    startRecording,
+    stopRecording,
+    pollRecording,
+    startRecordingPreview,
+    stopRecordingPreview,
+    installBrowser,
+    installSystemPkg,
+    launchAfterSetup,
+    checkEnvironment,
+    resetSetup,
+    checkCamoufox,
+    installCamoufox,
+    checkCamoufoxUpdate,
+    updateCamoufox,
+    startSessionHeartbeat,
+    stopSessionHeartbeat,
   };
 });

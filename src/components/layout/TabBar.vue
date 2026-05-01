@@ -1,155 +1,178 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue'
-import { useRouter } from 'vue-router'
-import { useI18n } from 'vue-i18n'
-import { useWorkspaceStore } from '../../stores/workspace'
-import { useWorkflowStore } from '../../stores/workflow'
-import { usePanelLayout } from '../../composables/usePanel'
-import { useFileOps } from '../../composables/useFileOps'
-import { Plus, X, PanelLeft, PanelBottom, PanelRight, Minus, Square, Maximize2, Undo2, Redo2, Save } from 'lucide-vue-next'
-import MimicryLogo from '../../assets/mimicry-logo.svg?url'
+  import { ref, onMounted, onUnmounted } from 'vue';
+  import { useRouter } from 'vue-router';
+  import { useI18n } from 'vue-i18n';
+  import { useWorkspaceStore } from '../../stores/workspace';
+  import { useWorkflowStore } from '../../stores/workflow';
+  import { usePanelLayout } from '../../composables/usePanel';
+  import { useFileOps } from '../../composables/useFileOps';
+  import {
+    Plus,
+    X,
+    PanelLeft,
+    PanelBottom,
+    PanelRight,
+    Minus,
+    Square,
+    Maximize2,
+    Undo2,
+    Redo2,
+    Save,
+  } from 'lucide-vue-next';
+  import MimicryLogo from '../../assets/mimicry-logo.svg?url';
 
-const { t } = useI18n()
-const router = useRouter()
-const workspace = useWorkspaceStore()
-const workflow = useWorkflowStore()
-const { sidebarCollapsed, bottomCollapsed, rightPanelCollapsed, toggleSidebar, toggleBottom, toggleRightPanel } = usePanelLayout()
-const fileOps = useFileOps()
+  const { t } = useI18n();
+  const router = useRouter();
+  const workspace = useWorkspaceStore();
+  const workflow = useWorkflowStore();
+  const {
+    sidebarCollapsed,
+    bottomCollapsed,
+    rightPanelCollapsed,
+    toggleSidebar,
+    toggleBottom,
+    toggleRightPanel,
+  } = usePanelLayout();
+  const fileOps = useFileOps();
 
-const menuOpen = ref(false)
-const recentSubmenuOpen = ref(false)
-const isMaximized = ref(false)
+  const menuOpen = ref(false);
+  const recentSubmenuOpen = ref(false);
+  const isMaximized = ref(false);
 
-// Window control functions (Tauri API)
-import type { Window as TauriWindow } from '@tauri-apps/api/window'
+  // Window control functions (Tauri API)
+  import type { Window as TauriWindow } from '@tauri-apps/api/window';
 
-let appWindow: TauriWindow | null = null
-let unlistenResize: (() => void) | null = null
+  let appWindow: TauriWindow | null = null;
+  let unlistenResize: (() => void) | null = null;
 
-onMounted(async () => {
-  try {
-    const { getCurrentWindow } = await import('@tauri-apps/api/window')
-    appWindow = getCurrentWindow()
-    isMaximized.value = await appWindow.isMaximized()
-    unlistenResize = await appWindow.onResized(async () => {
-      isMaximized.value = await appWindow!.isMaximized()
-    })
-  } catch {
-    // Not in Tauri environment (web dev)
-  }
-  // Load recent files
-  try { await fileOps.loadRecentFiles() } catch { /* ignore */ }
-})
-
-onUnmounted(() => {
-  unlistenResize?.()
-})
-
-function startDrag(e: MouseEvent) {
-  const target = e.target as HTMLElement
-  // Don't drag from interactive elements (buttons)
-  if (target.closest('button')) return
-
-  const startX = e.screenX
-  const startY = e.screenY
-  const threshold = 4
-
-  const onMove = (moveEvent: MouseEvent) => {
-    if (Math.abs(moveEvent.screenX - startX) + Math.abs(moveEvent.screenY - startY) > threshold) {
-      cleanup()
-      appWindow?.startDragging().catch(() => {})
+  onMounted(async () => {
+    try {
+      const { getCurrentWindow } = await import('@tauri-apps/api/window');
+      appWindow = getCurrentWindow();
+      isMaximized.value = await appWindow.isMaximized();
+      unlistenResize = await appWindow.onResized(async () => {
+        isMaximized.value = await appWindow!.isMaximized();
+      });
+    } catch {
+      // Not in Tauri environment (web dev)
     }
+    // Load recent files
+    try {
+      await fileOps.loadRecentFiles();
+    } catch {
+      /* ignore */
+    }
+  });
+
+  onUnmounted(() => {
+    unlistenResize?.();
+  });
+
+  function startDrag(e: MouseEvent) {
+    const target = e.target as HTMLElement;
+    // Don't drag from interactive elements (buttons)
+    if (target.closest('button')) return;
+
+    const startX = e.screenX;
+    const startY = e.screenY;
+    const threshold = 4;
+
+    const onMove = (moveEvent: MouseEvent) => {
+      if (Math.abs(moveEvent.screenX - startX) + Math.abs(moveEvent.screenY - startY) > threshold) {
+        cleanup();
+        appWindow?.startDragging().catch(() => {});
+      }
+    };
+    const onUp = () => cleanup();
+    const cleanup = () => {
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+    };
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
   }
-  const onUp = () => cleanup()
-  const cleanup = () => {
-    document.removeEventListener('mousemove', onMove)
-    document.removeEventListener('mouseup', onUp)
+
+  function minimizeWindow() {
+    appWindow?.minimize();
   }
-  document.addEventListener('mousemove', onMove)
-  document.addEventListener('mouseup', onUp)
-}
 
-function minimizeWindow() {
-  appWindow?.minimize()
-}
-
-function toggleMaximize() {
-  appWindow?.toggleMaximize()
-}
-
-function closeWindow() {
-  appWindow?.close()
-}
-
-function onTabClick(tabId: string) {
-  if (tabId === workspace.activeTabId) return
-  // Save current tab's workflow data
-  workspace.saveTabData(workspace.activeTabId, workflow.toJSON())
-  // Switch tab
-  workspace.switchTab(tabId)
-  // Restore target tab's workflow data
-  const data = workspace.getTabData(tabId)
-  if (data) {
-    workflow.fromJSON(data)
-  } else {
-    workflow.clear()
+  function toggleMaximize() {
+    appWindow?.toggleMaximize();
   }
-  router.push('/')
-}
 
-function onAddTab() {
-  // Save current tab's workflow data before switching
-  workspace.saveTabData(workspace.activeTabId, workflow.toJSON())
-  workspace.addTab()
-  workflow.clear()
-  router.push('/')
-}
+  function closeWindow() {
+    appWindow?.close();
+  }
 
-function onCloseTab(e: MouseEvent, tabId: string) {
-  e.stopPropagation()
-  const wasActive = tabId === workspace.activeTabId
-  workspace.closeTab(tabId)
-  if (wasActive) {
-    // Restore the new active tab's data
-    const data = workspace.getTabData(workspace.activeTabId)
+  function onTabClick(tabId: string) {
+    if (tabId === workspace.activeTabId) return;
+    // Save current tab's workflow data
+    workspace.saveTabData(workspace.activeTabId, workflow.toJSON());
+    // Switch tab
+    workspace.switchTab(tabId);
+    // Restore target tab's workflow data
+    const data = workspace.getTabData(tabId);
     if (data) {
-      workflow.fromJSON(data)
+      workflow.fromJSON(data);
     } else {
-      workflow.clear()
+      workflow.clear();
+    }
+    router.push('/');
+  }
+
+  function onAddTab() {
+    // Save current tab's workflow data before switching
+    workspace.saveTabData(workspace.activeTabId, workflow.toJSON());
+    workspace.addTab();
+    workflow.clear();
+    router.push('/');
+  }
+
+  function onCloseTab(e: MouseEvent, tabId: string) {
+    e.stopPropagation();
+    const wasActive = tabId === workspace.activeTabId;
+    workspace.closeTab(tabId);
+    if (wasActive) {
+      // Restore the new active tab's data
+      const data = workspace.getTabData(workspace.activeTabId);
+      if (data) {
+        workflow.fromJSON(data);
+      } else {
+        workflow.clear();
+      }
     }
   }
-}
 
-function toggleMenu() {
-  menuOpen.value = !menuOpen.value
-  recentSubmenuOpen.value = false
-}
+  function toggleMenu() {
+    menuOpen.value = !menuOpen.value;
+    recentSubmenuOpen.value = false;
+  }
 
-function closeMenu() {
-  menuOpen.value = false
-  recentSubmenuOpen.value = false
-}
+  function closeMenu() {
+    menuOpen.value = false;
+    recentSubmenuOpen.value = false;
+  }
 
-interface MenuItem {
-  label: string
-  action?: () => void
-  separator?: boolean
-  shortcut?: string
-  submenu?: boolean
-}
+  interface MenuItem {
+    label: string;
+    action?: () => void;
+    separator?: boolean;
+    shortcut?: string;
+    submenu?: boolean;
+  }
 
-const menuItems: MenuItem[] = [
-  { label: t('app.title'), separator: true },
-  { label: t('fileMenu.open'), shortcut: 'Ctrl+O', action: () => fileOps.importFile() },
-  { label: t('fileMenu.save'), shortcut: 'Ctrl+S', action: () => fileOps.saveFile() },
-  { label: t('fileMenu.saveAs'), shortcut: 'Ctrl+Shift+S', action: () => fileOps.saveFileAs() },
-  { label: t('fileMenu.exportCompact'), action: () => fileOps.exportCompact() },
-  { label: '', separator: true },
-  { label: t('fileMenu.recentFiles'), submenu: true },
-  { label: '', separator: true },
-  { label: t('sidebar.blocks'), action: () => router.push('/') },
-  { label: t('settings.title'), action: () => router.push('/settings') },
-]
+  const menuItems: MenuItem[] = [
+    { label: t('app.title'), separator: true },
+    { label: t('fileMenu.open'), shortcut: 'Ctrl+O', action: () => fileOps.importFile() },
+    { label: t('fileMenu.save'), shortcut: 'Ctrl+S', action: () => fileOps.saveFile() },
+    { label: t('fileMenu.saveAs'), shortcut: 'Ctrl+Shift+S', action: () => fileOps.saveFileAs() },
+    { label: t('fileMenu.exportCompact'), action: () => fileOps.exportCompact() },
+    { label: '', separator: true },
+    { label: t('fileMenu.recentFiles'), submenu: true },
+    { label: '', separator: true },
+    { label: t('sidebar.blocks'), action: () => router.push('/') },
+    { label: t('settings.title'), action: () => router.push('/settings') },
+  ];
 </script>
 
 <template>
@@ -157,7 +180,10 @@ const menuItems: MenuItem[] = [
     <!-- JB-style app menu button -->
     <div class="menu-area">
       <button class="menu-btn" @click="toggleMenu" :title="t('app.title')">
-        <span class="menu-logo" :style="{ maskImage: `url(${MimicryLogo})`, WebkitMaskImage: `url(${MimicryLogo})` }" />
+        <span
+          class="menu-logo"
+          :style="{ maskImage: `url(${MimicryLogo})`, WebkitMaskImage: `url(${MimicryLogo})` }"
+        />
       </button>
       <Transition name="fade">
         <div v-if="menuOpen" class="menu-overlay" @click="closeMenu" />
@@ -165,7 +191,9 @@ const menuItems: MenuItem[] = [
       <Transition name="slide">
         <div v-if="menuOpen" class="menu-dropdown">
           <template v-for="(item, idx) in menuItems" :key="idx">
-            <div v-if="item.separator && item.label" class="menu-separator-label">{{ item.label }}</div>
+            <div v-if="item.separator && item.label" class="menu-separator-label">
+              {{ item.label }}
+            </div>
             <div v-else-if="item.separator" class="menu-separator" />
             <div
               v-else-if="item.submenu"
@@ -183,12 +211,25 @@ const menuItems: MenuItem[] = [
                       :key="rf.path"
                       class="menu-item"
                       :title="rf.path"
-                      @click="() => { fileOps.openRecentFile(rf.path); closeMenu() }"
+                      @click="
+                        () => {
+                          fileOps.openRecentFile(rf.path);
+                          closeMenu();
+                        }
+                      "
                     >
                       {{ rf.name }}
                     </button>
                     <div class="menu-separator" />
-                    <button class="menu-item" @click="() => { fileOps.clearRecent(); closeMenu() }">
+                    <button
+                      class="menu-item"
+                      @click="
+                        () => {
+                          fileOps.clearRecent();
+                          closeMenu();
+                        }
+                      "
+                    >
                       {{ t('fileMenu.clearRecent') }}
                     </button>
                   </template>
@@ -199,7 +240,12 @@ const menuItems: MenuItem[] = [
             <button
               v-else
               class="menu-item"
-              @click="() => { item.action?.(); closeMenu() }"
+              @click="
+                () => {
+                  item.action?.();
+                  closeMenu();
+                }
+              "
             >
               <span>{{ item.label }}</span>
               <span v-if="item.shortcut" class="menu-shortcut">{{ item.shortcut }}</span>
@@ -253,11 +299,7 @@ const menuItems: MenuItem[] = [
       >
         <Redo2 :size="14" :stroke-width="1.5" />
       </button>
-      <button
-        class="panel-toggle"
-        :title="t('tabBar.save')"
-        @click="fileOps.saveFile()"
-      >
+      <button class="panel-toggle" :title="t('tabBar.save')" @click="fileOps.saveFile()">
         <Save :size="14" :stroke-width="1.5" />
       </button>
 
@@ -294,7 +336,11 @@ const menuItems: MenuItem[] = [
       <button class="window-btn" @click="minimizeWindow" :title="t('tabBar.minimize')">
         <Minus :size="14" :stroke-width="1.5" />
       </button>
-      <button class="window-btn" @click="toggleMaximize" :title="isMaximized ? t('tabBar.restore') : t('tabBar.maximize')">
+      <button
+        class="window-btn"
+        @click="toggleMaximize"
+        :title="isMaximized ? t('tabBar.restore') : t('tabBar.maximize')"
+      >
         <component :is="isMaximized ? Square : Maximize2" :size="12" :stroke-width="1.5" />
       </button>
       <button class="window-btn window-close" @click="closeWindow" :title="t('tabBar.close')">
@@ -305,317 +351,317 @@ const menuItems: MenuItem[] = [
 </template>
 
 <style scoped>
-.tab-bar {
-  display: flex;
-  align-items: center;
-  height: 36px;
-  min-height: 36px;
-  background: var(--color-bg);
-  border-bottom: 1px solid var(--color-border);
-  user-select: none;
-  -webkit-app-region: drag;
-}
+  .tab-bar {
+    display: flex;
+    align-items: center;
+    height: 36px;
+    min-height: 36px;
+    background: var(--color-bg);
+    border-bottom: 1px solid var(--color-border);
+    user-select: none;
+    -webkit-app-region: drag;
+  }
 
-.menu-area {
-  position: relative;
-  -webkit-app-region: no-drag;
-}
+  .menu-area {
+    position: relative;
+    -webkit-app-region: no-drag;
+  }
 
-.menu-btn {
-  width: 48px;
-  height: 36px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: none;
-  border: none;
-  color: var(--color-text-muted);
-  cursor: pointer;
-  transition: all 0.15s;
-}
+  .menu-btn {
+    width: 48px;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: none;
+    border: none;
+    color: var(--color-text-muted);
+    cursor: pointer;
+    transition: all 0.15s;
+  }
 
-.menu-btn:hover {
-  background: var(--color-surface-hover);
-  color: var(--color-text);
-}
+  .menu-btn:hover {
+    background: var(--color-surface-hover);
+    color: var(--color-text);
+  }
 
-.menu-logo {
-  display: block;
-  width: 50px;
-  height: 50px;
-  background-color: currentColor;
-  mask-size: contain;
-  mask-repeat: no-repeat;
-  mask-position: center;
-  -webkit-mask-size: contain;
-  -webkit-mask-repeat: no-repeat;
-  -webkit-mask-position: center;
-}
+  .menu-logo {
+    display: block;
+    width: 50px;
+    height: 50px;
+    background-color: currentColor;
+    mask-size: contain;
+    mask-repeat: no-repeat;
+    mask-position: center;
+    -webkit-mask-size: contain;
+    -webkit-mask-repeat: no-repeat;
+    -webkit-mask-position: center;
+  }
 
-.menu-overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 99;
-}
+  .menu-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 99;
+  }
 
-.menu-dropdown {
-  position: absolute;
-  top: 36px;
-  left: 0;
-  min-width: 200px;
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: 6px;
-  padding: 4px 0;
-  z-index: 100;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
-}
+  .menu-dropdown {
+    position: absolute;
+    top: 36px;
+    left: 0;
+    min-width: 200px;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: 6px;
+    padding: 4px 0;
+    z-index: 100;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+  }
 
-.menu-item:hover:not(.disabled) {
-  background: var(--color-surface-hover);
-}
+  .menu-item:hover:not(.disabled) {
+    background: var(--color-surface-hover);
+  }
 
-.menu-separator {
-  height: 1px;
-  margin: 4px 8px;
-  background: var(--color-separator);
-}
+  .menu-separator {
+    height: 1px;
+    margin: 4px 8px;
+    background: var(--color-separator);
+  }
 
-.menu-separator-label {
-  padding: 4px 16px 2px;
-  font-size: 11px;
-  color: var(--color-text-muted);
-  font-weight: 600;
-}
+  .menu-separator-label {
+    padding: 4px 16px 2px;
+    font-size: 11px;
+    color: var(--color-text-muted);
+    font-weight: 600;
+  }
 
-.menu-shortcut {
-  margin-left: auto;
-  font-size: 11px;
-  color: var(--color-text-muted);
-}
+  .menu-shortcut {
+    margin-left: auto;
+    font-size: 11px;
+    color: var(--color-text-muted);
+  }
 
-.menu-item {
-  display: flex;
-  width: 100%;
-  padding: 6px 16px;
-  background: none;
-  border: none;
-  color: var(--color-text);
-  font-size: 13px;
-  text-align: left;
-  cursor: pointer;
-  transition: background 0.1s;
-  gap: 8px;
-  align-items: center;
-}
+  .menu-item {
+    display: flex;
+    width: 100%;
+    padding: 6px 16px;
+    background: none;
+    border: none;
+    color: var(--color-text);
+    font-size: 13px;
+    text-align: left;
+    cursor: pointer;
+    transition: background 0.1s;
+    gap: 8px;
+    align-items: center;
+  }
 
-.menu-item.disabled {
-  color: var(--color-text-muted);
-  cursor: default;
-}
+  .menu-item.disabled {
+    color: var(--color-text-muted);
+    cursor: default;
+  }
 
-.submenu-trigger {
-  position: relative;
-}
+  .submenu-trigger {
+    position: relative;
+  }
 
-.submenu-arrow {
-  margin-left: auto;
-  font-size: 9px;
-  color: var(--color-text-muted);
-}
+  .submenu-arrow {
+    margin-left: auto;
+    font-size: 9px;
+    color: var(--color-text-muted);
+  }
 
-.submenu-dropdown {
-  position: absolute;
-  left: 100%;
-  top: 0;
-  min-width: 220px;
-  max-width: 400px;
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: 6px;
-  padding: 4px 0;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
-  z-index: 101;
-}
+  .submenu-dropdown {
+    position: absolute;
+    left: 100%;
+    top: 0;
+    min-width: 220px;
+    max-width: 400px;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: 6px;
+    padding: 4px 0;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+    z-index: 101;
+  }
 
-.submenu-dropdown .menu-item {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
+  .submenu-dropdown .menu-item {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
 
-.tabs-scroll {
-  display: flex;
-  flex: 1;
-  overflow-x: auto;
-  overflow-y: hidden;
-  -webkit-app-region: drag;
-}
+  .tabs-scroll {
+    display: flex;
+    flex: 1;
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-app-region: drag;
+  }
 
-.tabs-scroll::-webkit-scrollbar {
-  height: 0;
-}
+  .tabs-scroll::-webkit-scrollbar {
+    height: 0;
+  }
 
-.tab {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 0 12px;
-  height: 36px;
-  font-size: 12px;
-  color: var(--color-text-muted);
-  cursor: pointer;
-  white-space: nowrap;
-  border-right: 1px solid var(--color-border);
-  transition: all 0.15s;
-  flex-shrink: 0;
-  max-width: 200px;
-  -webkit-app-region: no-drag;
-}
+  .tab {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 0 12px;
+    height: 36px;
+    font-size: 12px;
+    color: var(--color-text-muted);
+    cursor: pointer;
+    white-space: nowrap;
+    border-right: 1px solid var(--color-border);
+    transition: all 0.15s;
+    flex-shrink: 0;
+    max-width: 200px;
+    -webkit-app-region: no-drag;
+  }
 
-.tab:hover {
-  background: var(--color-surface-hover);
-  color: var(--color-text);
-}
+  .tab:hover {
+    background: var(--color-surface-hover);
+    color: var(--color-text);
+  }
 
-.tab.active {
-  background: var(--color-surface);
-  color: var(--color-text);
-}
+  .tab.active {
+    background: var(--color-surface);
+    color: var(--color-text);
+  }
 
-.tab-name {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
+  .tab-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
 
-.tab-close {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 18px;
-  height: 18px;
-  border: none;
-  background: none;
-  color: var(--color-text-muted);
-  border-radius: 4px;
-  cursor: pointer;
-  opacity: 0;
-  transition: all 0.1s;
-  flex-shrink: 0;
-}
+  .tab-close {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+    border: none;
+    background: none;
+    color: var(--color-text-muted);
+    border-radius: 4px;
+    cursor: pointer;
+    opacity: 0;
+    transition: all 0.1s;
+    flex-shrink: 0;
+  }
 
-.tab:hover .tab-close {
-  opacity: 1;
-}
+  .tab:hover .tab-close {
+    opacity: 1;
+  }
 
-.tab-close:hover {
-  background: var(--color-surface-active, var(--color-surface-hover));
-  color: var(--color-text);
-}
+  .tab-close:hover {
+    background: var(--color-surface-active, var(--color-surface-hover));
+    color: var(--color-text);
+  }
 
-.new-tab-btn {
-  width: 32px;
-  height: 36px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: none;
-  border: none;
-  color: var(--color-text-muted);
-  cursor: pointer;
-  transition: all 0.15s;
-  -webkit-app-region: no-drag;
-  flex-shrink: 0;
-}
+  .new-tab-btn {
+    width: 32px;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: none;
+    border: none;
+    color: var(--color-text-muted);
+    cursor: pointer;
+    transition: all 0.15s;
+    -webkit-app-region: no-drag;
+    flex-shrink: 0;
+  }
 
-.new-tab-btn:hover {
-  background: var(--color-surface-hover);
-  color: var(--color-text);
-}
+  .new-tab-btn:hover {
+    background: var(--color-surface-hover);
+    color: var(--color-text);
+  }
 
-/* Transitions */
-.fade-enter-active,
-.fade-leave-active {
-  transition: opacity 0.15s;
-}
-.fade-enter-from,
-.fade-leave-to {
-  opacity: 0;
-}
+  /* Transitions */
+  .fade-enter-active,
+  .fade-leave-active {
+    transition: opacity 0.15s;
+  }
+  .fade-enter-from,
+  .fade-leave-to {
+    opacity: 0;
+  }
 
-.slide-enter-active,
-.slide-leave-active {
-  transition: all 0.15s;
-}
-.slide-enter-from,
-.slide-leave-to {
-  opacity: 0;
-  transform: translateY(-4px);
-}
+  .slide-enter-active,
+  .slide-leave-active {
+    transition: all 0.15s;
+  }
+  .slide-enter-from,
+  .slide-leave-to {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
 
-/* Right controls area */
-.right-controls {
-  display: flex;
-  align-items: center;
-  -webkit-app-region: no-drag;
-  flex-shrink: 0;
-}
+  /* Right controls area */
+  .right-controls {
+    display: flex;
+    align-items: center;
+    -webkit-app-region: no-drag;
+    flex-shrink: 0;
+  }
 
-.panel-toggle {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 30px;
-  height: 36px;
-  border: none;
-  background: none;
-  color: var(--color-text-muted);
-  cursor: pointer;
-  transition: all 0.15s;
-}
+  .panel-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 36px;
+    border: none;
+    background: none;
+    color: var(--color-text-muted);
+    cursor: pointer;
+    transition: all 0.15s;
+  }
 
-.panel-toggle:hover {
-  background: var(--color-surface-hover);
-  color: var(--color-text);
-}
+  .panel-toggle:hover {
+    background: var(--color-surface-hover);
+    color: var(--color-text);
+  }
 
-.panel-toggle.active {
-  color: var(--color-text);
-}
+  .panel-toggle.active {
+    color: var(--color-text);
+  }
 
-.panel-toggle.disabled {
-  opacity: 0.35;
-  cursor: default;
-}
+  .panel-toggle.disabled {
+    opacity: 0.35;
+    cursor: default;
+  }
 
-.controls-separator {
-  width: 1px;
-  height: 16px;
-  background: var(--color-border);
-  margin: 0 2px;
-}
+  .controls-separator {
+    width: 1px;
+    height: 16px;
+    background: var(--color-border);
+    margin: 0 2px;
+  }
 
-.window-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 46px;
-  height: 36px;
-  border: none;
-  background: none;
-  color: var(--color-text-muted);
-  cursor: pointer;
-  transition: all 0.15s;
-}
+  .window-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 46px;
+    height: 36px;
+    border: none;
+    background: none;
+    color: var(--color-text-muted);
+    cursor: pointer;
+    transition: all 0.15s;
+  }
 
-.window-btn:hover {
-  background: var(--color-surface-hover);
-  color: var(--color-text);
-}
+  .window-btn:hover {
+    background: var(--color-surface-hover);
+    color: var(--color-text);
+  }
 
-.window-close:hover {
-  background: #e81123;
-  color: #fff;
-}
+  .window-close:hover {
+    background: #e81123;
+    color: #fff;
+  }
 </style>

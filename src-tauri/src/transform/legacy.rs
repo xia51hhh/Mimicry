@@ -9,13 +9,13 @@ use super::types::*;
 /// - Action names may be snake_case or PascalCase
 /// - May lack `id`, `position`, `settings`
 pub fn legacy_to_canonical(json: &serde_json::Value) -> Result<CanonicalWorkflow, TransformError> {
-    let nodes = json
-        .get("nodes")
-        .and_then(|v| v.as_array())
-        .ok_or(TransformError::MissingField {
-            node_id: "<root>".into(),
-            field: "nodes".into(),
-        })?;
+    let nodes =
+        json.get("nodes")
+            .and_then(|v| v.as_array())
+            .ok_or(TransformError::MissingField {
+                node_id: "<root>".into(),
+                field: "nodes".into(),
+            })?;
 
     let canonical_nodes: Vec<CanonicalNode> = nodes
         .iter()
@@ -57,17 +57,25 @@ pub fn legacy_to_canonical(json: &serde_json::Value) -> Result<CanonicalWorkflow
 
 /// Known metadata fields that should NOT be put into `data`
 const META_FIELDS: &[&str] = &[
-    "id", "type", "kind", "action", "position", "settings", "runtime",
-    "selected", "sessionId", "session_id",
+    "id",
+    "type",
+    "kind",
+    "action",
+    "position",
+    "settings",
+    "runtime",
+    "selected",
+    "sessionId",
+    "session_id",
 ];
 
 fn convert_legacy_node(
     node: &serde_json::Value,
     index: usize,
 ) -> Result<CanonicalNode, TransformError> {
-    let obj = node
-        .as_object()
-        .ok_or(TransformError::InvalidKind { kind: "non-object node".into() })?;
+    let obj = node.as_object().ok_or(TransformError::InvalidKind {
+        kind: "non-object node".into(),
+    })?;
 
     // Extract id
     let id = obj
@@ -77,10 +85,7 @@ fn convert_legacy_node(
         .unwrap_or_else(|| format!("legacy_{index}"));
 
     // Extract kind from "type" field
-    let type_str = obj
-        .get("type")
-        .and_then(|v| v.as_str())
-        .unwrap_or("action");
+    let type_str = obj.get("type").and_then(|v| v.as_str()).unwrap_or("action");
 
     let kind = match type_str {
         "action" => NodeKind::Action,
@@ -180,7 +185,12 @@ mod tests {
 
         let canonical = legacy_to_canonical(&wf).unwrap();
         assert_eq!(
-            canonical.nodes[0].runtime.as_ref().unwrap().session_id.as_deref(),
+            canonical.nodes[0]
+                .runtime
+                .as_ref()
+                .unwrap()
+                .session_id
+                .as_deref(),
             Some("s1")
         );
     }

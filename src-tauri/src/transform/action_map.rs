@@ -9,7 +9,10 @@ static ACTION_MAP: LazyLock<HashMap<String, String>> = LazyLock::new(|| {
 
 /// snake_case → PascalCase reverse mapping
 static REVERSE_MAP: LazyLock<HashMap<String, String>> = LazyLock::new(|| {
-    ACTION_MAP.iter().map(|(k, v)| (v.clone(), k.clone())).collect()
+    ACTION_MAP
+        .iter()
+        .map(|(k, v)| (v.clone(), k.clone()))
+        .collect()
 });
 
 /// Convert PascalCase action name to snake_case backend name.

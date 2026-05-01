@@ -1,73 +1,85 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
-import { useI18n } from 'vue-i18n'
-import { useBrowserStore } from '../../stores/browser'
-import { Download, CheckCircle, XCircle, Loader2, Package, Shield, Copy, ChevronDown, ChevronUp } from 'lucide-vue-next'
+  import { computed, ref } from 'vue';
+  import { useI18n } from 'vue-i18n';
+  import { useBrowserStore } from '../../stores/browser';
+  import {
+    Download,
+    CheckCircle,
+    XCircle,
+    Loader2,
+    Package,
+    Shield,
+    Copy,
+    ChevronDown,
+    ChevronUp,
+  } from 'lucide-vue-next';
 
-const { t } = useI18n()
-const browser = useBrowserStore()
-const errorExpanded = ref(false)
-const copied = ref(false)
+  const { t } = useI18n();
+  const browser = useBrowserStore();
+  const errorExpanded = ref(false);
+  const copied = ref(false);
 
-function capitalize(s: string): string {
-  return s.charAt(0).toUpperCase() + s.slice(1)
-}
-
-const steps = [
-  { key: 'venv' as const, label: () => t('setup.stepVenv') },
-  { key: 'pip' as const, label: () => t('setup.stepPip') },
-  { key: 'browser' as const, label: () => t('setup.stepBrowser') },
-]
-
-function stepStatus(stepKey: string) {
-  if (!browser.installStep) return 'pending'
-  const order = ['venv', 'pip', 'browser']
-  const currentIdx = order.indexOf(browser.installStep)
-  const stepIdx = order.indexOf(stepKey)
-  if (stepIdx < currentIdx) return 'done'
-  if (stepIdx === currentIdx) {
-    return browser.installProgress >= 100 ? 'done' : 'active'
+  function capitalize(s: string): string {
+    return s.charAt(0).toUpperCase() + s.slice(1);
   }
-  return 'pending'
-}
 
-const overallProgress = computed(() => {
-  const order = ['venv', 'pip', 'browser']
-  const currentIdx = order.indexOf(browser.installStep || 'venv')
-  const base = (currentIdx / 3) * 100
-  const stepContrib = (browser.installProgress / 3)
-  return Math.min(Math.round(base + stepContrib), 100)
-})
+  const steps = [
+    { key: 'venv' as const, label: () => t('setup.stepVenv') },
+    { key: 'pip' as const, label: () => t('setup.stepPip') },
+    { key: 'browser' as const, label: () => t('setup.stepBrowser') },
+  ];
 
-function handleInstallSystemPkg() {
-  browser.installSystemPkg(browser.systemPkgName)
-}
-
-/** Extract the last meaningful line from a Python traceback as summary */
-const errorSummary = computed(() => {
-  const err = browser.setupError
-  if (!err) return ''
-  // Find the last exception line (e.g. "requests.exceptions.HTTPError: 403 ...")
-  const lines = err.split(/\n/)
-  for (let i = lines.length - 1; i >= 0; i--) {
-    const line = lines[i].trim()
-    if (line && !line.startsWith('File ') && !line.startsWith('~~~') && !line.startsWith('^')) {
-      return line
+  function stepStatus(stepKey: string) {
+    if (!browser.installStep) return 'pending';
+    const order = ['venv', 'pip', 'browser'];
+    const currentIdx = order.indexOf(browser.installStep);
+    const stepIdx = order.indexOf(stepKey);
+    if (stepIdx < currentIdx) return 'done';
+    if (stepIdx === currentIdx) {
+      return browser.installProgress >= 100 ? 'done' : 'active';
     }
+    return 'pending';
   }
-  return err.length > 200 ? err.slice(0, 200) + '...' : err
-})
 
-const hasFullError = computed(() => {
-  return browser.setupError !== null && browser.setupError !== errorSummary.value
-})
+  const overallProgress = computed(() => {
+    const order = ['venv', 'pip', 'browser'];
+    const currentIdx = order.indexOf(browser.installStep || 'venv');
+    const base = (currentIdx / 3) * 100;
+    const stepContrib = browser.installProgress / 3;
+    return Math.min(Math.round(base + stepContrib), 100);
+  });
 
-async function copyError() {
-  if (!browser.setupError) return
-  await navigator.clipboard.writeText(browser.setupError)
-  copied.value = true
-  setTimeout(() => { copied.value = false }, 2000)
-}
+  function handleInstallSystemPkg() {
+    browser.installSystemPkg(browser.systemPkgName);
+  }
+
+  /** Extract the last meaningful line from a Python traceback as summary */
+  const errorSummary = computed(() => {
+    const err = browser.setupError;
+    if (!err) return '';
+    // Find the last exception line (e.g. "requests.exceptions.HTTPError: 403 ...")
+    const lines = err.split(/\n/);
+    for (let i = lines.length - 1; i >= 0; i--) {
+      const line = lines[i].trim();
+      if (line && !line.startsWith('File ') && !line.startsWith('~~~') && !line.startsWith('^')) {
+        return line;
+      }
+    }
+    return err.length > 200 ? err.slice(0, 200) + '...' : err;
+  });
+
+  const hasFullError = computed(() => {
+    return browser.setupError !== null && browser.setupError !== errorSummary.value;
+  });
+
+  async function copyError() {
+    if (!browser.setupError) return;
+    await navigator.clipboard.writeText(browser.setupError);
+    copied.value = true;
+    setTimeout(() => {
+      copied.value = false;
+    }, 2000);
+  }
 </script>
 
 <template>
@@ -76,7 +88,13 @@ async function copyError() {
       <div
         v-if="browser.setupPhase !== 'idle' && browser.setupPhase !== 'checking'"
         class="dialog-overlay"
-        @click.self="browser.setupPhase === 'prompt' || browser.setupPhase === 'completed' || browser.setupPhase === 'failed' ? browser.resetSetup() : undefined"
+        @click.self="
+          browser.setupPhase === 'prompt' ||
+          browser.setupPhase === 'completed' ||
+          browser.setupPhase === 'failed'
+            ? browser.resetSetup()
+            : undefined
+        "
       >
         <div class="dialog-content">
           <!-- Header -->
@@ -138,9 +156,22 @@ async function copyError() {
           <!-- Installing phase: show progress -->
           <template v-else-if="browser.setupPhase === 'installing'">
             <div class="steps-list">
-              <div v-for="step in steps" :key="step.key" class="step-item" :class="stepStatus(step.key)">
-                <CheckCircle v-if="stepStatus(step.key) === 'done'" :size="16" class="step-icon done" />
-                <Loader2 v-else-if="stepStatus(step.key) === 'active'" :size="16" class="step-icon active spin" />
+              <div
+                v-for="step in steps"
+                :key="step.key"
+                class="step-item"
+                :class="stepStatus(step.key)"
+              >
+                <CheckCircle
+                  v-if="stepStatus(step.key) === 'done'"
+                  :size="16"
+                  class="step-icon done"
+                />
+                <Loader2
+                  v-else-if="stepStatus(step.key) === 'active'"
+                  :size="16"
+                  class="step-icon active spin"
+                />
                 <div v-else class="step-icon pending-dot" />
                 <span class="step-label">{{ step.label() }}</span>
               </div>
@@ -150,7 +181,9 @@ async function copyError() {
             </div>
             <p class="progress-text">
               {{ browser.installStep ? t(`setup.step${capitalize(browser.installStep)}`) : '' }}
-              <span v-if="browser.installDetail" class="progress-detail">{{ browser.installDetail }}</span>
+              <span v-if="browser.installDetail" class="progress-detail">{{
+                browser.installDetail
+              }}</span>
               <span v-else>...</span>
             </p>
           </template>
@@ -178,11 +211,20 @@ async function copyError() {
               <div class="error-summary">
                 <span class="error-text">{{ errorSummary }}</span>
                 <div class="error-actions">
-                  <button v-if="hasFullError" class="icon-btn" @click="errorExpanded = !errorExpanded" :title="errorExpanded ? '收起' : '展开'">
+                  <button
+                    v-if="hasFullError"
+                    class="icon-btn"
+                    @click="errorExpanded = !errorExpanded"
+                    :title="errorExpanded ? '收起' : '展开'"
+                  >
                     <ChevronUp v-if="errorExpanded" :size="14" />
                     <ChevronDown v-else :size="14" />
                   </button>
-                  <button class="icon-btn" @click="copyError" :title="copied ? '已复制' : '复制错误信息'">
+                  <button
+                    class="icon-btn"
+                    @click="copyError"
+                    :title="copied ? '已复制' : '复制错误信息'"
+                  >
                     <CheckCircle v-if="copied" :size="14" class="text-success" />
                     <Copy v-else :size="14" />
                   </button>
@@ -206,304 +248,308 @@ async function copyError() {
 </template>
 
 <style scoped>
-.dialog-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.5);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 9999;
-}
+  .dialog-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+  }
 
-.dialog-content {
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: 8px;
-  padding: 24px;
-  min-width: 420px;
-  max-width: 500px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
-}
+  .dialog-content {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: 8px;
+    padding: 24px;
+    min-width: 420px;
+    max-width: 500px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  }
 
-.dialog-header {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 16px;
-  font-weight: 600;
-  color: var(--color-text);
-  margin-bottom: 16px;
-}
+  .dialog-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--color-text);
+    margin-bottom: 16px;
+  }
 
-.dialog-desc {
-  font-size: 13px;
-  color: var(--color-text-muted);
-  margin-bottom: 12px;
-  line-height: 1.5;
-}
+  .dialog-desc {
+    font-size: 13px;
+    color: var(--color-text-muted);
+    margin-bottom: 12px;
+    line-height: 1.5;
+  }
 
-.dep-list {
-  list-style: none;
-  padding: 0;
-  margin: 0 0 20px;
-}
+  .dep-list {
+    list-style: none;
+    padding: 0;
+    margin: 0 0 20px;
+  }
 
-.dep-list li {
-  font-size: 13px;
-  color: var(--color-text);
-  padding: 6px 0;
-  padding-left: 16px;
-  position: relative;
-}
+  .dep-list li {
+    font-size: 13px;
+    color: var(--color-text);
+    padding: 6px 0;
+    padding-left: 16px;
+    position: relative;
+  }
 
-.dep-list li::before {
-  content: "•";
-  position: absolute;
-  left: 0;
-  color: var(--color-primary);
-}
+  .dep-list li::before {
+    content: '•';
+    position: absolute;
+    left: 0;
+    color: var(--color-primary);
+  }
 
-.dialog-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-  margin-top: 20px;
-}
+  .dialog-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 20px;
+  }
 
-.btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 16px;
-  border-radius: 6px;
-  font-size: 13px;
-  cursor: pointer;
-  border: none;
-  transition: all 0.15s;
-}
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 16px;
+    border-radius: 6px;
+    font-size: 13px;
+    cursor: pointer;
+    border: none;
+    transition: all 0.15s;
+  }
 
-.btn-primary {
-  background: var(--color-primary);
-  color: white;
-}
+  .btn-primary {
+    background: var(--color-primary);
+    color: white;
+  }
 
-.btn-primary:hover {
-  opacity: 0.9;
-}
+  .btn-primary:hover {
+    opacity: 0.9;
+  }
 
-.btn-secondary {
-  background: var(--color-surface-hover, #333);
-  color: var(--color-text);
-}
+  .btn-secondary {
+    background: var(--color-surface-hover, #333);
+    color: var(--color-text);
+  }
 
-.btn-secondary:hover {
-  background: var(--color-surface-active, #444);
-}
+  .btn-secondary:hover {
+    background: var(--color-surface-active, #444);
+  }
 
-.steps-list {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  margin-bottom: 20px;
-}
+  .steps-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-bottom: 20px;
+  }
 
-.step-item {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  font-size: 13px;
-  color: var(--color-text-muted);
-}
+  .step-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 13px;
+    color: var(--color-text-muted);
+  }
 
-.step-item.done {
-  color: var(--color-text);
-}
+  .step-item.done {
+    color: var(--color-text);
+  }
 
-.step-item.active {
-  color: var(--color-primary);
-}
+  .step-item.active {
+    color: var(--color-primary);
+  }
 
-.step-icon.done {
-  color: #22c55e;
-}
+  .step-icon.done {
+    color: #22c55e;
+  }
 
-.step-icon.active {
-  color: var(--color-primary);
-}
+  .step-icon.active {
+    color: var(--color-primary);
+  }
 
-.pending-dot {
-  width: 16px;
-  height: 16px;
-  border-radius: 50%;
-  border: 2px solid var(--color-border);
-  box-sizing: border-box;
-}
+  .pending-dot {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    border: 2px solid var(--color-border);
+    box-sizing: border-box;
+  }
 
-.spin {
-  animation: spin 1s linear infinite;
-}
+  .spin {
+    animation: spin 1s linear infinite;
+  }
 
-@keyframes spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
-}
+  @keyframes spin {
+    from {
+      transform: rotate(0deg);
+    }
+    to {
+      transform: rotate(360deg);
+    }
+  }
 
-.progress-bar {
-  height: 4px;
-  background: var(--color-border);
-  border-radius: 2px;
-  overflow: hidden;
-  margin-bottom: 8px;
-}
+  .progress-bar {
+    height: 4px;
+    background: var(--color-border);
+    border-radius: 2px;
+    overflow: hidden;
+    margin-bottom: 8px;
+  }
 
-.progress-fill {
-  height: 100%;
-  background: var(--color-primary);
-  border-radius: 2px;
-  transition: width 0.3s ease;
-}
+  .progress-fill {
+    height: 100%;
+    background: var(--color-primary);
+    border-radius: 2px;
+    transition: width 0.3s ease;
+  }
 
-.progress-text {
-  font-size: 12px;
-  color: var(--color-text-muted);
-  text-align: center;
-}
+  .progress-text {
+    font-size: 12px;
+    color: var(--color-text-muted);
+    text-align: center;
+  }
 
-.progress-detail {
-  font-family: monospace;
-  margin-left: 4px;
-  color: var(--color-text);
-}
+  .progress-detail {
+    font-family: monospace;
+    margin-left: 4px;
+    color: var(--color-text);
+  }
 
-.result-section {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 12px;
-  padding: 20px 0;
-}
+  .result-section {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    padding: 20px 0;
+  }
 
-.result-section.success {
-  color: #22c55e;
-}
+  .result-section.success {
+    color: #22c55e;
+  }
 
-.result-section.error {
-  color: #ef4444;
-}
+  .result-section.error {
+    color: #ef4444;
+  }
 
-.result-section p {
-  font-size: 15px;
-  font-weight: 500;
-}
+  .result-section p {
+    font-size: 15px;
+    font-weight: 500;
+  }
 
-.error-block {
-  margin-top: 8px;
-}
+  .error-block {
+    margin-top: 8px;
+  }
 
-.error-summary {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  background: rgba(239, 68, 68, 0.1);
-  padding: 8px 12px;
-  border-radius: 4px;
-}
+  .error-summary {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(239, 68, 68, 0.1);
+    padding: 8px 12px;
+    border-radius: 4px;
+  }
 
-.error-text {
-  flex: 1;
-  font-size: 12px;
-  color: #ef4444;
-  user-select: text;
-  -webkit-user-select: text;
-  word-break: break-word;
-}
+  .error-text {
+    flex: 1;
+    font-size: 12px;
+    color: #ef4444;
+    user-select: text;
+    -webkit-user-select: text;
+    word-break: break-word;
+  }
 
-.error-actions {
-  display: flex;
-  gap: 4px;
-  flex-shrink: 0;
-}
+  .error-actions {
+    display: flex;
+    gap: 4px;
+    flex-shrink: 0;
+  }
 
-.icon-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 24px;
-  height: 24px;
-  border: none;
-  background: transparent;
-  color: var(--color-text-muted);
-  cursor: pointer;
-  border-radius: 4px;
-  flex-shrink: 0;
-}
+  .icon-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    border: none;
+    background: transparent;
+    color: var(--color-text-muted);
+    cursor: pointer;
+    border-radius: 4px;
+    flex-shrink: 0;
+  }
 
-.icon-btn:hover {
-  background: var(--color-surface-hover, #333);
-  color: var(--color-text);
-}
+  .icon-btn:hover {
+    background: var(--color-surface-hover, #333);
+    color: var(--color-text);
+  }
 
-.icon-btn .text-success {
-  color: #22c55e;
-}
+  .icon-btn .text-success {
+    color: #22c55e;
+  }
 
-.error-detail {
-  font-size: 11px;
-  color: #ef4444;
-  background: rgba(239, 68, 68, 0.05);
-  border: 1px solid rgba(239, 68, 68, 0.15);
-  border-top: none;
-  border-radius: 0 0 4px 4px;
-  padding: 8px 12px;
-  max-height: 200px;
-  overflow-y: auto;
-  white-space: pre-wrap;
-  word-break: break-all;
-  user-select: text;
-  -webkit-user-select: text;
-  margin: 0;
-  font-family: monospace;
-}
+  .error-detail {
+    font-size: 11px;
+    color: #ef4444;
+    background: rgba(239, 68, 68, 0.05);
+    border: 1px solid rgba(239, 68, 68, 0.15);
+    border-top: none;
+    border-radius: 0 0 4px 4px;
+    padding: 8px 12px;
+    max-height: 200px;
+    overflow-y: auto;
+    white-space: pre-wrap;
+    word-break: break-all;
+    user-select: text;
+    -webkit-user-select: text;
+    margin: 0;
+    font-family: monospace;
+  }
 
-.system-pkg-section {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  margin-bottom: 8px;
-}
+  .system-pkg-section {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    margin-bottom: 8px;
+  }
 
-.system-pkg-section .text-warning {
-  color: #f59e0b;
-  flex-shrink: 0;
-  margin-top: 2px;
-}
+  .system-pkg-section .text-warning {
+    color: #f59e0b;
+    flex-shrink: 0;
+    margin-top: 2px;
+  }
 
-.dialog-hint {
-  font-size: 12px;
-  color: var(--color-text-muted);
-  margin-bottom: 8px;
-}
+  .dialog-hint {
+    font-size: 12px;
+    color: var(--color-text-muted);
+    margin-bottom: 8px;
+  }
 
-.cmd-block {
-  display: block;
-  background: var(--color-bg);
-  border: 1px solid var(--color-border);
-  padding: 8px 12px;
-  border-radius: 4px;
-  font-size: 13px;
-  font-family: monospace;
-  color: var(--color-text);
-  margin-bottom: 8px;
-}
+  .cmd-block {
+    display: block;
+    background: var(--color-bg);
+    border: 1px solid var(--color-border);
+    padding: 8px 12px;
+    border-radius: 4px;
+    font-size: 13px;
+    font-family: monospace;
+    color: var(--color-text);
+    margin-bottom: 8px;
+  }
 
-.dialog-enter-active,
-.dialog-leave-active {
-  transition: opacity 0.2s;
-}
+  .dialog-enter-active,
+  .dialog-leave-active {
+    transition: opacity 0.2s;
+  }
 
-.dialog-enter-from,
-.dialog-leave-to {
-  opacity: 0;
-}
+  .dialog-enter-from,
+  .dialog-leave-to {
+    opacity: 0;
+  }
 </style>

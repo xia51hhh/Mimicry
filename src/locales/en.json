@@ -368,7 +368,7 @@
     "virtualDisplay": "Virtual Display (Linux)",
     "launchArgs": "Launch Arguments",
     "detectScreen": "Detect",
-      "windowScale": "Scale"
+    "windowScale": "Scale"
   },
   "session": {
     "title": "Active Sessions",

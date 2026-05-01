@@ -52,13 +52,19 @@ impl Sidecar {
 
     /// Get cloneable IO handles for making RPC calls without holding the Sidecar Mutex.
     pub fn io(&self) -> Result<SidecarIo, AppError> {
-        self.io.clone().ok_or_else(|| AppError::Sidecar("Sidecar not running".into()))
+        self.io
+            .clone()
+            .ok_or_else(|| AppError::Sidecar("Sidecar not running".into()))
     }
 
     /// Get the venv python path if it exists
     fn venv_python(&self) -> Option<PathBuf> {
         let p = self.venv_dir.join("bin/python");
-        if p.exists() { Some(p) } else { None }
+        if p.exists() {
+            Some(p)
+        } else {
+            None
+        }
     }
 
     pub async fn start(&mut self, python_path: &str) -> Result<(), AppError> {
@@ -67,7 +73,10 @@ impl Sidecar {
             return Ok(());
         }
 
-        info!("Starting sidecar: {} (dir: {:?})", python_path, self.sidecar_dir);
+        info!(
+            "Starting sidecar: {} (dir: {:?})",
+            python_path, self.sidecar_dir
+        );
         let mut child = Command::new(python_path)
             .arg("-u")
             .arg("main.py")
@@ -78,8 +87,14 @@ impl Sidecar {
             .spawn()
             .map_err(|e| AppError::Sidecar(format!("Failed to spawn sidecar: {}", e)))?;
 
-        let stdin = child.stdin.take().ok_or_else(|| AppError::Sidecar("No stdin".into()))?;
-        let stdout = child.stdout.take().ok_or_else(|| AppError::Sidecar("No stdout".into()))?;
+        let stdin = child
+            .stdin
+            .take()
+            .ok_or_else(|| AppError::Sidecar("No stdin".into()))?;
+        let stdout = child
+            .stdout
+            .take()
+            .ok_or_else(|| AppError::Sidecar("No stdout".into()))?;
         let stderr = child.stderr.take();
 
         let io = SidecarIo {
@@ -137,7 +152,8 @@ impl Sidecar {
         }
 
         // Return the most meaningful error (longest, likely has Python traceback)
-        let best_error = errors.iter()
+        let best_error = errors
+            .iter()
             .max_by_key(|e| e.len())
             .cloned()
             .unwrap_or_default();
@@ -148,10 +164,9 @@ impl Sidecar {
     pub async fn stop(&mut self) {
         // Try graceful shutdown first
         if let Some(ref io) = self.io {
-            match tokio::time::timeout(
-                std::time::Duration::from_secs(3),
-                io.call("shutdown", None),
-            ).await {
+            match tokio::time::timeout(std::time::Duration::from_secs(3), io.call("shutdown", None))
+                .await
+            {
                 Ok(Ok(_)) => info!("Sidecar shutdown gracefully"),
                 Ok(Err(e)) => tracing::debug!("Sidecar shutdown RPC failed: {}", e),
                 Err(_) => tracing::debug!("Sidecar shutdown timed out"),
@@ -170,7 +185,7 @@ impl Sidecar {
             Some(child) => {
                 // Check if process is still running without blocking
                 match child.try_wait() {
-                    Ok(None) => true,   // still running
+                    Ok(None) => true,     // still running
                     Ok(Some(_)) => false, // exited
                     Err(_) => false,
                 }
@@ -191,19 +206,22 @@ impl Sidecar {
 impl SidecarIo {
     fn timeout_for_method(method: &str) -> std::time::Duration {
         match method {
-            "ping" | "browser.status" | "recording.poll" | "workflow.execution_status"
-                => std::time::Duration::from_secs(5),
+            "ping" | "browser.status" | "recording.poll" | "workflow.execution_status" => {
+                std::time::Duration::from_secs(5)
+            }
             "browser.close" | "browser.navigate" | "recording.start" | "recording.stop"
-            | "workflow.stop"
-                => std::time::Duration::from_secs(30),
-            "browser.launch" | "camoufox.check"
-                => std::time::Duration::from_secs(60),
+            | "workflow.stop" => std::time::Duration::from_secs(30),
+            "browser.launch" | "camoufox.check" => std::time::Duration::from_secs(60),
             // workflow.execute, camoufox.install, and anything else
             _ => std::time::Duration::from_secs(600),
         }
     }
 
-    pub async fn call(&self, method: &str, params: Option<serde_json::Value>) -> Result<serde_json::Value, AppError> {
+    pub async fn call(
+        &self,
+        method: &str,
+        params: Option<serde_json::Value>,
+    ) -> Result<serde_json::Value, AppError> {
         let req = RpcRequest::new(method, params);
         let req_id = req.id;
         let line = req.to_line();
@@ -212,8 +230,14 @@ impl SidecarIo {
         // Write request — brief lock on stdin
         {
             let mut stdin = self.stdin.lock().await;
-            stdin.write_all(line.as_bytes()).await.map_err(|e| AppError::Sidecar(format!("Write failed: {}", e)))?;
-            stdin.flush().await.map_err(|e| AppError::Sidecar(format!("Flush failed: {}", e)))?;
+            stdin
+                .write_all(line.as_bytes())
+                .await
+                .map_err(|e| AppError::Sidecar(format!("Write failed: {}", e)))?;
+            stdin
+                .flush()
+                .await
+                .map_err(|e| AppError::Sidecar(format!("Flush failed: {}", e)))?;
         }
 
         // Read response — holds reader lock until we get a matching response
@@ -228,7 +252,9 @@ impl SidecarIo {
 
             if bytes == 0 {
                 tracing::error!("RPC [{}]: sidecar process exited (EOF on stdout)", req_id);
-                return Err(AppError::Sidecar("Sidecar process exited unexpectedly".into()));
+                return Err(AppError::Sidecar(
+                    "Sidecar process exited unexpectedly".into(),
+                ));
             }
 
             tracing::debug!("RPC [{}] << {}", req_id, response_line.trim());
@@ -240,15 +266,23 @@ impl SidecarIo {
                 // It's a response — verify id matches our request
                 let resp: RpcResponse = serde_json::from_value(val)?;
                 if resp.id != req_id {
-                    tracing::warn!("RPC id mismatch: expected {}, got {} — skipping", req_id, resp.id);
+                    tracing::warn!(
+                        "RPC id mismatch: expected {}, got {} — skipping",
+                        req_id,
+                        resp.id
+                    );
                     continue;
                 }
                 if let Some(err) = resp.error {
-                    let error_type = err.data
+                    let error_type = err
+                        .data
                         .as_ref()
                         .and_then(|d| d.error_type.as_deref())
                         .unwrap_or("Unknown");
-                    return Err(AppError::Sidecar(format!("[{}:{}] {}", err.code, error_type, err.message)));
+                    return Err(AppError::Sidecar(format!(
+                        "[{}:{}] {}",
+                        err.code, error_type, err.message
+                    )));
                 }
                 return Ok(resp.result.unwrap_or(serde_json::Value::Null));
             } else if let Some(method) = val.get("method").and_then(|m| m.as_str()) {
@@ -256,7 +290,10 @@ impl SidecarIo {
                 if let Some(handle) = &self.app_handle {
                     use tauri::Emitter;
                     let event_name = format!("sidecar:{}", method.replace('.', "/"));
-                    let params = val.get("params").cloned().unwrap_or(serde_json::Value::Null);
+                    let params = val
+                        .get("params")
+                        .cloned()
+                        .unwrap_or(serde_json::Value::Null);
                     let _ = handle.emit(&event_name, params);
                 }
                 // Continue reading next line

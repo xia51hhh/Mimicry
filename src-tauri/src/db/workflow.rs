@@ -29,7 +29,9 @@ pub fn create(conn: &Connection, wf: &Workflow) -> rusqlite::Result<()> {
 }
 
 pub fn get(conn: &Connection, id: &str) -> rusqlite::Result<Option<Workflow>> {
-    let mut stmt = conn.prepare("SELECT id, name, nodes, edges, created_at, updated_at FROM workflows WHERE id = ?1")?;
+    let mut stmt = conn.prepare(
+        "SELECT id, name, nodes, edges, created_at, updated_at FROM workflows WHERE id = ?1",
+    )?;
     let mut rows = stmt.query(params![id])?;
     match rows.next()? {
         Some(row) => {
@@ -70,7 +72,13 @@ pub fn list(conn: &Connection) -> rusqlite::Result<Vec<Workflow>> {
 pub fn update(conn: &Connection, wf: &Workflow) -> rusqlite::Result<()> {
     conn.execute(
         "UPDATE workflows SET name = ?1, nodes = ?2, edges = ?3, updated_at = ?4 WHERE id = ?5",
-        params![wf.name, wf.nodes.to_string(), wf.edges.to_string(), wf.updated_at, wf.id],
+        params![
+            wf.name,
+            wf.nodes.to_string(),
+            wf.edges.to_string(),
+            wf.updated_at,
+            wf.id
+        ],
     )?;
     Ok(())
 }

@@ -1,4 +1,4 @@
-export type WorkflowNodeKind = "action" | "condition" | "loop" | "group";
+export type WorkflowNodeKind = 'action' | 'condition' | 'loop' | 'group';
 
 export interface WorkflowPosition {
   x: number;
@@ -6,7 +6,7 @@ export interface WorkflowPosition {
 }
 
 export interface WorkflowNodeSettings {
-  onError?: "inherit" | "stop" | "continue" | "retry" | "fallback";
+  onError?: 'inherit' | 'stop' | 'continue' | 'retry' | 'fallback';
   retryOnFail?: boolean;
   retryCount?: number;
   retryInterval?: number;
@@ -55,7 +55,7 @@ export interface ConditionData {
 }
 
 export interface LoopData {
-  loopType: "items" | "count" | "while" | "elements";
+  loopType: 'items' | 'count' | 'while' | 'elements';
   selector?: string;
   count?: number;
   condition?: string;

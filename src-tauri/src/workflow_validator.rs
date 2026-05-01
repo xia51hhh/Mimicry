@@ -26,18 +26,64 @@ pub struct Diagnostic {
 
 /// Valid PascalCase action names (from shared/action-map.json).
 const VALID_ACTIONS: &[&str] = &[
-    "Navigate", "NewTab", "SwitchTab", "CloseTab", "GoBack", "GoForward", "Reload",
-    "Click", "DblClick", "Type", "Hover", "Scroll", "SelectOption", "PressKey",
-    "Clear", "Focus", "Wait", "GetText", "GetAttribute", "GetURL", "Screenshot",
-    "ExtractTable", "SetVariable", "Export", "RunScript", "HttpRequest", "Delay",
-    "Log", "Comment", "HandleDialog", "UploadFile", "SwitchFrame", "WaitForPage",
-    "Cookie", "ElementExists", "LoopElements", "LoopBreakpoint", "WaitConnections",
-    "ExecuteWorkflow", "HandleDownload", "Transform", "Stop", "Fail",
+    "Navigate",
+    "NewTab",
+    "SwitchTab",
+    "CloseTab",
+    "GoBack",
+    "GoForward",
+    "Reload",
+    "Click",
+    "DblClick",
+    "Type",
+    "Hover",
+    "Scroll",
+    "SelectOption",
+    "PressKey",
+    "Clear",
+    "Focus",
+    "Wait",
+    "GetText",
+    "GetAttribute",
+    "GetURL",
+    "Screenshot",
+    "ExtractTable",
+    "SetVariable",
+    "Export",
+    "RunScript",
+    "HttpRequest",
+    "Delay",
+    "Log",
+    "Comment",
+    "HandleDialog",
+    "UploadFile",
+    "SwitchFrame",
+    "WaitForPage",
+    "Cookie",
+    "ElementExists",
+    "LoopElements",
+    "LoopBreakpoint",
+    "WaitConnections",
+    "ExecuteWorkflow",
+    "HandleDownload",
+    "Transform",
+    "Stop",
+    "Fail",
 ];
 
 const SELECTOR_ACTIONS: &[&str] = &[
-    "Click", "DblClick", "Type", "Clear", "Hover", "Focus", "SelectOption",
-    "GetText", "GetAttribute", "ExtractTable", "ElementExists", "UploadFile",
+    "Click",
+    "DblClick",
+    "Type",
+    "Clear",
+    "Hover",
+    "Focus",
+    "SelectOption",
+    "GetText",
+    "GetAttribute",
+    "ExtractTable",
+    "ElementExists",
+    "UploadFile",
 ];
 
 const URL_ACTIONS: &[&str] = &["Navigate", "HttpRequest"];
@@ -107,7 +153,11 @@ fn validate_node(node: &Value, diags: &mut Vec<Diagnostic>, in_loop: bool) {
             level: DiagLevel::Info,
             rule_id: "I009".into(),
             node_id: node_id.clone(),
-            action: if action.is_empty() { None } else { Some(action.into()) },
+            action: if action.is_empty() {
+                None
+            } else {
+                Some(action.into())
+            },
             message: "此节点已被禁用，执行时将跳过".into(),
             suggestion: None,
         });
@@ -212,10 +262,7 @@ fn validate_action_node(
     // E010: HttpRequest URL invalid protocol
     if action == "HttpRequest" && !is_empty_str(data, "url") {
         let url = data.get("url").and_then(Value::as_str).unwrap_or("");
-        if !url.starts_with("http://")
-            && !url.starts_with("https://")
-            && !url.contains("{{")
-        {
+        if !url.starts_with("http://") && !url.starts_with("https://") && !url.contains("{{") {
             diags.push(Diagnostic {
                 level: DiagLevel::Error,
                 rule_id: "E010".into(),
@@ -291,9 +338,8 @@ fn validate_action_node(
         if let Some(sel) = data.get("selector").and_then(Value::as_str) {
             let trimmed = sel.trim();
             let generic_tags = [
-                "div", "span", "body", "p", "a", "li", "ul", "ol", "table",
-                "tr", "td", "th", "form", "section", "article", "header", "footer",
-                "main", "nav", "aside",
+                "div", "span", "body", "p", "a", "li", "ul", "ol", "table", "tr", "td", "th",
+                "form", "section", "article", "header", "footer", "main", "nav", "aside",
             ];
             if generic_tags.contains(&trimmed) {
                 diags.push(Diagnostic {
@@ -458,9 +504,7 @@ fn validate_condition_node(
                 "分支 Tab 操作不对称 — true: +{}/-{}, false: +{}/-{}",
                 true_new, true_close, false_new, false_close
             ),
-            suggestion: Some(
-                "建议在 SwitchTab 中使用 urlOrigin/urlPath 辅助匹配".into(),
-            ),
+            suggestion: Some("建议在 SwitchTab 中使用 urlOrigin/urlPath 辅助匹配".into()),
         });
     }
 
@@ -742,11 +786,20 @@ fn collect_defined_vars(nodes: &[Value], vars: &mut HashSet<String>) {
 
         // Actions with `into` field define the target variable
         let into_actions = [
-            "GetText", "GetAttribute", "ExtractTable", "GetURL",
-            "RunScript", "HttpRequest", "Cookie", "ElementExists",
+            "GetText",
+            "GetAttribute",
+            "ExtractTable",
+            "GetURL",
+            "RunScript",
+            "HttpRequest",
+            "Cookie",
+            "ElementExists",
         ];
         if into_actions.contains(&action) {
-            let into = data.get("into").and_then(Value::as_str).unwrap_or("$_result");
+            let into = data
+                .get("into")
+                .and_then(Value::as_str)
+                .unwrap_or("$_result");
             if !into.is_empty() {
                 vars.insert(into.to_string());
             }
@@ -772,11 +825,7 @@ fn collect_defined_vars(nodes: &[Value], vars: &mut HashSet<String>) {
 }
 
 /// W001: Check for variable references that are never defined.
-fn check_var_references(
-    nodes: &[Value],
-    defined: &HashSet<String>,
-    diags: &mut Vec<Diagnostic>,
-) {
+fn check_var_references(nodes: &[Value], defined: &HashSet<String>, diags: &mut Vec<Diagnostic>) {
     for node in nodes {
         let node_id = node.get("id").and_then(Value::as_str).map(String::from);
         let action = str_field(node, "action");
@@ -803,10 +852,7 @@ fn check_var_references(
                                 } else {
                                     Some(action.into())
                                 },
-                                message: format!(
-                                    "引用了未定义的变量 \"{}\"",
-                                    var_ref
-                                ),
+                                message: format!("引用了未定义的变量 \"{}\"", var_ref),
                                 suggestion: Some(
                                     "确认变量名拼写，或在上游添加 SetVariable 节点".into(),
                                 ),
@@ -875,9 +921,7 @@ fn check_loop_vars(node: &Value, diags: &mut Vec<Diagnostic>) {
                                 "While 循环条件中的变量 {:?} 在循环体内未被修改，可能导致无限循环",
                                 cond_vars.iter().collect::<Vec<_>>()
                             ),
-                            suggestion: Some(
-                                "在循环体中添加修改条件变量的操作".into(),
-                            ),
+                            suggestion: Some("在循环体中添加修改条件变量的操作".into()),
                         });
                     }
                 }
@@ -896,13 +940,8 @@ fn check_loop_vars(node: &Value, diags: &mut Vec<Diagnostic>) {
                         rule_id: "W010".into(),
                         node_id: node_id.clone(),
                         action: None,
-                        message: format!(
-                            "Loop 变量 \"{}\" 在循环体中未被引用",
-                            var
-                        ),
-                        suggestion: Some(
-                            "在循环体中使用该变量，或移除变量定义".into(),
-                        ),
+                        message: format!("Loop 变量 \"{}\" 在循环体中未被引用", var),
+                        suggestion: Some("在循环体中使用该变量，或移除变量定义".into()),
                     });
                 }
             }
@@ -967,10 +1006,7 @@ fn check_dead_code(nodes: &[Value], diags: &mut Vec<Diagnostic>) {
                 } else {
                     Some(action.into())
                 },
-                message: format!(
-                    "此节点位于 \"{}\" 之后，永远不会被执行",
-                    terminator_action
-                ),
+                message: format!("此节点位于 \"{}\" 之后，永远不会被执行", terminator_action),
                 suggestion: Some("移除死代码或调整节点顺序".into()),
             });
         }
@@ -1009,8 +1045,12 @@ fn check_condition_syntax(cond: &str) -> Option<String> {
     // Check for single '=' (assignment instead of comparison), but allow '=='
     let bytes = trimmed.as_bytes();
     for i in 0..bytes.len() {
-        if bytes[i] == b'=' && i > 0 && bytes[i - 1] != b'!'
-            && bytes[i - 1] != b'>' && bytes[i - 1] != b'<' && bytes[i - 1] != b'='
+        if bytes[i] == b'='
+            && i > 0
+            && bytes[i - 1] != b'!'
+            && bytes[i - 1] != b'>'
+            && bytes[i - 1] != b'<'
+            && bytes[i - 1] != b'='
         {
             if i + 1 < bytes.len() && bytes[i + 1] == b'=' {
                 continue; // '==' is fine
@@ -1030,8 +1070,11 @@ fn check_duplicates(nodes: &[Value], diags: &mut Vec<Diagnostic>) {
         let action = str_field(node, "action");
         let data = node.get("data").unwrap_or(&Value::Null);
 
-        if kind == "action" && !action.is_empty() && action != "Comment"
-            && action != "Delay" && action != "Log"
+        if kind == "action"
+            && !action.is_empty()
+            && action != "Comment"
+            && action != "Delay"
+            && action != "Log"
         {
             if action == prev_action && data == &prev_data {
                 let node_id = node.get("id").and_then(Value::as_str).map(String::from);
@@ -1062,11 +1105,7 @@ fn check_duplicates(nodes: &[Value], diags: &mut Vec<Diagnostic>) {
 }
 
 /// I011: Transform source variable not defined upstream.
-fn check_transform_source(
-    nodes: &[Value],
-    defined: &HashSet<String>,
-    diags: &mut Vec<Diagnostic>,
-) {
+fn check_transform_source(nodes: &[Value], defined: &HashSet<String>, diags: &mut Vec<Diagnostic>) {
     for node in nodes {
         let action = str_field(node, "action");
         let data = node.get("data").unwrap_or(&Value::Null);
@@ -1081,13 +1120,8 @@ fn check_transform_source(
                             rule_id: "I011".into(),
                             node_id,
                             action: Some("Transform".into()),
-                            message: format!(
-                                "Transform source 引用了未定义的变量 \"{}\"",
-                                var_ref
-                            ),
-                            suggestion: Some(
-                                "确认变量名拼写，或在上游添加定义操作".into(),
-                            ),
+                            message: format!("Transform source 引用了未定义的变量 \"{}\"", var_ref),
+                            suggestion: Some("确认变量名拼写，或在上游添加定义操作".into()),
                         });
                     }
                 }
@@ -1134,9 +1168,11 @@ mod tests {
 
     #[test]
     fn valid_click_no_errors() {
-        let wf = make_workflow(vec![
-            make_action("n1", "Click", json!({"selector": "#btn"})),
-        ]);
+        let wf = make_workflow(vec![make_action(
+            "n1",
+            "Click",
+            json!({"selector": "#btn"}),
+        )]);
         let diags = validate(&wf);
         assert!(diags.is_empty());
     }
@@ -1159,10 +1195,11 @@ mod tests {
 
     #[test]
     fn e002_missing_url() {
-        let wf = make_workflow(vec![
-            make_action("n1", "Navigate", json!({})),
-        ]);
-        let diags: Vec<_> = validate(&wf).into_iter().filter(|d| d.rule_id == "E002").collect();
+        let wf = make_workflow(vec![make_action("n1", "Navigate", json!({}))]);
+        let diags: Vec<_> = validate(&wf)
+            .into_iter()
+            .filter(|d| d.rule_id == "E002")
+            .collect();
         assert_eq!(diags.len(), 1);
     }
 
@@ -1170,9 +1207,7 @@ mod tests {
 
     #[test]
     fn e003_missing_key() {
-        let wf = make_workflow(vec![
-            make_action("n1", "PressKey", json!({})),
-        ]);
+        let wf = make_workflow(vec![make_action("n1", "PressKey", json!({}))]);
         assert!(validate(&wf).iter().any(|d| d.rule_id == "E003"));
     }
 
@@ -1180,9 +1215,7 @@ mod tests {
 
     #[test]
     fn e004_missing_script() {
-        let wf = make_workflow(vec![
-            make_action("n1", "RunScript", json!({})),
-        ]);
+        let wf = make_workflow(vec![make_action("n1", "RunScript", json!({}))]);
         assert!(validate(&wf).iter().any(|d| d.rule_id == "E004"));
     }
 
@@ -1190,9 +1223,7 @@ mod tests {
 
     #[test]
     fn e005_missing_variable() {
-        let wf = make_workflow(vec![
-            make_action("n1", "SetVariable", json!({})),
-        ]);
+        let wf = make_workflow(vec![make_action("n1", "SetVariable", json!({}))]);
         assert!(validate(&wf).iter().any(|d| d.rule_id == "E005"));
     }
 
@@ -1200,9 +1231,7 @@ mod tests {
 
     #[test]
     fn e006_missing_filepath() {
-        let wf = make_workflow(vec![
-            make_action("n1", "UploadFile", json!({})),
-        ]);
+        let wf = make_workflow(vec![make_action("n1", "UploadFile", json!({}))]);
         let diags = validate(&wf);
         // E001 (selector) + E006 (filePath)
         assert!(diags.iter().any(|d| d.rule_id == "E001"));
@@ -1246,17 +1275,21 @@ mod tests {
 
     #[test]
     fn e010_http_invalid_protocol() {
-        let wf = make_workflow(vec![
-            make_action("n1", "HttpRequest", json!({"url": "ftp://example.com"})),
-        ]);
+        let wf = make_workflow(vec![make_action(
+            "n1",
+            "HttpRequest",
+            json!({"url": "ftp://example.com"}),
+        )]);
         assert!(validate(&wf).iter().any(|d| d.rule_id == "E010"));
     }
 
     #[test]
     fn e010_template_url_ok() {
-        let wf = make_workflow(vec![
-            make_action("n1", "HttpRequest", json!({"url": "{{baseUrl}}/api"})),
-        ]);
+        let wf = make_workflow(vec![make_action(
+            "n1",
+            "HttpRequest",
+            json!({"url": "{{baseUrl}}/api"}),
+        )]);
         assert!(!validate(&wf).iter().any(|d| d.rule_id == "E010"));
     }
 
@@ -1264,10 +1297,11 @@ mod tests {
 
     #[test]
     fn e011_unknown_action() {
-        let wf = make_workflow(vec![
-            make_action("n1", "DoSomethingWeird", json!({})),
-        ]);
-        let diags: Vec<_> = validate(&wf).into_iter().filter(|d| d.rule_id == "E011").collect();
+        let wf = make_workflow(vec![make_action("n1", "DoSomethingWeird", json!({}))]);
+        let diags: Vec<_> = validate(&wf)
+            .into_iter()
+            .filter(|d| d.rule_id == "E011")
+            .collect();
         assert_eq!(diags.len(), 1);
     }
 
@@ -1329,7 +1363,10 @@ mod tests {
             "id": "c1", "kind": "condition",
             "data": { "condition": "true", "children": [], "elseChildren": [] }
         })]);
-        let w008: Vec<_> = validate(&wf).into_iter().filter(|d| d.rule_id == "W008").collect();
+        let w008: Vec<_> = validate(&wf)
+            .into_iter()
+            .filter(|d| d.rule_id == "W008")
+            .collect();
         assert_eq!(w008.len(), 2); // both branches empty
     }
 
@@ -1348,9 +1385,7 @@ mod tests {
 
     #[test]
     fn w012_breakpoint_outside_loop() {
-        let wf = make_workflow(vec![
-            make_action("n1", "LoopBreakpoint", json!({})),
-        ]);
+        let wf = make_workflow(vec![make_action("n1", "LoopBreakpoint", json!({}))]);
         assert!(validate(&wf).iter().any(|d| d.rule_id == "W012"));
     }
 
@@ -1372,9 +1407,11 @@ mod tests {
 
     #[test]
     fn w011_missing_attr_name() {
-        let wf = make_workflow(vec![
-            make_action("n1", "GetAttribute", json!({"selector": "#el"})),
-        ]);
+        let wf = make_workflow(vec![make_action(
+            "n1",
+            "GetAttribute",
+            json!({"selector": "#el"}),
+        )]);
         assert!(validate(&wf).iter().any(|d| d.rule_id == "W011"));
     }
 
@@ -1382,9 +1419,7 @@ mod tests {
 
     #[test]
     fn w015_missing_workflow_ref() {
-        let wf = make_workflow(vec![
-            make_action("n1", "ExecuteWorkflow", json!({})),
-        ]);
+        let wf = make_workflow(vec![make_action("n1", "ExecuteWorkflow", json!({}))]);
         assert!(validate(&wf).iter().any(|d| d.rule_id == "W015"));
     }
 
@@ -1434,10 +1469,15 @@ mod tests {
 
     #[test]
     fn w001_undefined_var() {
-        let wf = make_workflow(vec![
-            make_action("n1", "Navigate", json!({"url": "$baseUrl/page"})),
-        ]);
-        let diags: Vec<_> = validate(&wf).into_iter().filter(|d| d.rule_id == "W001").collect();
+        let wf = make_workflow(vec![make_action(
+            "n1",
+            "Navigate",
+            json!({"url": "$baseUrl/page"}),
+        )]);
+        let diags: Vec<_> = validate(&wf)
+            .into_iter()
+            .filter(|d| d.rule_id == "W001")
+            .collect();
         assert_eq!(diags.len(), 1);
         assert!(diags[0].message.contains("$baseUrl"));
     }
@@ -1445,7 +1485,11 @@ mod tests {
     #[test]
     fn w001_defined_var_ok() {
         let wf = make_workflow(vec![
-            make_action("n1", "SetVariable", json!({"variable": "$baseUrl", "value": "https://x.com"})),
+            make_action(
+                "n1",
+                "SetVariable",
+                json!({"variable": "$baseUrl", "value": "https://x.com"}),
+            ),
             make_action("n2", "Navigate", json!({"url": "$baseUrl/page"})),
         ]);
         assert!(!validate(&wf).iter().any(|d| d.rule_id == "W001"));
@@ -1453,9 +1497,11 @@ mod tests {
 
     #[test]
     fn w001_builtin_result_ok() {
-        let wf = make_workflow(vec![
-            make_action("n1", "Navigate", json!({"url": "$_result"})),
-        ]);
+        let wf = make_workflow(vec![make_action(
+            "n1",
+            "Navigate",
+            json!({"url": "$_result"}),
+        )]);
         assert!(!validate(&wf).iter().any(|d| d.rule_id == "W001"));
     }
 
@@ -1465,7 +1511,9 @@ mod tests {
             "id": "c1", "kind": "condition",
             "data": { "condition": "$count > 0", "children": [], "elseChildren": [] }
         })]);
-        assert!(validate(&wf).iter().any(|d| d.rule_id == "W001" && d.message.contains("$count")));
+        assert!(validate(&wf)
+            .iter()
+            .any(|d| d.rule_id == "W001" && d.message.contains("$count")));
     }
 
     // ── W005: While loop without condition change ───────────────────────
@@ -1540,7 +1588,10 @@ mod tests {
             make_action("n1", "Fail", json!({"message": "abort"})),
             make_action("n2", "Click", json!({"selector": "#btn"})),
         ]);
-        let diags: Vec<_> = validate(&wf).into_iter().filter(|d| d.rule_id == "I001").collect();
+        let diags: Vec<_> = validate(&wf)
+            .into_iter()
+            .filter(|d| d.rule_id == "I001")
+            .collect();
         assert_eq!(diags.len(), 1);
         assert!(diags[0].message.contains("Fail"));
     }
@@ -1577,17 +1628,17 @@ mod tests {
 
     #[test]
     fn w006_tab_index_string() {
-        let wf = make_workflow(vec![
-            make_action("n1", "SwitchTab", json!({"tabIndex": "2"})),
-        ]);
+        let wf = make_workflow(vec![make_action(
+            "n1",
+            "SwitchTab",
+            json!({"tabIndex": "2"}),
+        )]);
         assert!(validate(&wf).iter().any(|d| d.rule_id == "W006"));
     }
 
     #[test]
     fn w006_tab_index_number_ok() {
-        let wf = make_workflow(vec![
-            make_action("n1", "SwitchTab", json!({"tabIndex": 2})),
-        ]);
+        let wf = make_workflow(vec![make_action("n1", "SwitchTab", json!({"tabIndex": 2}))]);
         assert!(!validate(&wf).iter().any(|d| d.rule_id == "W006"));
     }
 
@@ -1676,25 +1727,31 @@ mod tests {
 
     #[test]
     fn w014_path_traversal() {
-        let wf = make_workflow(vec![
-            make_action("n1", "Export", json!({"path": "../../etc/passwd"})),
-        ]);
+        let wf = make_workflow(vec![make_action(
+            "n1",
+            "Export",
+            json!({"path": "../../etc/passwd"}),
+        )]);
         assert!(validate(&wf).iter().any(|d| d.rule_id == "W014"));
     }
 
     #[test]
     fn w014_absolute_path() {
-        let wf = make_workflow(vec![
-            make_action("n1", "Screenshot", json!({"filename": "/tmp/shot.png"})),
-        ]);
+        let wf = make_workflow(vec![make_action(
+            "n1",
+            "Screenshot",
+            json!({"filename": "/tmp/shot.png"}),
+        )]);
         assert!(validate(&wf).iter().any(|d| d.rule_id == "W014"));
     }
 
     #[test]
     fn w014_safe_path_ok() {
-        let wf = make_workflow(vec![
-            make_action("n1", "Export", json!({"path": "output/data.csv"})),
-        ]);
+        let wf = make_workflow(vec![make_action(
+            "n1",
+            "Export",
+            json!({"path": "output/data.csv"}),
+        )]);
         assert!(!validate(&wf).iter().any(|d| d.rule_id == "W014"));
     }
 
@@ -1722,17 +1779,17 @@ mod tests {
 
     #[test]
     fn i003_generic_selector() {
-        let wf = make_workflow(vec![
-            make_action("n1", "Click", json!({"selector": "div"})),
-        ]);
+        let wf = make_workflow(vec![make_action("n1", "Click", json!({"selector": "div"}))]);
         assert!(validate(&wf).iter().any(|d| d.rule_id == "I003"));
     }
 
     #[test]
     fn i003_specific_selector_ok() {
-        let wf = make_workflow(vec![
-            make_action("n1", "Click", json!({"selector": "#submit-btn"})),
-        ]);
+        let wf = make_workflow(vec![make_action(
+            "n1",
+            "Click",
+            json!({"selector": "#submit-btn"}),
+        )]);
         assert!(!validate(&wf).iter().any(|d| d.rule_id == "I003"));
     }
 
@@ -1740,17 +1797,21 @@ mod tests {
 
     #[test]
     fn i004_scroll_empty_selector() {
-        let wf = make_workflow(vec![
-            make_action("n1", "Scroll", json!({"direction": "down", "amount": 300})),
-        ]);
+        let wf = make_workflow(vec![make_action(
+            "n1",
+            "Scroll",
+            json!({"direction": "down", "amount": 300}),
+        )]);
         assert!(validate(&wf).iter().any(|d| d.rule_id == "I004"));
     }
 
     #[test]
     fn i004_press_key_with_selector_ok() {
-        let wf = make_workflow(vec![
-            make_action("n1", "PressKey", json!({"key": "Enter", "selector": "#input"})),
-        ]);
+        let wf = make_workflow(vec![make_action(
+            "n1",
+            "PressKey",
+            json!({"key": "Enter", "selector": "#input"}),
+        )]);
         assert!(!validate(&wf).iter().any(|d| d.rule_id == "I004"));
     }
 
@@ -1758,9 +1819,7 @@ mod tests {
 
     #[test]
     fn i005_comment_node() {
-        let wf = make_workflow(vec![
-            make_action("n1", "Comment", json!({"text": "note"})),
-        ]);
+        let wf = make_workflow(vec![make_action("n1", "Comment", json!({"text": "note"}))]);
         assert!(validate(&wf).iter().any(|d| d.rule_id == "I005"));
     }
 
@@ -1768,9 +1827,7 @@ mod tests {
 
     #[test]
     fn i006_wait_connections() {
-        let wf = make_workflow(vec![
-            make_action("n1", "WaitConnections", json!({})),
-        ]);
+        let wf = make_workflow(vec![make_action("n1", "WaitConnections", json!({}))]);
         assert!(validate(&wf).iter().any(|d| d.rule_id == "I006"));
     }
 
@@ -1778,25 +1835,23 @@ mod tests {
 
     #[test]
     fn i007_delay_too_long() {
-        let wf = make_workflow(vec![
-            make_action("n1", "Delay", json!({"duration": "60"})),
-        ]);
+        let wf = make_workflow(vec![make_action("n1", "Delay", json!({"duration": "60"}))]);
         assert!(validate(&wf).iter().any(|d| d.rule_id == "I007"));
     }
 
     #[test]
     fn i007_delay_ok() {
-        let wf = make_workflow(vec![
-            make_action("n1", "Delay", json!({"duration": "5"})),
-        ]);
+        let wf = make_workflow(vec![make_action("n1", "Delay", json!({"duration": "5"}))]);
         assert!(!validate(&wf).iter().any(|d| d.rule_id == "I007"));
     }
 
     #[test]
     fn i007_delay_ms() {
-        let wf = make_workflow(vec![
-            make_action("n1", "Delay", json!({"duration": "60000ms"})),
-        ]);
+        let wf = make_workflow(vec![make_action(
+            "n1",
+            "Delay",
+            json!({"duration": "60000ms"}),
+        )]);
         assert!(validate(&wf).iter().any(|d| d.rule_id == "I007"));
     }
 
@@ -1858,17 +1913,21 @@ mod tests {
 
     #[test]
     fn i010_navigate_no_protocol() {
-        let wf = make_workflow(vec![
-            make_action("n1", "Navigate", json!({"url": "www.google.com"})),
-        ]);
+        let wf = make_workflow(vec![make_action(
+            "n1",
+            "Navigate",
+            json!({"url": "www.google.com"}),
+        )]);
         assert!(validate(&wf).iter().any(|d| d.rule_id == "I010"));
     }
 
     #[test]
     fn i010_navigate_with_protocol_ok() {
-        let wf = make_workflow(vec![
-            make_action("n1", "Navigate", json!({"url": "https://www.google.com"})),
-        ]);
+        let wf = make_workflow(vec![make_action(
+            "n1",
+            "Navigate",
+            json!({"url": "https://www.google.com"}),
+        )]);
         assert!(!validate(&wf).iter().any(|d| d.rule_id == "I010"));
     }
 
@@ -1876,16 +1935,22 @@ mod tests {
 
     #[test]
     fn i011_transform_undefined_source() {
-        let wf = make_workflow(vec![
-            make_action("n1", "Transform", json!({"source": "$unknown"})),
-        ]);
+        let wf = make_workflow(vec![make_action(
+            "n1",
+            "Transform",
+            json!({"source": "$unknown"}),
+        )]);
         assert!(validate(&wf).iter().any(|d| d.rule_id == "I011"));
     }
 
     #[test]
     fn i011_transform_defined_source_ok() {
         let wf = make_workflow(vec![
-            make_action("n1", "SetVariable", json!({"variable": "$data", "value": "x"})),
+            make_action(
+                "n1",
+                "SetVariable",
+                json!({"variable": "$data", "value": "x"}),
+            ),
             make_action("n2", "Transform", json!({"source": "$data"})),
         ]);
         assert!(!validate(&wf).iter().any(|d| d.rule_id == "I011"));

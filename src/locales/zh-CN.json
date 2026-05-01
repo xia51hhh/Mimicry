@@ -368,7 +368,7 @@
     "virtualDisplay": "虚拟显示器 (Linux)",
     "launchArgs": "启动参数",
     "detectScreen": "检测",
-      "windowScale": "缩放"
+    "windowScale": "缩放"
   },
   "session": {
     "title": "活动会话",

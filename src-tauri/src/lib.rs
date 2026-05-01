@@ -1,10 +1,10 @@
-mod db;
-mod ipc;
 mod commands;
-mod logger;
+mod db;
 mod error;
-pub mod workflow_validator;
+mod ipc;
+mod logger;
 pub mod transform;
+pub mod workflow_validator;
 
 pub use error::{AppError, AppResult};
 use ipc::sidecar::Sidecar;
@@ -62,7 +62,13 @@ pub fn run() {
 
                     tracing::info!(
                         "Monitor: {}x{} @ {:.1}x, logical: {:.0}x{:.0}, window: {:.0}x{:.0}",
-                        phy.width, phy.height, scale, logical_w, logical_h, target_w, target_h
+                        phy.width,
+                        phy.height,
+                        scale,
+                        logical_w,
+                        logical_h,
+                        target_w,
+                        target_h
                     );
 
                     let _ = window.set_size(tauri::LogicalSize::new(target_w, target_h));

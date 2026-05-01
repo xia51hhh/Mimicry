@@ -1,10 +1,10 @@
-import { defineStore } from "pinia";
-import { ref, shallowRef } from "vue";
-import { invoke } from "@tauri-apps/api/core";
-import { listen, type UnlistenFn } from "@tauri-apps/api/event";
-import { errorMessage, extractDiagnostics, SidecarEvent } from "../types/ipc";
-import { useBrowserStore } from "./browser";
-import { useValidationStore } from "./validation";
+import { defineStore } from 'pinia';
+import { ref, shallowRef } from 'vue';
+import { invoke } from '@tauri-apps/api/core';
+import { listen, type UnlistenFn } from '@tauri-apps/api/event';
+import { errorMessage, extractDiagnostics, SidecarEvent } from '../types/ipc';
+import { useBrowserStore } from './browser';
+import { useValidationStore } from './validation';
 
 interface ExecutionStatusResult {
   running: boolean;
@@ -23,7 +23,7 @@ interface ExecutionResult {
 
 export interface LogEntry {
   time: string;
-  level: "info" | "warn" | "error" | "debug";
+  level: 'info' | 'warn' | 'error' | 'debug';
   nodeId?: string;
   message: string;
 }
@@ -37,7 +37,7 @@ export interface ExecutionState {
   variables: Record<string, unknown>;
 }
 
-export const useExecutionStore = defineStore("execution", () => {
+export const useExecutionStore = defineStore('execution', () => {
   const running = ref(false);
   const step = ref(0);
   const total = ref(0);
@@ -56,7 +56,7 @@ export const useExecutionStore = defineStore("execution", () => {
   let progressUnlisten: UnlistenFn | null = null;
   let logUnlisten: UnlistenFn | null = null;
 
-  function addLog(level: LogEntry["level"], message: string, nodeId?: string) {
+  function addLog(level: LogEntry['level'], message: string, nodeId?: string) {
     logs.value.push({
       time: new Date().toLocaleTimeString(),
       level,
@@ -79,7 +79,7 @@ export const useExecutionStore = defineStore("execution", () => {
 
   async function pollStatus() {
     try {
-      const result = await invoke<ExecutionStatusResult>("workflow_execution_status");
+      const result = await invoke<ExecutionStatusResult>('workflow_execution_status');
       const prevNodeId = currentNodeId.value;
 
       running.value = result.running;
@@ -101,9 +101,9 @@ export const useExecutionStore = defineStore("execution", () => {
       if (!result.running) {
         stopPolling();
         if (result.error) {
-          addLog("error", `execution.failed: ${result.error}`);
+          addLog('error', `execution.failed: ${result.error}`);
         } else {
-          addLog("info", "execution.completed");
+          addLog('info', 'execution.completed');
         }
       }
     } catch {
@@ -143,7 +143,7 @@ export const useExecutionStore = defineStore("execution", () => {
         completedNodeIds.value = new Set([...completedNodeIds.value, prevNodeId]);
       }
 
-      addLog("info", `Step ${p.step + 1}/${p.total}: ${p.action}`, p.nodeId);
+      addLog('info', `Step ${p.step + 1}/${p.total}: ${p.action}`, p.nodeId);
     });
 
     logUnlisten = await listen<{
@@ -156,7 +156,7 @@ export const useExecutionStore = defineStore("execution", () => {
       const entry = event.payload;
       logs.value.push({
         time: new Date(entry.timestamp * 1000).toLocaleTimeString(),
-        level: (entry.level as LogEntry["level"]) || "info",
+        level: (entry.level as LogEntry['level']) || 'info',
         nodeId: entry.nodeId,
         message: entry.message,
       });
@@ -177,14 +177,14 @@ export const useExecutionStore = defineStore("execution", () => {
   async function execute(workflowJson: { name?: string; nodes: unknown[]; edges: unknown[] }) {
     reset();
     running.value = true;
-    addLog("info", `execution.start: ${workflowJson.name || "Untitled"}`);
+    addLog('info', `execution.start: ${workflowJson.name || 'Untitled'}`);
     await listenProgress();
     startPolling(); // fallback for missed events
 
     // Send canonical format directly — Rust transform layer handles conversion
     try {
       const browserStore = useBrowserStore();
-      const result = await invoke<ExecutionResult>("workflow_execute", {
+      const result = await invoke<ExecutionResult>('workflow_execute', {
         workflow: workflowJson,
         sessionId: browserStore.activeSessionId,
         humanize: humanize.value,
@@ -195,11 +195,11 @@ export const useExecutionStore = defineStore("execution", () => {
       stopListening();
 
       if (result.success) {
-        addLog("info", "execution.success");
+        addLog('info', 'execution.success');
         variables.value = result.variables || {};
       } else {
-        error.value = result.error || "execution.unknownError";
-        addLog("error", `execution.failed: ${error.value}`);
+        error.value = result.error || 'execution.unknownError';
+        addLog('error', `execution.failed: ${error.value}`);
       }
 
       return result;
@@ -213,13 +213,13 @@ export const useExecutionStore = defineStore("execution", () => {
         const validation = useValidationStore();
         validation.setDiagnostics(diags);
         error.value = `${diags.length} validation error(s)`;
-        addLog("error", `execution.validationFailed: ${diags.length} error(s)`);
+        addLog('error', `execution.validationFailed: ${diags.length} error(s)`);
         for (const d of diags) {
-          addLog("error", `[${d.ruleId}] ${d.message}`);
+          addLog('error', `[${d.ruleId}] ${d.message}`);
         }
       } else {
         error.value = errorMessage(e);
-        addLog("error", `execution.exception: ${e}`);
+        addLog('error', `execution.exception: ${e}`);
       }
       throw e;
     }
@@ -227,27 +227,38 @@ export const useExecutionStore = defineStore("execution", () => {
 
   async function stop() {
     try {
-      await invoke("workflow_stop_execution");
+      await invoke('workflow_stop_execution');
       running.value = false;
       stopPolling();
       stopListening();
-      addLog("warn", "execution.stopped");
+      addLog('warn', 'execution.stopped');
     } catch (e: unknown) {
-      addLog("error", `execution.stopFailed: ${e}`);
+      addLog('error', `execution.stopFailed: ${e}`);
     }
   }
 
-  function getNodeStatus(nodeId: string): "idle" | "running" | "success" | "error" {
-    if (currentNodeId.value === nodeId && running.value) return "running";
-    if (failedNodeIds.value.has(nodeId)) return "error";
-    if (completedNodeIds.value.has(nodeId)) return "success";
-    return "idle";
+  function getNodeStatus(nodeId: string): 'idle' | 'running' | 'success' | 'error' {
+    if (currentNodeId.value === nodeId && running.value) return 'running';
+    if (failedNodeIds.value.has(nodeId)) return 'error';
+    if (completedNodeIds.value.has(nodeId)) return 'success';
+    return 'idle';
   }
 
   return {
-    running, step, total, currentNodeId, error, variables, logs,
-    completedNodeIds, failedNodeIds,
-    humanize, delayMultiplier,
-    execute, stop, reset, getNodeStatus,
+    running,
+    step,
+    total,
+    currentNodeId,
+    error,
+    variables,
+    logs,
+    completedNodeIds,
+    failedNodeIds,
+    humanize,
+    delayMultiplier,
+    execute,
+    stop,
+    reset,
+    getNodeStatus,
   };
 });
