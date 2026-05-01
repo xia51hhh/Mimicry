@@ -137,57 +137,6 @@ def cmd_finish(args: argparse.Namespace) -> int:
 # Command: list
 # =============================================================================
 
-def _prd_declares_hotfile(prd_path, hotfile: str) -> bool:
-    """Return True if the PRD's `hotfiles_touched:` block contains the path.
-
-    Accepts the YAML-list form embedded under any heading:
-        parallel:
-          hotfiles_touched:
-            - shared/action-map.json
-            - .trellis/spec/cross-layer/block-schema.md
-
-    Quoted entries (`"path"`) and trailing inline comments (`# ...`) are stripped.
-    """
-    if not prd_path.is_file():
-        return False
-    try:
-        content = prd_path.read_text(encoding="utf-8")
-    except OSError:
-        return False
-
-    in_block = False
-    for raw in content.splitlines():
-        stripped = raw.strip()
-        if stripped.startswith("hotfiles_touched:"):
-            in_block = True
-            # Inline form: hotfiles_touched: [a, b]
-            after = stripped[len("hotfiles_touched:"):].strip()
-            if after.startswith("[") and after.endswith("]"):
-                items = [s.strip().strip('"').strip("'") for s in after[1:-1].split(",")]
-                if hotfile in items:
-                    return True
-                in_block = False
-            continue
-        if not in_block:
-            continue
-        if stripped.startswith("- "):
-            entry = stripped[2:].strip()
-            if "#" in entry:
-                entry = entry.split("#", 1)[0].strip()
-            if (entry.startswith('"') and entry.endswith('"')) or (
-                entry.startswith("'") and entry.endswith("'")
-            ):
-                entry = entry[1:-1]
-            if entry == hotfile:
-                return True
-        elif stripped == "" or stripped.startswith("#"):
-            # blank / comment lines inside the YAML list — keep scanning
-            continue
-        else:
-            in_block = False
-    return False
-
-
 def cmd_list(args: argparse.Namespace) -> int:
     """List active tasks."""
     repo_root = get_repo_root()
@@ -196,15 +145,12 @@ def cmd_list(args: argparse.Namespace) -> int:
     developer = get_developer(repo_root)
     filter_mine = args.mine
     filter_status = args.status
-    filter_hotfile = getattr(args, "hotfile", None)
 
     if filter_mine:
         if not developer:
             print(colored("Error: No developer set. Run init_developer.py first", Colors.RED), file=sys.stderr)
             return 1
         print(colored(f"My tasks (assignee: {developer}):", Colors.BLUE))
-    elif filter_hotfile:
-        print(colored(f"Tasks claiming hotfile '{filter_hotfile}':", Colors.BLUE))
     else:
         print(colored("All active tasks:", Colors.BLUE))
     print()
@@ -226,10 +172,6 @@ def cmd_list(args: argparse.Namespace) -> int:
 
         # Apply --status filter
         if filter_status and t.status != filter_status:
-            return
-
-        # Apply --hotfile filter (matches PRD `hotfiles_touched:` declarations)
-        if filter_hotfile and not _prd_declares_hotfile(t.directory / "prd.md", filter_hotfile):
             return
 
         relative_path = f"{DIR_WORKFLOW}/{DIR_TASKS}/{dir_name}"
@@ -454,7 +396,6 @@ def main() -> int:
     p_list = subparsers.add_parser("list", help="List tasks")
     p_list.add_argument("--mine", "-m", action="store_true", help="My tasks only")
     p_list.add_argument("--status", "-s", help="Filter by status")
-    p_list.add_argument("--hotfile", help="Filter to tasks declaring this path in PRD `hotfiles_touched`")
 
     # add-subtask
     p_addsub = subparsers.add_parser("add-subtask", help="Link child task to parent")

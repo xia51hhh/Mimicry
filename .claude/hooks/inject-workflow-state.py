@@ -207,57 +207,6 @@ def build_breadcrumb(
     return f"<workflow-state>\n{header}\n{body}\n</workflow-state>"
 
 
-def get_peer_worktrees(root: Path) -> str:
-    """Return a compact <peer-worktrees> block listing active peer worktrees.
-
-    Reads every task.json under .trellis/tasks/ (skipping archive/) and
-    filters those with a non-null `worktree_path`. No git calls — must stay
-    fast since this runs on every UserPromptSubmit. Empty string when no peers.
-    """
-    tasks_dir = root / ".trellis" / "tasks"
-    if not tasks_dir.is_dir():
-        return ""
-
-    peers: list[tuple[str, str, str]] = []
-    try:
-        entries = sorted(tasks_dir.iterdir())
-    except OSError:
-        return ""
-
-    for task_dir in entries:
-        if not task_dir.is_dir() or task_dir.name == "archive":
-            continue
-        task_json = task_dir / "task.json"
-        if not task_json.is_file():
-            continue
-        try:
-            data = json.loads(task_json.read_text(encoding="utf-8"))
-        except (json.JSONDecodeError, OSError):
-            continue
-        if not isinstance(data, dict):
-            continue
-        wt = data.get("worktree_path")
-        if not wt:
-            continue
-        slug = data.get("id") or data.get("name") or task_dir.name
-        branch = data.get("branch") or "?"
-        peers.append((str(slug), str(branch), str(wt)))
-
-    if not peers:
-        return ""
-
-    lines = [f"  - {slug} ({branch}) at {wt}" for slug, branch, wt in peers]
-    return (
-        "<peer-worktrees>\n"
-        f"{len(peers)} active peer worktree(s):\n"
-        + "\n".join(lines)
-        + "\nFor ahead/behind/dirty detail: `python3 .trellis/scripts/task.py worktree list`. "
-        "To check who claims a hot file: `python3 .trellis/scripts/task.py list --hotfile <path>`. "
-        "Conflict resolution protocol: `.trellis/spec/cross-layer/parallel-development.md`.\n"
-        "</peer-worktrees>"
-    )
-
-
 # ---------------------------------------------------------------------------
 # Entry
 # ---------------------------------------------------------------------------
@@ -283,11 +232,6 @@ def main() -> int:
         breadcrumb = build_breadcrumb(None, "no_task", templates)
     else:
         breadcrumb = build_breadcrumb(*task, templates=templates)
-
-    # Append peer-worktree observability so every agent sees what other agents are doing.
-    peer_block = get_peer_worktrees(root)
-    if peer_block:
-        breadcrumb = breadcrumb + "\n\n" + peer_block
 
     output = {
         "hookSpecificOutput": {

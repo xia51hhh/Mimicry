@@ -193,19 +193,6 @@ python3 ./.trellis/scripts/get_context.py --mode phase --step <step>
 
 ---
 
-## Parallel Development (multi-worktree, multi-agent)
-
-The default Trellis flow assumes one task in one worktree. When multiple agents (typically separate terminals running their own Claude / Codex / etc. session) push the same project forward concurrently, the model is **peer tasks**: each agent owns one Trellis task, one worktree under `.trellis/worktrees/<task-slug>/`, one branch `feat/<task-slug>`, and PRs directly to `main`. There is no parent / child / integration branch — every task is a top-level peer.
-
-- **Whether to open a parallel task**: read [Parallel Task Thinking Guide](./spec/guides/parallel-task-thinking-guide.md). Most "let's parallelize this" instincts don't pass its checklist.
-- **How to coordinate**: read [Parallel Development Protocol](./spec/cross-layer/parallel-development.md). Hard contract for branch naming, hot-file self-declaration via PRD `parallel:` block, merge-conflict resolution by reading the conflicting peer task's PRD, and Conventional-Commits-with-task-slug format.
-- **Tooling**: `python3 .trellis/scripts/task.py worktree {create|remove|list|status}` manages `.trellis/worktrees/<task-slug>/` and writes `task.json.worktree_path` atomically. `task.py list --hotfile <path>` finds peer claims on a file.
-- **Observability**: `SessionStart` and `UserPromptSubmit` hooks auto-inject a `<peer-worktrees>` block on every session and every prompt, so agents always see what other agents are doing without running commands.
-
-The Phase 1/2/3 flow below applies to each peer task individually.
-
----
-
 ## Phase 1: Plan
 
 Goal: figure out what to build, produce a clear requirements doc and the context needed to implement it.
