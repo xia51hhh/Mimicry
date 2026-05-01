@@ -223,6 +223,13 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent] | CallToolR
     path — unknown tool/method or exception raised by the RPC handler.
     Surfacing isError at the protocol level lets MCP clients distinguish
     failures without parsing the JSON payload.
+
+    SDK compatibility verified against `mcp.server.lowlevel.server.Server`:
+    its `@call_tool` request handler explicitly checks
+    `isinstance(results, types.CallToolResult)` and forwards via
+    `ServerResult(results)` without re-wrapping. Validated empirically with
+    `asyncio.run(call_tool('does_not_exist', {}))` returning a
+    CallToolResult(isError=True). See task 05-01-mcp-gap-followup.
     """
     def _err(message: str) -> CallToolResult:
         return CallToolResult(
