@@ -795,6 +795,183 @@ def shutdown():
 
 
 # ---------------------------------------------------------------------------
+# Network capture (Phase 3)
+# ---------------------------------------------------------------------------
+
+
+@rpc_method(
+    "network.start_capture",
+    description="Start capturing HTTP requests and responses for the session. Use when you want to inspect API calls a page makes (login flows, XHR, fetch). Clears any existing buffer.",
+    param_descriptions={
+        "session_id": "Browser session ID; defaults to 'default'.",
+    },
+)
+def network_start_capture(session_id: str = "default"):
+    return _mgr.get(session_id).start_network_capture()
+
+
+@rpc_method(
+    "network.stop_capture",
+    description="Stop capturing network traffic. The buffer is preserved so you can still call network.list / network.get afterwards.",
+    param_descriptions={
+        "session_id": "Browser session ID; defaults to 'default'.",
+    },
+)
+def network_stop_capture(session_id: str = "default"):
+    return _mgr.get(session_id).stop_network_capture()
+
+
+@rpc_method(
+    "network.list",
+    description="List captured HTTP requests with optional filters. Use to find a specific request by URL substring, method, or status. Response bodies are omitted from this listing — use network.get to fetch a single entry's full body.",
+    param_descriptions={
+        "session_id": "Browser session ID; defaults to 'default'.",
+        "url_contains": "Optional substring filter applied to request URLs.",
+        "method": "Optional HTTP method filter (GET, POST, PUT, DELETE, ...). Case-insensitive.",
+        "status": "Optional response status code filter (200, 404, 500, ...).",
+        "limit": "Maximum number of entries to return. Default 100.",
+        "offset": "Zero-based offset for pagination. Default 0.",
+    },
+)
+def network_list(session_id: str = "default", url_contains: str | None = None,
+                 method: str | None = None, status: int | None = None,
+                 limit: int = 100, offset: int = 0):
+    return _mgr.get(session_id).list_network_requests(
+        url_contains=url_contains, method=method, status=status,
+        limit=limit, offset=offset,
+    )
+
+
+@rpc_method(
+    "network.get",
+    description="Fetch a single captured request by id, including request/response headers and the (possibly truncated) response body.",
+    param_descriptions={
+        "request_id": "Numeric id from the network.list output.",
+        "session_id": "Browser session ID; defaults to 'default'.",
+    },
+)
+def network_get(request_id: int, session_id: str = "default"):
+    entry = _mgr.get(session_id).get_network_request(request_id)
+    if entry is None:
+        return {"error": f"No request with id {request_id}"}
+    return entry
+
+
+@rpc_method(
+    "network.clear",
+    description="Discard all captured network requests for the session. Does not change the start/stop state.",
+    param_descriptions={
+        "session_id": "Browser session ID; defaults to 'default'.",
+    },
+)
+def network_clear(session_id: str = "default"):
+    _mgr.get(session_id).clear_network_requests()
+    return {"ok": True}
+
+
+# ---------------------------------------------------------------------------
+# Console buffer (Phase 3)
+# ---------------------------------------------------------------------------
+
+
+@rpc_method(
+    "console.list",
+    description="List page console messages captured for the session (always-on ring buffer, last 500 entries). Use to inspect JS errors, warnings, and console.log output produced by the page.",
+    param_descriptions={
+        "session_id": "Browser session ID; defaults to 'default'.",
+        "type": "Optional console-message type filter: 'log', 'info', 'warn', 'error', 'debug', 'trace'.",
+        "text_contains": "Optional substring filter applied to the message text.",
+        "limit": "Maximum number of entries to return. Default 100.",
+        "offset": "Zero-based offset for pagination. Default 0.",
+    },
+)
+def console_list(session_id: str = "default", type: str | None = None,
+                 text_contains: str | None = None, limit: int = 100, offset: int = 0):
+    return _mgr.get(session_id).list_console_logs(
+        type=type, text_contains=text_contains, limit=limit, offset=offset,
+    )
+
+
+@rpc_method(
+    "console.clear",
+    description="Empty the page-console ring buffer for the session. Use before triggering an action whose console output you want to inspect in isolation.",
+    param_descriptions={
+        "session_id": "Browser session ID; defaults to 'default'.",
+    },
+)
+def console_clear(session_id: str = "default"):
+    _mgr.get(session_id).clear_console_logs()
+    return {"ok": True}
+
+
+# ---------------------------------------------------------------------------
+# Init scripts (Phase 3)
+# ---------------------------------------------------------------------------
+
+
+@rpc_method(
+    "browser.add_init_script",
+    description="Register a JS init script that runs on every page in the session before any page script. Use to install MutationObservers, polyfills, anti-fingerprint patches, or auto-dismiss popups. Applies to existing context AND every future page (via Playwright context-level add_init_script).",
+    param_descriptions={
+        "script": "Raw JavaScript source. Runs at document start in the page's main world.",
+        "name": "Optional name to store the script under. Auto-generated as 'init_<n>' if omitted. Reusing an existing name overwrites the entry but cannot un-inject the script from already-loaded pages.",
+        "session_id": "Browser session ID; defaults to 'default'.",
+    },
+)
+def browser_add_init_script(script: str, name: str | None = None, session_id: str = "default"):
+    return _mgr.get(session_id).add_init_script(script, name=name)
+
+
+@rpc_method(
+    "browser.list_init_scripts",
+    description="List names, lengths, and short hashes of all registered init scripts for the session. Bodies are omitted to keep responses small — use browser.get_init_script for the full source.",
+    param_descriptions={
+        "session_id": "Browser session ID; defaults to 'default'.",
+    },
+)
+def browser_list_init_scripts(session_id: str = "default"):
+    return {"scripts": _mgr.get(session_id).list_init_scripts()}
+
+
+@rpc_method(
+    "browser.get_init_script",
+    description="Return the full source of a registered init script by name.",
+    param_descriptions={
+        "name": "Init script name as shown by browser.list_init_scripts.",
+        "session_id": "Browser session ID; defaults to 'default'.",
+    },
+)
+def browser_get_init_script(name: str, session_id: str = "default"):
+    entry = _mgr.get(session_id).get_init_script(name)
+    if entry is None:
+        return {"error": f"No init script named '{name}'"}
+    return entry
+
+
+@rpc_method(
+    "browser.remove_init_script",
+    description="Remove an init script from the session registry. NOTE: Playwright cannot un-inject scripts from already-loaded pages; this only prevents the script from being re-applied to future contexts. Currently-open pages are unaffected.",
+    param_descriptions={
+        "name": "Init script name to remove.",
+        "session_id": "Browser session ID; defaults to 'default'.",
+    },
+)
+def browser_remove_init_script(name: str, session_id: str = "default"):
+    return _mgr.get(session_id).remove_init_script(name)
+
+
+@rpc_method(
+    "browser.clear_init_scripts",
+    description="Clear the entire init-script registry for the session. Same caveat as remove_init_script: already-loaded pages keep whatever was injected; only future contexts will be clean.",
+    param_descriptions={
+        "session_id": "Browser session ID; defaults to 'default'.",
+    },
+)
+def browser_clear_init_scripts(session_id: str = "default"):
+    return _mgr.get(session_id).clear_init_scripts()
+
+
+# ---------------------------------------------------------------------------
 # Captcha (Cloudflare click solver MVP)
 # ---------------------------------------------------------------------------
 

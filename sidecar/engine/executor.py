@@ -264,6 +264,21 @@ class WorkflowExecutor:
         self._ctx.running = True
         logger.info(f"Executing workflow: {workflow_json.get('name', 'unnamed')} ({len(nodes)} top-level nodes)")
 
+        # Apply workflow-level init scripts (Phase 3): runs before any browser action.
+        init_scripts = workflow_json.get("init_scripts")
+        if init_scripts and self._session_manager:
+            try:
+                ctrl = self._session_manager.get(self._default_session_id)
+                ctrl.register_init_scripts(init_scripts)
+                logger.info(f"Registered {len(init_scripts)} workflow init script(s)")
+            except Exception as e:
+                logger.warning(f"Failed to register workflow init_scripts: {e}")
+        elif init_scripts and self._controller:
+            try:
+                self._controller.register_init_scripts(init_scripts)
+            except Exception as e:
+                logger.warning(f"Failed to register workflow init_scripts: {e}")
+
         try:
             self._execute_nodes(nodes)
             self._ctx.running = False

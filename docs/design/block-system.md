@@ -291,6 +291,33 @@ Loop Breakpoint:   [input] ──Block── [output]
 
 ---
 
+## Init Scripts (workflow-level)
+
+Workflow JSON may carry an optional top-level `init_scripts` field — a list of JavaScript snippets that the executor registers via Playwright `BrowserContext.add_init_script` **before any browser action runs**. Each script executes at document start in every page of the session, including future tabs.
+
+```json
+{
+  "name": "my-flow",
+  "init_scripts": [
+    "window.__bot_check = false;",
+    { "name": "auto-dismiss", "script": "document.addEventListener('DOMContentLoaded', () => document.querySelector('.cookie-banner button')?.click());" }
+  ],
+  "nodes": [ /* ... */ ]
+}
+```
+
+Entries may be plain strings (auto-named `init_<n>`) or `{name, script}` objects. Persistence is workflow-only — scripts are NOT stored in the SQLite DB or `Profile` table. They travel with the workflow JSON file.
+
+For interactive authoring/debugging, the sidecar exposes runtime RPC methods that operate on the session's in-memory registry:
+
+- `browser.add_init_script(script, name?)` — append + apply to current context.
+- `browser.list_init_scripts()` — `[{name, length, hash_short}]` (bodies omitted).
+- `browser.get_init_script(name)` — full body.
+- `browser.remove_init_script(name)` — drop from registry. Note: Playwright cannot un-inject from already-loaded pages; this only affects future contexts.
+- `browser.clear_init_scripts()` — wipe the registry.
+
+---
+
 ## 相关文档
 
 - [设计决策记录](./decisions.md)
