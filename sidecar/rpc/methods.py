@@ -36,7 +36,10 @@ def rpc_method(
     return decorator
 
 
-@rpc_method("ping")
+@rpc_method(
+    "ping",
+    description="Liveness probe. Returns the literal string 'pong'. Use to verify the sidecar RPC is reachable.",
+)
 def ping():
     return "pong"
 
@@ -46,7 +49,10 @@ def echo(message: str = ""):
     return message
 
 
-@rpc_method("system.info")
+@rpc_method(
+    "system.info",
+    description="Return basic sidecar runtime info: host platform, Python version, sidecar version. Use for diagnostics or version-gating client behavior.",
+)
 def system_info():
     return {
         "platform": platform.system(),
@@ -55,7 +61,10 @@ def system_info():
     }
 
 
-@rpc_method("heartbeat")
+@rpc_method(
+    "heartbeat",
+    description="Return current sidecar timestamp and process uptime in seconds. Use to confirm the daemon is alive and to measure session age.",
+)
 def heartbeat():
     return {
         "timestamp": time.time(),

@@ -1,10 +1,19 @@
 import sys
-import json
+import os
+from pathlib import Path
 from loguru import logger
+
+# Absolute log path anchored to this file's directory.
+# Prevents the sidecar from writing logs into the caller's CWD when launched
+# by Tauri (which runs the sidecar with CWD=src-tauri/).
+_SIDECAR_DIR = Path(__file__).resolve().parent
+_LOG_DIR = _SIDECAR_DIR / "logs"
+_LOG_DIR.mkdir(exist_ok=True)
+_LOG_FILE = _LOG_DIR / "mimicry-sidecar.log"
 
 logger.remove()
 logger.add(sys.stderr, level="DEBUG", format="{time:HH:mm:ss} | {level:<7} | {message}")
-logger.add("mimicry-sidecar.log", rotation="10 MB", retention="3 days", level="DEBUG")
+logger.add(str(_LOG_FILE), rotation="10 MB", retention="3 days", level="DEBUG")
 
 
 def main():

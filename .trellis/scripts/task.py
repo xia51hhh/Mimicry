@@ -56,6 +56,12 @@ from common.task_context import (
     cmd_validate,
     cmd_list_context,
 )
+from common.worktree import (
+    cmd_worktree_create,
+    cmd_worktree_remove,
+    cmd_worktree_list,
+    cmd_worktree_status,
+)
 
 
 # =============================================================================
@@ -405,6 +411,23 @@ def main() -> int:
     p_listarch = subparsers.add_parser("list-archive", help="List archived tasks")
     p_listarch.add_argument("month", nargs="?", help="Month (YYYY-MM)")
 
+    # worktree (subcommand group)
+    p_worktree = subparsers.add_parser("worktree", help="Manage git worktrees for tasks")
+    wt_subparsers = p_worktree.add_subparsers(dest="worktree_action", help="Worktree action")
+
+    p_wt_create = wt_subparsers.add_parser("create", help="Create worktree for task")
+    p_wt_create.add_argument("slug", help="Task slug or directory")
+    p_wt_create.add_argument("--branch", help="Override branch name (default: task.json.branch or feat/<slug>)")
+
+    p_wt_remove = wt_subparsers.add_parser("remove", help="Remove task's worktree")
+    p_wt_remove.add_argument("slug", help="Task slug or directory")
+    p_wt_remove.add_argument("--force", action="store_true", help="Skip dirty/ahead-of-base safety checks")
+
+    wt_subparsers.add_parser("list", help="List active worktrees")
+
+    p_wt_status = wt_subparsers.add_parser("status", help="Show worktree status")
+    p_wt_status.add_argument("slug", help="Task slug or directory")
+
     args = parser.parse_args()
 
     if not args.command:
@@ -426,6 +449,7 @@ def main() -> int:
         "remove-subtask": cmd_remove_subtask,
         "list": cmd_list,
         "list-archive": cmd_list_archive,
+        "worktree": _cmd_worktree_dispatch,
     }
 
     if args.command in commands:
@@ -433,6 +457,29 @@ def main() -> int:
     else:
         show_usage()
         return 1
+
+
+_WORKTREE_ACTIONS = {
+    "create": cmd_worktree_create,
+    "remove": cmd_worktree_remove,
+    "list": cmd_worktree_list,
+    "status": cmd_worktree_status,
+}
+
+
+def _cmd_worktree_dispatch(args: argparse.Namespace) -> int:
+    """Dispatch nested `task.py worktree {create|remove|list|status}` subcommand."""
+    action = getattr(args, "worktree_action", None)
+    if action not in _WORKTREE_ACTIONS:
+        print(
+            colored(
+                "Usage: task.py worktree {create|remove|list|status}",
+                Colors.RED,
+            ),
+            file=sys.stderr,
+        )
+        return 1
+    return _WORKTREE_ACTIONS[action](args)
 
 
 if __name__ == "__main__":

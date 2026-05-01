@@ -76,3 +76,13 @@ Legacy fallback is retained for backward compatibility with saved JSON workflows
 | `_execute_action()` calls `to_backend(action)` | Action already snake_case from normalize | Double conversion is harmless but wasteful |
 | `startRecording` swallows errors silently | Set `setupError.value` in catch block | User sees "no response" with no feedback |
 | `execute()` omits `sessionId` in invoke | Always pass `browserStore.activeSessionId` | Rust fallback to "default" won't match Profile sessions |
+
+## Init Scripts (workflow-level)
+
+Optional top-level `init_scripts: list[str | {name, script}]` on a workflow JSON object. The Python executor registers them on the session's `BrowserContext` via `add_init_script` BEFORE running the first node, so every page (current and future) loads with the snippets pre-applied.
+
+Strings get auto-name `init_<n>`; dicts must carry `script` and may carry `name`. Storage is workflow-scoped only (NOT the SQLite `profiles` table).
+
+Runtime authoring is exposed through `browser.add_init_script` / `browser.list_init_scripts` / `browser.get_init_script` / `browser.remove_init_script` / `browser.clear_init_scripts`. Playwright cannot un-inject already-loaded pages; remove/clear only stop re-application to future contexts.
+
+See `docs/design/block-system.md` § "Init Scripts" for examples.

@@ -103,6 +103,16 @@ Phase 2: Execute → write code and pass quality checks
 Phase 3: Finish  → distill lessons + wrap-up
 ```
 
+### Parallel Development
+
+For tasks that can be split into independent sub-modules, Trellis supports parallel execution via `git worktree`:
+
+- **Contract**: [`.trellis/spec/cross-layer/parallel-development.md`](spec/cross-layer/parallel-development.md) — worktree placement, branch naming, hot-file ownership, merge order
+- **Thinking guide**: [`.trellis/spec/guides/parallel-task-thinking-guide.md`](spec/guides/parallel-task-thinking-guide.md) — when to fan out, splitting principles, common mistakes
+- **Tool**: `python3 .trellis/scripts/task.py worktree {create|remove|list|status}` — manage worktrees per task
+
+Fan-out happens during Phase 1 (Plan): parent creates children, assigns hot-file owners, then each child enters its own Phase 2 (Execute) in its worktree. Integration testing happens in the parent worktree before the final PR to main.
+
 ### Phase 1: Plan
 - 1.0 Create task `[required · once]`
 - 1.1 Requirement exploration `[required · repeatable]`

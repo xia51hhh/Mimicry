@@ -23,6 +23,7 @@ These guides help you **ask the right questions before coding**.
 |-------|---------|-------------|
 | [Code Reuse Thinking Guide](./code-reuse-thinking-guide.md) | Identify patterns and reduce duplication | When you notice repeated patterns |
 | [Cross-Layer Thinking Guide](./cross-layer-thinking-guide.md) | Think through data flow across layers | Features spanning multiple layers |
+| [Parallel Task Thinking Guide](./parallel-task-thinking-guide.md) | Decide when/how to fan out to parallel worktrees | When work can split into independent sub-modules |
 
 ---
 
@@ -46,6 +47,15 @@ These guides help you **ask the right questions before coding**.
 - [ ] **You're creating a new utility/helper function** ← Search first!
 
 → Read [Code Reuse Thinking Guide](./code-reuse-thinking-guide.md)
+
+### When to Think About Parallel Development
+
+- [ ] Work can split into ≥2 independent sub-modules
+- [ ] Each sub-module requires ≥30 minutes coding
+- [ ] Multiple agents available for concurrent work
+- [ ] Hot files ≤2 with clear single owners
+
+→ Read [Parallel Task Thinking Guide](./parallel-task-thinking-guide.md)
 
 ---
 

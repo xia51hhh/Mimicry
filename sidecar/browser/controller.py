@@ -1,4 +1,7 @@
 from loguru import logger
+import collections
+import fnmatch
+import hashlib
 import platform
 import random
 import subprocess
@@ -7,6 +10,11 @@ import time
 import uuid
 from dataclasses import dataclass, asdict
 from urllib.parse import urlparse
+
+# Ring buffer caps (per session)
+_NETWORK_BUFFER_MAX = 500
+_CONSOLE_BUFFER_MAX = 500
+_RESPONSE_BODY_MAX_BYTES = 256 * 1024  # 256KB cap for captured response bodies
 
 # Set DPI awareness once at process level (Windows only)
 if platform.system() == "Windows":
@@ -60,6 +68,18 @@ class BrowserController:
         self._tab_registry: dict[str, TabInfo] = {}   # tabId → TabInfo
         self._page_to_tab: dict[int, str] = {}        # id(page) → tabId
         self._seq_counter: int = 0                      # monotonic, 1-based
+        # Network capture state (Phase 3)
+        self._network_capture_enabled: bool = False
+        self._network_requests: collections.deque = collections.deque(maxlen=_NETWORK_BUFFER_MAX)
+        self._network_id_counter: int = 0
+        self._pages_with_net_hooks: set[int] = set()
+        # Console buffer (always-on)
+        self._console_buffer: collections.deque = collections.deque(maxlen=_CONSOLE_BUFFER_MAX)
+        self._console_id_counter: int = 0
+        self._pages_with_console_hooks: set[int] = set()
+        # Init script registry (workflow-driven; Playwright re-applies on every new page automatically once added to context)
+        self._init_scripts: dict[str, str] = {}
+        self._init_script_counter: int = 0
 
     @staticmethod
     def _get_screen_size() -> tuple[int, int]:
@@ -362,6 +382,20 @@ class BrowserController:
         # Inject anti-detection patches before any navigation
         self._inject_stealth_scripts()
 
+        # Flush any init_scripts registered before launch (e.g. workflow-level
+        # scripts registered by executor.execute() before the first
+        # browser.launch node). _apply_init_script_to_context early-returns
+        # when _context is None, so without this flush those scripts would
+        # silently never be applied to Playwright.
+        if self._init_scripts:
+            ctx = self._context
+            if ctx is not None:
+                for _name, body in self._init_scripts.items():
+                    try:
+                        ctx.add_init_script(body)
+                    except Exception as e:
+                        logger.warning(f"Failed to flush pre-launch init script {_name}: {e}")
+
         # Navigate to startup URL if configured
         startup_url = (profile or {}).get("browser_config", {}).get("startup_url")
         if startup_url and startup_url.startswith(("http://", "https://")):
@@ -461,6 +495,10 @@ class BrowserController:
         Idempotent: if page is already registered, returns existing TabInfo."""
         existing_tab_id = self._page_to_tab.get(id(page))
         if existing_tab_id and existing_tab_id in self._tab_registry:
+            # Still ensure listeners are attached (idempotent)
+            self._attach_console_hook(page)
+            if self._network_capture_enabled:
+                self._attach_network_hook(page)
             return self._tab_registry[existing_tab_id]
         self._seq_counter += 1
         tab_id = str(uuid.uuid4())
@@ -469,12 +507,18 @@ class BrowserController:
         self._page_to_tab[id(page)] = tab_id
         # Auto-cleanup on close (handles manual close, crash, etc.)
         page.on("close", lambda p=page: self._unregister_page(p))
+        # Attach console buffer (always-on) and network capture (if enabled)
+        self._attach_console_hook(page)
+        if self._network_capture_enabled:
+            self._attach_network_hook(page)
         logger.debug(f"Tab registered: seq={info.seq}, tabId={tab_id[:8]}..., url={info.url_origin}{info.url_path}")
         return info
 
     def _unregister_page(self, page) -> TabInfo | None:
         """Remove a page from the tab registry."""
         tab_id = self._page_to_tab.pop(id(page), None)
+        self._pages_with_net_hooks.discard(id(page))
+        self._pages_with_console_hooks.discard(id(page))
         if tab_id:
             info = self._tab_registry.pop(tab_id, None)
             if info:
@@ -544,6 +588,16 @@ class BrowserController:
         self._tab_registry.clear()
         self._page_to_tab.clear()
         self._seq_counter = 0
+        # Clear capture buffers and init scripts
+        self._network_requests.clear()
+        self._network_capture_enabled = False
+        self._network_id_counter = 0
+        self._pages_with_net_hooks.clear()
+        self._console_buffer.clear()
+        self._console_id_counter = 0
+        self._pages_with_console_hooks.clear()
+        self._init_scripts.clear()
+        self._init_script_counter = 0
 
         if not camoufox and not browser and not pid:
             return
@@ -924,6 +978,303 @@ class BrowserController:
         """Backward-compatible: setup + wait."""
         self.setup_download_listener(timeout)
         return self.wait_for_download(save_path)
+
+    # ------------------------------------------------------------------
+    # Console buffer (always-on)
+    # ------------------------------------------------------------------
+    def _attach_console_hook(self, page) -> None:
+        """Attach a console listener to `page`. Idempotent per page id."""
+        if id(page) in self._pages_with_console_hooks:
+            return
+        self._pages_with_console_hooks.add(id(page))
+
+        def _on_console(msg, _self=self):
+            try:
+                _self._console_id_counter += 1
+                loc = None
+                try:
+                    loc_obj = msg.location
+                    if loc_obj:
+                        loc = {
+                            "url": loc_obj.get("url") if isinstance(loc_obj, dict) else getattr(loc_obj, "url", None),
+                            "line": loc_obj.get("lineNumber") if isinstance(loc_obj, dict) else getattr(loc_obj, "lineNumber", None),
+                            "col": loc_obj.get("columnNumber") if isinstance(loc_obj, dict) else getattr(loc_obj, "columnNumber", None),
+                        }
+                except Exception:
+                    loc = None
+                _self._console_buffer.append({
+                    "id": _self._console_id_counter,
+                    "ts": int(time.time() * 1000),
+                    "type": getattr(msg, "type", "log"),
+                    "text": getattr(msg, "text", ""),
+                    "location": loc,
+                })
+            except Exception as e:
+                logger.debug(f"console hook error: {e}")
+
+        try:
+            page.on("console", _on_console)
+        except Exception as e:
+            logger.warning(f"Failed to attach console hook: {e}")
+
+    def list_console_logs(self, type: str | None = None, text_contains: str | None = None,
+                          limit: int = 100, offset: int = 0) -> dict:
+        items = list(self._console_buffer)
+        if type:
+            items = [e for e in items if e.get("type") == type]
+        if text_contains:
+            items = [e for e in items if text_contains in (e.get("text") or "")]
+        total = len(items)
+        items = items[offset: offset + max(0, limit)]
+        return {"total": total, "items": items}
+
+    def clear_console_logs(self) -> None:
+        self._console_buffer.clear()
+
+    # ------------------------------------------------------------------
+    # Network capture (toggleable)
+    # ------------------------------------------------------------------
+    def _attach_network_hook(self, page) -> None:
+        """Attach request/response listeners to `page`. Idempotent per page id."""
+        if id(page) in self._pages_with_net_hooks:
+            return
+        self._pages_with_net_hooks.add(id(page))
+
+        # Resource types whose bodies are almost never useful for LLM-driven
+        # workflow debugging. Reading their bodies blocks the page event loop
+        # under Playwright sync API (resp.body() is synchronous).
+        _SKIP_BODY_RESOURCE_TYPES = frozenset({"image", "media", "font", "stylesheet"})
+
+        def _on_request(req, _self=self):
+            if not _self._network_capture_enabled:
+                return
+            try:
+                _self._network_id_counter += 1
+                _self._network_requests.append({
+                    "id": _self._network_id_counter,
+                    "ts": int(time.time() * 1000),
+                    "method": req.method,
+                    "url": req.url,
+                    "resource_type": req.resource_type,
+                    "status": None,
+                    "duration_ms": None,
+                    "request_headers": dict(req.headers) if req.headers else {},
+                    "response_headers": None,
+                    "post_data": req.post_data,
+                    "response_body": None,           # raw bytes (capped) or None
+                    "response_body_skipped": None,   # reason if not captured
+                    "original_size": None,           # actual response byte length (best-effort)
+                    "body_truncated": False,
+                    "_req": req,
+                    "_started": time.time(),
+                })
+            except Exception as e:
+                logger.debug(f"net request hook error: {e}")
+
+        def _on_response(resp, _self=self):
+            if not _self._network_capture_enabled:
+                return
+            try:
+                # Match by request identity — robust against duplicate URLs
+                # (redirects, polling endpoints). Falls back to URL match for
+                # entries that pre-date the _req field.
+                req = resp.request
+                entry = None
+                for e in reversed(_self._network_requests):
+                    if e.get("_req") is req:
+                        entry = e
+                        break
+                if entry is None:
+                    for e in reversed(_self._network_requests):
+                        if e.get("status") is None and e.get("url") == resp.url:
+                            entry = e
+                            break
+                if entry is None:
+                    return
+
+                entry["status"] = resp.status
+                try:
+                    entry["response_headers"] = dict(resp.headers) if resp.headers else {}
+                except Exception:
+                    entry["response_headers"] = {}
+                started = entry.pop("_started", None)
+                if started:
+                    entry["duration_ms"] = int((time.time() - started) * 1000)
+
+                # Determine declared content length
+                declared_size: int | None = None
+                cl = (entry["response_headers"] or {}).get("content-length")
+                if cl:
+                    try:
+                        declared_size = int(cl)
+                    except (TypeError, ValueError):
+                        declared_size = None
+                if declared_size is not None:
+                    entry["original_size"] = declared_size
+
+                # Skip body for filtered resource types
+                rtype = entry.get("resource_type") or ""
+                if rtype in _SKIP_BODY_RESOURCE_TYPES:
+                    entry["response_body_skipped"] = "filtered_resource_type"
+                    return
+
+                # Skip body if declared size > cap — avoid pulling huge payloads
+                # which would block the sync page event loop.
+                if declared_size is not None and declared_size > _RESPONSE_BODY_MAX_BYTES:
+                    entry["response_body_skipped"] = "too_large"
+                    entry["body_truncated"] = True
+                    return
+
+                # Best-effort body capture (sync API; cap size)
+                try:
+                    body_bytes = resp.body()
+                except Exception as e:  # noqa: BLE001 — Playwright raises various concrete types
+                    entry["response_body_skipped"] = f"error:{type(e).__name__}"
+                    return
+
+                if body_bytes is None:
+                    return
+                actual = len(body_bytes)
+                if entry.get("original_size") is None:
+                    entry["original_size"] = actual
+                if actual > _RESPONSE_BODY_MAX_BYTES:
+                    body_bytes = body_bytes[:_RESPONSE_BODY_MAX_BYTES]
+                    entry["body_truncated"] = True
+                # Store raw bytes; defer decoding to network.get so we don't
+                # corrupt UTF-8 multi-byte sequences at the truncation boundary.
+                entry["response_body"] = body_bytes
+            except Exception as e:
+                logger.debug(f"net response hook error: {e}")
+
+        try:
+            page.on("request", _on_request)
+            page.on("response", _on_response)
+        except Exception as e:
+            logger.warning(f"Failed to attach network hook: {e}")
+
+    def start_network_capture(self) -> dict:
+        self._network_capture_enabled = True
+        self._network_requests.clear()
+        self._network_id_counter = 0
+        # Apply hooks to all existing pages
+        ctx = self._context
+        if ctx:
+            for page in ctx.pages:
+                self._attach_network_hook(page)
+        return {"ok": True, "enabled": True}
+
+    def stop_network_capture(self) -> dict:
+        captured = len(self._network_requests)
+        self._network_capture_enabled = False
+        return {"ok": True, "enabled": False, "captured": captured}
+
+    def list_network_requests(self, url_contains: str | None = None, method: str | None = None,
+                              status: int | None = None, limit: int = 100, offset: int = 0) -> dict:
+        items = list(self._network_requests)
+        if url_contains:
+            items = [e for e in items if url_contains in (e.get("url") or "")]
+        if method:
+            mu = method.upper()
+            items = [e for e in items if (e.get("method") or "").upper() == mu]
+        if status is not None:
+            items = [e for e in items if e.get("status") == status]
+        # Strip body / internal refs from list output to keep payload small.
+        # Surface original_size + body_truncated so LLMs can decide whether
+        # network.get is worth calling.
+        slim = []
+        _hidden = ("response_body", "_started", "_req")
+        for e in items:
+            slim.append({k: v for k, v in e.items() if k not in _hidden})
+        total = len(slim)
+        slim = slim[offset: offset + max(0, limit)]
+        return {"total": total, "items": slim}
+
+    def get_network_request(self, request_id: int) -> dict | None:
+        for entry in self._network_requests:
+            if entry.get("id") == request_id:
+                out = {k: v for k, v in entry.items() if k not in ("_started", "_req")}
+                # Lazy-decode bytes here so we never corrupt UTF-8 at the
+                # 256KB truncation boundary. errors='replace' yields U+FFFD
+                # for truncated/binary payloads.
+                body = out.get("response_body")
+                if isinstance(body, (bytes, bytearray)):
+                    out["response_body"] = bytes(body).decode("utf-8", errors="replace")
+                return out
+        return None
+
+    def clear_network_requests(self) -> None:
+        self._network_requests.clear()
+
+    # ------------------------------------------------------------------
+    # Init scripts (workflow-driven; LLM-runtime authoring)
+    # ------------------------------------------------------------------
+    def _apply_init_script_to_context(self, script: str) -> None:
+        ctx = self._context
+        if ctx is None:
+            return
+        try:
+            ctx.add_init_script(script)
+        except Exception as e:
+            logger.warning(f"Failed to add init script: {e}")
+
+    def register_init_scripts(self, scripts: list) -> dict:
+        """Register a batch of init scripts (from workflow JSON).
+
+        Accepts strings or `{name, script}` dicts. Strings get auto-name `init_<n>`.
+        Idempotent on identical (name, body) — same name+body is not re-applied
+        but a different body for the same name overrides.
+        """
+        applied = []
+        for entry in scripts or []:
+            if isinstance(entry, str):
+                self._init_script_counter += 1
+                name = f"init_{self._init_script_counter}"
+                body = entry
+            elif isinstance(entry, dict) and entry.get("script"):
+                name = entry.get("name") or f"init_{self._init_script_counter + 1}"
+                if not entry.get("name"):
+                    self._init_script_counter += 1
+                body = entry["script"]
+            else:
+                continue
+            if self._init_scripts.get(name) == body:
+                applied.append(name)
+                continue
+            self._init_scripts[name] = body
+            self._apply_init_script_to_context(body)
+            applied.append(name)
+        return {"applied": applied, "total": len(self._init_scripts)}
+
+    def add_init_script(self, script: str, name: str | None = None) -> dict:
+        if not name:
+            self._init_script_counter += 1
+            name = f"init_{self._init_script_counter}"
+        self._init_scripts[name] = script
+        self._apply_init_script_to_context(script)
+        return {"name": name, "total": len(self._init_scripts)}
+
+    def list_init_scripts(self) -> list[dict]:
+        out = []
+        for name, body in self._init_scripts.items():
+            h = hashlib.sha1(body.encode("utf-8", errors="replace")).hexdigest()[:8]
+            out.append({"name": name, "length": len(body), "hash_short": h})
+        return out
+
+    def get_init_script(self, name: str) -> dict | None:
+        body = self._init_scripts.get(name)
+        if body is None:
+            return None
+        return {"name": name, "script": body, "length": len(body)}
+
+    def remove_init_script(self, name: str) -> dict:
+        existed = name in self._init_scripts
+        self._init_scripts.pop(name, None)
+        return {"removed": existed, "name": name, "total": len(self._init_scripts)}
+
+    def clear_init_scripts(self) -> dict:
+        n = len(self._init_scripts)
+        self._init_scripts.clear()
+        return {"cleared": n}
 
 
 class SessionManager:

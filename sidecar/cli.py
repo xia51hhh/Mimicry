@@ -72,6 +72,8 @@ def _start_daemon_bg():
     """Fork the daemon as a background process."""
     python = sys.executable
     sidecar_dir = os.path.dirname(os.path.abspath(__file__))
+    log_dir = os.path.join(sidecar_dir, "logs")
+    os.makedirs(log_dir, exist_ok=True)
     env = os.environ.copy()
     env["PYTHONPATH"] = sidecar_dir
     subprocess.Popen(
@@ -79,7 +81,7 @@ def _start_daemon_bg():
         cwd=sidecar_dir,
         env=env,
         stdout=subprocess.DEVNULL,
-        stderr=open(os.path.join(sidecar_dir, "daemon.log"), "a"),
+        stderr=open(os.path.join(log_dir, "daemon.log"), "a"),
         start_new_session=True,  # detach from terminal
     )
 
@@ -151,6 +153,37 @@ def _print_result(resp: dict, json_mode: bool = False):
         print(json.dumps(result, indent=2, ensure_ascii=False))
 
 
+def _print_payload(payload: dict, json_mode: bool = False, *, stream: bool = False):
+    """Print an arbitrary local payload (not a JSON-RPC response).
+
+    json_mode=True  → single JSON line (or pretty JSON when stream=False).
+    json_mode=False → human-readable lines.
+    stream=True is used for streaming events: emit one JSON object per line
+    in JSON mode, and one indented human line otherwise.
+    """
+    if json_mode:
+        if stream:
+            print(json.dumps(payload, ensure_ascii=False))
+        else:
+            print(json.dumps(payload, indent=2, ensure_ascii=False))
+        return
+
+    if isinstance(payload, dict):
+        for k, v in payload.items():
+            if isinstance(v, list):
+                print(f"  {k}: [{len(v)} items]")
+                for item in v[:10]:
+                    print(f"    - {item}")
+            elif isinstance(v, dict):
+                print(f"  {k}:")
+                for k2, v2 in v.items():
+                    print(f"    {k2}: {v2}")
+            else:
+                print(f"  {k}: {v}")
+    else:
+        print(payload)
+
+
 # ── Command implementations ─────────────────────────────────────
 
 def cmd_daemon(args):
@@ -170,7 +203,7 @@ def cmd_daemon(args):
             if check():
                 print("Daemon started")
             else:
-                print("Daemon failed to start, check daemon.log", file=sys.stderr)
+                print("Daemon failed to start, check sidecar/logs/daemon.log", file=sys.stderr)
                 sys.exit(1)
     elif sub == "stop":
         resp = _call("shutdown", timeout=5)
@@ -252,7 +285,10 @@ def cmd_run(args):
         if "method" in resp and "id" not in resp:
             method = resp["method"]
             p = resp.get("params", {})
-            if method == "workflow.progress":
+            if args.json:
+                # Stream notifications as one JSON object per line.
+                _print_payload({"event": method, "params": p}, json_mode=True, stream=True)
+            elif method == "workflow.progress":
                 print(f"  [{p.get('step', '?')}/{p.get('total', '?')}] {p.get('action', '')} ({p.get('status', '')})")
             elif method == "workflow.log":
                 level = p.get("level", "info")
@@ -311,8 +347,8 @@ def cmd_breakpoint(args):
     elif sub == "list":
         resp = _call("workflow.list_breakpoints", {"session_id": args.session})
     else:
-        print(f"Unknown breakpoint command: {sub}", file=sys.stderr)
-        return
+        _print_payload({"error": f"Unknown breakpoint command: {sub}"}, json_mode=args.json)
+        sys.exit(1)
     _print_result(resp, args.json)
 
 
@@ -322,10 +358,10 @@ def cmd_validate(args):
         with open(args.workflow, "r", encoding="utf-8") as f:
             data = json.load(f)
     except json.JSONDecodeError as e:
-        print(json.dumps({"valid": False, "errors": [f"Invalid JSON: {e}"]}))
+        _print_payload({"valid": False, "errors": [f"Invalid JSON: {e}"]}, json_mode=args.json)
         sys.exit(1)
     except FileNotFoundError:
-        print(json.dumps({"valid": False, "errors": [f"File not found: {args.workflow}"]}))
+        _print_payload({"valid": False, "errors": [f"File not found: {args.workflow}"]}, json_mode=args.json)
         sys.exit(1)
 
     errors = []
@@ -344,7 +380,7 @@ def cmd_validate(args):
             errors.append(f"Node {i}: unknown action '{action}'")
 
     result = {"valid": len(errors) == 0, "errors": errors, "node_count": len(data.get("nodes", []))}
-    print(json.dumps(result, indent=2))
+    _print_payload(result, json_mode=args.json)
     sys.exit(0 if result["valid"] else 1)
 
 
@@ -356,78 +392,84 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--session", "-s", default="default", help="Session ID")
     p.add_argument("--mcp", action="store_true", help="Start as MCP server (stdio)")
 
+    # Shared parent so each subcommand also accepts --json / --session
+    # (avoids argparse rejecting them when placed after the subcommand).
+    common = argparse.ArgumentParser(add_help=False)
+    common.add_argument("--json", action="store_true", default=argparse.SUPPRESS, help="Output as JSON")
+    common.add_argument("--session", "-s", default=argparse.SUPPRESS, help="Session ID")
+
     sub = p.add_subparsers(dest="command")
 
     # daemon
-    d = sub.add_parser("daemon", help="Manage daemon process")
+    d = sub.add_parser("daemon", parents=[common], help="Manage daemon process")
     ds = d.add_subparsers(dest="daemon_cmd")
-    start = ds.add_parser("start", help="Start daemon")
+    start = ds.add_parser("start", parents=[common], help="Start daemon")
     start.add_argument("--foreground", "-f", action="store_true")
-    ds.add_parser("stop", help="Stop daemon")
-    ds.add_parser("status", help="Daemon status")
+    ds.add_parser("stop", parents=[common], help="Stop daemon")
+    ds.add_parser("status", parents=[common], help="Daemon status")
 
     # browser
-    launch = sub.add_parser("launch", help="Launch browser")
+    launch = sub.add_parser("launch", parents=[common], help="Launch browser")
     launch.add_argument("--headless", action="store_true")
     launch.add_argument("--proxy", type=str)
 
-    sub.add_parser("close", help="Close browser")
+    sub.add_parser("close", parents=[common], help="Close browser")
 
-    nav = sub.add_parser("navigate", help="Navigate to URL")
+    nav = sub.add_parser("navigate", parents=[common], help="Navigate to URL")
     nav.add_argument("url")
 
-    click = sub.add_parser("click", help="Click element")
+    click = sub.add_parser("click", parents=[common], help="Click element")
     click.add_argument("selector")
     click.add_argument("--force", action="store_true", help="Skip actionability checks")
 
-    typ = sub.add_parser("type", help="Type text")
+    typ = sub.add_parser("type", parents=[common], help="Type text")
     typ.add_argument("selector")
     typ.add_argument("text")
     typ.add_argument("--no-humanize", action="store_true", help="Use fill() instead of keystroke simulation")
 
-    ev = sub.add_parser("eval", help="Evaluate JS")
+    ev = sub.add_parser("eval", parents=[common], help="Evaluate JS")
     ev.add_argument("expression")
 
-    ss = sub.add_parser("screenshot", help="Take screenshot")
+    ss = sub.add_parser("screenshot", parents=[common], help="Take screenshot")
     ss.add_argument("path", nargs="?", default="screenshot.png")
 
-    sc = sub.add_parser("scroll", help="Scroll page")
+    sc = sub.add_parser("scroll", parents=[common], help="Scroll page")
     sc.add_argument("direction", choices=["up", "down", "left", "right"])
     sc.add_argument("amount", nargs="?", type=int, default=300)
 
     # workflow
-    run = sub.add_parser("run", help="Execute workflow")
+    run = sub.add_parser("run", parents=[common], help="Execute workflow")
     run.add_argument("file")
     run.add_argument("--step", action="store_true", help="Start in step mode")
     run.add_argument("--break-at", nargs="*", help="Breakpoint node IDs")
     run.add_argument("--no-humanize", action="store_true")
 
-    sub.add_parser("pause", help="Pause execution")
-    sub.add_parser("resume", help="Resume execution")
-    sub.add_parser("stop", help="Stop workflow execution")
+    sub.add_parser("pause", parents=[common], help="Pause execution")
+    sub.add_parser("resume", parents=[common], help="Resume execution")
+    sub.add_parser("stop", parents=[common], help="Stop workflow execution")
 
-    step = sub.add_parser("step", help="Step N nodes")
+    step = sub.add_parser("step", parents=[common], help="Step N nodes")
     step.add_argument("count", nargs="?", type=int, default=1)
 
-    inj = sub.add_parser("inject", help="Inject block")
+    inj = sub.add_parser("inject", parents=[common], help="Inject block")
     inj.add_argument("block_json", help="Block JSON string")
 
-    sub.add_parser("state", help="Show execution state")
-    sub.add_parser("context", help="Show variables")
-    sub.add_parser("sessions", help="List sessions")
+    sub.add_parser("state", parents=[common], help="Show execution state")
+    sub.add_parser("context", parents=[common], help="Show variables")
+    sub.add_parser("sessions", parents=[common], help="List sessions")
 
     # validate (local, no daemon)
-    val = sub.add_parser("validate", help="Validate workflow JSON (local)")
+    val = sub.add_parser("validate", parents=[common], help="Validate workflow JSON (local)")
     val.add_argument("workflow")
 
     # breakpoints
-    bp = sub.add_parser("breakpoint", aliases=["bp"], help="Manage breakpoints")
+    bp = sub.add_parser("breakpoint", parents=[common], aliases=["bp"], help="Manage breakpoints")
     bps = bp.add_subparsers(dest="bp_cmd")
-    bp_add = bps.add_parser("add", help="Add breakpoint")
+    bp_add = bps.add_parser("add", parents=[common], help="Add breakpoint")
     bp_add.add_argument("node_id")
-    bp_rm = bps.add_parser("rm", help="Remove breakpoint")
+    bp_rm = bps.add_parser("rm", parents=[common], help="Remove breakpoint")
     bp_rm.add_argument("node_id")
-    bps.add_parser("list", help="List breakpoints")
+    bps.add_parser("list", parents=[common], help="List breakpoints")
 
     return p
 
@@ -459,14 +501,7 @@ _CMD_MAP = {
 
 def main():
     parser = build_parser()
-    args, unknown = parser.parse_known_args()
-
-    # Handle --json appearing after subcommand
-    if "--json" in unknown:
-        args.json = True
-        unknown.remove("--json")
-    if unknown:
-        parser.error(f"unrecognized arguments: {' '.join(unknown)}")
+    args = parser.parse_args()
 
     if args.mcp:
         from mcp_server import run_mcp

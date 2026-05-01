@@ -1,0 +1,8 @@
+{
+  "id": "04-27-browser-config",
+  "title": "浏览器配置系统 — Profile级参数暴露",
+  "status": "completed",
+  "createdAt": "2026-04-27",
+  "completedAt": "2026-05-01",
+  "description": "在Profile编辑对话框中暴露Camoufox全量参数，允许用户自定义反检测配置"
+}

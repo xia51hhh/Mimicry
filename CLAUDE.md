@@ -81,3 +81,5 @@ When work spans layers, read these first:
 ## Trellis workflow
 
 This repo uses the Trellis task system. The active task is tracked in `.trellis/.current-task` and surfaced via the SessionStart hook. Tasks live under `.trellis/tasks/{MM-DD-name}/` with `prd.md`, `implement.jsonl`, `check.jsonl`. The standard flow per task is `trellis-implement → trellis-check → trellis-update-spec → finish`. See `.trellis/workflow.md` and `AGENTS.md` for the full protocol — including when to dispatch sub-agents instead of editing in the main session.
+
+For multi-terminal isolated parallel development, use `task.py worktree create <slug>` to spin up an isolated worktree per task. See `docs/parallel-agents.md` for the short howto.

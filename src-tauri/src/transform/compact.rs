@@ -1,5 +1,5 @@
 use super::action_map::{is_snake_case_action, to_frontend};
-use super::layout::{auto_layout, LayoutConfig};
+use super::layout::{BranchAwareLayout, EdgeDef, LayoutConfig};
 use super::types::*;
 
 /// Infer NodeKind from action name
@@ -36,34 +36,37 @@ fn normalize_action(action: &str) -> String {
 /// - kind inference from action name
 /// - id generation (uuid)
 /// - note → settings.note
-/// - auto-layout for positions
-/// - auto-generate edges from array order + nesting
+/// - Flatten condition/loop children as top-level nodes
+/// - auto-layout for positions (branch-aware)
+/// - auto-generate edges from array order + branching with handles
 /// - snake_case action → PascalCase normalization
+/// - Keep data.children embedded for execution compatibility
 pub fn compact_to_canonical(
     compact: &CompactWorkflow,
 ) -> Result<CanonicalWorkflow, TransformError> {
     let config = LayoutConfig::default();
 
-    // First pass: convert nodes and collect for layout
+    // Convert nodes: flatten all (including nested children) into top-level
     let mut canonical_nodes = Vec::new();
-    let mut edge_pairs: Vec<(String, String)> = Vec::new();
+    let mut edge_defs: Vec<EdgeDef> = Vec::new();
 
-    convert_compact_nodes(&compact.nodes, &mut canonical_nodes, &mut edge_pairs)?;
+    convert_compact_nodes_flat(&compact.nodes, &mut canonical_nodes, &mut edge_defs, None)?;
 
-    // Apply auto-layout
-    let positions = auto_layout(&canonical_nodes, &config);
+    // Apply branch-aware layout
+    let mut layout_engine = BranchAwareLayout::new(config);
+    let positions = layout_engine.compute(&canonical_nodes, &edge_defs);
     for (node, pos) in canonical_nodes.iter_mut().zip(positions.iter()) {
         node.position = pos.clone();
     }
 
-    // Generate edges from sequential pairs + nesting
-    let edges = edge_pairs
+    // Generate edges from edge_defs
+    let edges = edge_defs
         .iter()
-        .map(|(src, tgt)| CanonicalEdge {
-            id: format!("edge_{src}__{tgt}"),
-            source: src.clone(),
-            target: tgt.clone(),
-            source_handle: None,
+        .map(|e| CanonicalEdge {
+            id: format!("edge_{}__{}", e.source, e.target),
+            source: e.source.clone(),
+            target: e.target.clone(),
+            source_handle: e.source_handle.clone(),
             target_handle: None,
             label: None,
             extra: Default::default(),
@@ -80,14 +83,19 @@ pub fn compact_to_canonical(
     })
 }
 
-fn convert_compact_nodes(
+/// Recursively convert compact nodes, flattening children into the top-level list.
+///
+/// `parent_edge` — if provided, generate an edge from parent → first node in this sequence.
+fn convert_compact_nodes_flat(
     compact_nodes: &[CompactNode],
     out_nodes: &mut Vec<CanonicalNode>,
-    out_edges: &mut Vec<(String, String)>,
-) -> Result<(), TransformError> {
+    out_edges: &mut Vec<EdgeDef>,
+    parent_edge: Option<(&str, Option<&str>)>, // (parent_id, source_handle)
+) -> Result<Option<String>, TransformError> {
+    // Returns the ID of the last node in this sequence (for chaining)
     let mut prev_id: Option<String> = None;
 
-    for cn in compact_nodes {
+    for (i, cn) in compact_nodes.iter().enumerate() {
         let id = cn
             .id
             .clone()
@@ -108,18 +116,149 @@ fn convert_compact_nodes(
             Some(s)
         };
 
-        // Build data, embedding children/elseChildren for canonical storage
+        // Build data — embed children/elseChildren for execution compatibility
         let mut data = if cn.data.is_object() {
             cn.data.clone()
         } else {
             serde_json::Value::Object(Default::default())
         };
 
-        // Recursively convert children
+        // Embed children in data for execution (before we push this node)
+        if let Some(ref children) = cn.children {
+            let mut embedded_nodes = Vec::new();
+            let mut _embedded_edges = Vec::new();
+            convert_compact_nodes_embedded(children, &mut embedded_nodes, &mut _embedded_edges)?;
+            let children_val: Vec<serde_json::Value> = embedded_nodes
+                .iter()
+                .map(|n| serde_json::to_value(n).unwrap())
+                .collect();
+            data.as_object_mut().unwrap().insert(
+                "children".to_string(),
+                serde_json::Value::Array(children_val),
+            );
+        }
+
+        if let Some(ref else_children) = cn.else_children {
+            let mut embedded_nodes = Vec::new();
+            let mut _embedded_edges = Vec::new();
+            convert_compact_nodes_embedded(
+                else_children,
+                &mut embedded_nodes,
+                &mut _embedded_edges,
+            )?;
+            let children_val: Vec<serde_json::Value> = embedded_nodes
+                .iter()
+                .map(|n| serde_json::to_value(n).unwrap())
+                .collect();
+            data.as_object_mut().unwrap().insert(
+                "elseChildren".to_string(),
+                serde_json::Value::Array(children_val),
+            );
+        }
+
+        let node = CanonicalNode {
+            id: id.clone(),
+            kind: inferred_kind.clone(),
+            action: canonical_action,
+            position: Position { x: 0.0, y: 0.0 }, // filled by layout
+            data,
+            settings,
+            runtime: Some(NodeRuntime::default()),
+            selected: None,
+        };
+
+        // Edge from parent (for first node in a branch)
+        if i == 0 {
+            if let Some((parent_id, handle)) = parent_edge {
+                out_edges.push(EdgeDef {
+                    source: parent_id.to_string(),
+                    target: id.clone(),
+                    source_handle: handle.map(String::from),
+                });
+            }
+        }
+
+        // Edge from previous sibling
+        if let Some(ref prev) = prev_id {
+            out_edges.push(EdgeDef {
+                source: prev.clone(),
+                target: id.clone(),
+                source_handle: None,
+            });
+        }
+
+        prev_id = Some(id.clone());
+
+        // Push this node FIRST, then flatten children after it
+        out_nodes.push(node);
+
+        // Now flatten children as top-level nodes (after the parent)
+        if let Some(ref children) = cn.children {
+            let handle = match inferred_kind {
+                NodeKind::Condition => Some("true"),
+                NodeKind::Loop => Some("body"),
+                _ => None,
+            };
+            convert_compact_nodes_flat(
+                children,
+                out_nodes,
+                out_edges,
+                Some((&id, handle)),
+            )?;
+        }
+
+        if let Some(ref else_children) = cn.else_children {
+            convert_compact_nodes_flat(
+                else_children,
+                out_nodes,
+                out_edges,
+                Some((&id, Some("false"))),
+            )?;
+        }
+    }
+
+    Ok(prev_id)
+}
+
+/// Convert compact nodes to canonical for embedding in data.children (execution only).
+/// Does NOT flatten to top-level — preserves nesting.
+fn convert_compact_nodes_embedded(
+    compact_nodes: &[CompactNode],
+    out_nodes: &mut Vec<CanonicalNode>,
+    out_edges: &mut Vec<(String, String)>,
+) -> Result<(), TransformError> {
+    let mut prev_id: Option<String> = None;
+
+    for cn in compact_nodes {
+        let id = cn
+            .id
+            .clone()
+            .unwrap_or_else(|| format!("node_{}", uuid::Uuid::new_v4().simple()));
+
+        let (inferred_kind, canonical_action) = if let Some(ref k) = cn.kind {
+            (k.clone(), Some(normalize_action(&cn.action)))
+        } else {
+            infer_kind(&cn.action)
+        };
+
+        let settings = {
+            let mut s = cn.settings.clone().unwrap_or_default();
+            if let Some(ref note) = cn.note {
+                s.note = Some(note.clone());
+            }
+            Some(s)
+        };
+
+        let mut data = if cn.data.is_object() {
+            cn.data.clone()
+        } else {
+            serde_json::Value::Object(Default::default())
+        };
+
         if let Some(ref children) = cn.children {
             let mut child_nodes = Vec::new();
-            let mut _child_edges = Vec::new();
-            convert_compact_nodes(children, &mut child_nodes, &mut _child_edges)?;
+            let mut child_edges = Vec::new();
+            convert_compact_nodes_embedded(children, &mut child_nodes, &mut child_edges)?;
             let children_val: Vec<serde_json::Value> = child_nodes
                 .iter()
                 .map(|n| serde_json::to_value(n).unwrap())
@@ -132,8 +271,8 @@ fn convert_compact_nodes(
 
         if let Some(ref else_children) = cn.else_children {
             let mut child_nodes = Vec::new();
-            let mut _child_edges = Vec::new();
-            convert_compact_nodes(else_children, &mut child_nodes, &mut _child_edges)?;
+            let mut child_edges = Vec::new();
+            convert_compact_nodes_embedded(else_children, &mut child_nodes, &mut child_edges)?;
             let children_val: Vec<serde_json::Value> = child_nodes
                 .iter()
                 .map(|n| serde_json::to_value(n).unwrap())
@@ -148,14 +287,13 @@ fn convert_compact_nodes(
             id: id.clone(),
             kind: inferred_kind,
             action: canonical_action,
-            position: Position { x: 0.0, y: 0.0 }, // placeholder, filled by auto_layout
+            position: Position { x: 0.0, y: 0.0 },
             data,
             settings,
             runtime: Some(NodeRuntime::default()),
             selected: None,
         };
 
-        // Edge from previous node
         if let Some(ref prev) = prev_id {
             out_edges.push((prev.clone(), id.clone()));
         }
@@ -367,10 +505,23 @@ mod tests {
         };
 
         let canonical = compact_to_canonical(&compact).unwrap();
+        // Condition node + flattened child = 2 top-level nodes
+        assert_eq!(canonical.nodes.len(), 2);
         assert_eq!(canonical.nodes[0].kind, NodeKind::Condition);
         assert!(canonical.nodes[0].action.is_none()); // pseudo-action stripped
-                                                      // children should be in data
+        // children still embedded in data for execution
         assert!(canonical.nodes[0].data.get("children").is_some());
+        // Flattened child is a top-level action node
+        assert_eq!(canonical.nodes[1].kind, NodeKind::Action);
+        assert_eq!(canonical.nodes[1].action.as_deref(), Some("Click"));
+        // Edge from condition → child with "true" handle
+        assert!(canonical.edges.iter().any(|e| {
+            e.source == canonical.nodes[0].id
+                && e.target == canonical.nodes[1].id
+                && e.source_handle.as_deref() == Some("true")
+        }));
+        // Child position should be offset from condition (branch-aware layout)
+        assert_ne!(canonical.nodes[0].position.x, canonical.nodes[1].position.x);
     }
 
     #[test]
