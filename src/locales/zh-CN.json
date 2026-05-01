@@ -175,7 +175,10 @@
     "installing": "安装中...",
     "humanize": "拟人",
     "humanizeTooltip": "启用/关闭动作间随机延迟和拟人化输入",
-    "delayMultiplier": "延迟倍率"
+    "delayMultiplier": "延迟倍率",
+    "pause": "暂停",
+    "resume": "继续",
+    "step": "单步执行"
   },
   "shortcut": {
     "undo": "撤销",

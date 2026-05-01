@@ -175,7 +175,10 @@
     "installing": "Installing...",
     "humanize": "Humanize",
     "humanizeTooltip": "Toggle random delays and humanized input between actions",
-    "delayMultiplier": "Delay multiplier"
+    "delayMultiplier": "Delay multiplier",
+    "pause": "Pause",
+    "resume": "Resume",
+    "step": "Step Forward"
   },
   "shortcut": {
     "undo": "Undo",
