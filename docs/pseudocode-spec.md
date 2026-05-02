@@ -1,5 +1,11 @@
 # Mimicry Pseudocode DSL v1
 
+> **状态**: 已弃用（Deprecated） | **最后更新**: 2026-05-02
+>
+> ⚠️ **此 DSL 已被 [ADR-001 JSON 节点图直驱](design/decisions.md#adr-001-block-底层格式--json-节点图直驱)** 取代。当前工作流采用 canonical JSON 节点图（`{kind, action, data, settings}`）直接执行，不再经过 DSL 编译。`sidecar/dsl/` 模块仍保留作为历史参考，但 **不再扩展**。
+>
+> 本文档保留作为历史快照。最新工作流契约见 [block-api.md](block-api.md) 与 [block-system.md](design/block-system.md)。
+
 ## Overview
 A human-readable, AI-parseable workflow description language for browser automation.
 
