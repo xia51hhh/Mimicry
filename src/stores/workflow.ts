@@ -132,8 +132,16 @@ export const useWorkflowStore = defineStore('workflow', () => {
   }
 
   function importRecordedNodes(recordedNodes: RecordedNode[]) {
+    const nodesPerRow = 5;
+    const nodeWidth = 220;
+    const nodeHeight = 80;
+    const gapX = 60;
+    const gapY = 100;
+
+    // Start below existing nodes
+    const startX = 50;
     const startY =
-      nodes.value.length > 0 ? Math.max(...nodes.value.map((n) => n.position.y)) + 100 : 50;
+      nodes.value.length > 0 ? Math.max(...nodes.value.map((n) => n.position.y)) + 150 : 50;
 
     const newNodes: Node[] = [];
     const newEdges: Edge[] = [];
@@ -144,10 +152,20 @@ export const useWorkflowStore = defineStore('workflow', () => {
       const nodeId = `rec_${Date.now()}_${i}`;
       const nodeType =
         rn.kind === 'condition' ? 'condition' : rn.kind === 'loop' ? 'loop' : 'action';
+
+      // Serpentine layout: odd rows L→R, even rows R→L
+      const row = Math.floor(i / nodesPerRow);
+      const col = i % nodesPerRow;
+      const isReversed = row % 2 === 1;
+      const effectiveCol = isReversed ? (nodesPerRow - 1 - col) : col;
+
+      const x = startX + effectiveCol * (nodeWidth + gapX);
+      const y = startY + row * (nodeHeight + gapY);
+
       newNodes.push({
         id: nodeId,
         type: nodeType,
-        position: { x: 300, y: startY + i * 80 },
+        position: { x, y },
         data: { action: toFrontend(rn.action), ...rn.data },
       });
       if (prevId) {
@@ -162,8 +180,6 @@ export const useWorkflowStore = defineStore('workflow', () => {
 
     nodes.value = [...nodes.value, ...newNodes];
     edges.value = [...edges.value, ...newEdges];
-    // Auto-layout after import for proper arrangement
-    autoLayout('LR');
   }
 
   function toJSON() {
