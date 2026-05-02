@@ -135,6 +135,7 @@
     { value: 'stop', label: t('errorOptions.stop') },
     { value: 'continue', label: t('errorOptions.continue') },
     { value: 'retry', label: t('errorOptions.retry') },
+    { value: 'fallback', label: t('errorOptions.fallback') },
   ];
 
   const sessionOptions = computed(() =>

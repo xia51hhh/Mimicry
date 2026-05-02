@@ -1,6 +1,6 @@
 <script setup lang="ts">
   import { ref, computed, onMounted, onUnmounted } from 'vue';
-  import { VueFlow, useVueFlow } from '@vue-flow/core';
+  import { VueFlow, useVueFlow, type GraphNode } from '@vue-flow/core';
   import { Background } from '@vue-flow/background';
   import { MiniMap } from '@vue-flow/minimap';
   import '@vue-flow/core/dist/style.css';
@@ -26,6 +26,7 @@
   const store = useWorkflowStore();
   const browser = useBrowserStore();
   const execution = useExecutionStore();
+  const vueFlow = useVueFlow();
   const {
     onConnect,
     onConnectEnd,
@@ -37,7 +38,7 @@
     onPaneContextMenu,
     project,
     fitView,
-  } = useVueFlow();
+  } = vueFlow;
 
   useKeyboardShortcuts();
 
@@ -132,9 +133,8 @@
       y: mouseEvent.clientY - bounds.top,
     });
 
-    // Find which node was the source of the connection
-    const connectingEl = document.querySelector('.vue-flow__connection');
-    const sourceNodeId = connectingEl?.getAttribute('data-source');
+    // Find which node was the source of the connection (via Vue Flow state)
+    const sourceNodeId = vueFlow.connectionStartHandle.value?.nodeId;
     if (!sourceNodeId) return;
 
     // Create a new action node at drop position
@@ -287,14 +287,14 @@
   }
 
   function groupSelectedNodes() {
-    const selected = store.nodes.filter((n) => (n as unknown as Record<string, unknown>).selected && n.type !== 'group');
+    const selected = store.nodes.filter((n) => (n as GraphNode).selected && n.type !== 'group');
     if (selected.length < 2) return;
 
     const padding = 30;
     const minX = Math.min(...selected.map((n) => n.position.x)) - padding;
     const minY = Math.min(...selected.map((n) => n.position.y)) - padding;
-    const maxX = Math.max(...selected.map((n) => n.position.x + (Number((n as unknown as Record<string, unknown>).width) || 150))) + padding;
-    const maxY = Math.max(...selected.map((n) => n.position.y + (Number((n as unknown as Record<string, unknown>).height) || 50))) + padding;
+    const maxX = Math.max(...selected.map((n) => n.position.x + ((n as GraphNode).dimensions?.width || 150))) + padding;
+    const maxY = Math.max(...selected.map((n) => n.position.y + ((n as GraphNode).dimensions?.height || 50))) + padding;
 
     store.addNode(
       'group',

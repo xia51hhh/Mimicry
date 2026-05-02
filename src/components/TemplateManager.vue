@@ -3,12 +3,13 @@
   import { useI18n } from 'vue-i18n';
   import { useTemplateStore, type Template } from '../stores/templates';
   import { useWorkflowStore } from '../stores/workflow';
-  import { Plus, Trash2, Download, Upload, FileText, Search } from 'lucide-vue-next';
+  import { Plus, Trash2, Download, Upload, FileText, Search, AlertTriangle } from 'lucide-vue-next';
 
   const { t } = useI18n();
   const store = useTemplateStore();
   const workflow = useWorkflowStore();
   const importError = ref('');
+  const importWarning = ref('');
 
   const searchQuery = ref('');
   const showSaveDialog = ref(false);
@@ -93,6 +94,7 @@
 
   async function importTemplate() {
     importError.value = '';
+    importWarning.value = '';
     const input = document.createElement('input');
     input.type = 'file';
     input.accept = '.json';
@@ -125,6 +127,13 @@
           Array.isArray(data.edges) ? data.edges : [],
           Array.isArray(data.tags) ? data.tags : [],
         );
+        const riskyActions = ['RunScript', 'HttpRequest'];
+        const found = data.nodes
+          .filter((n: { action?: string }) => n.action && riskyActions.includes(n.action))
+          .map((n: { action: string }) => n.action);
+        if (found.length > 0) {
+          importWarning.value = t('templates.securityWarning', { actions: [...new Set(found)].join(', ') });
+        }
       } catch {
         importError.value = t('templates.invalidFormat');
       }
@@ -159,6 +168,11 @@
 
     <div v-if="importError" class="import-error" @click="importError = ''">
       {{ importError }}
+    </div>
+
+    <div v-if="importWarning" class="import-warning" @click="importWarning = ''">
+      <AlertTriangle :size="14" :stroke-width="2" />
+      {{ importWarning }}
     </div>
 
     <div class="template-list">
@@ -272,6 +286,17 @@
     color: var(--color-error);
     background: color-mix(in srgb, var(--color-error) 10%, transparent);
     cursor: pointer;
+  }
+
+  .import-warning {
+    padding: 6px 12px;
+    font-size: 11px;
+    color: var(--color-warning, #e5a800);
+    background: color-mix(in srgb, var(--color-warning, #e5a800) 10%, transparent);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 4px;
   }
 
   .search-icon {

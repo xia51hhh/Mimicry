@@ -154,7 +154,8 @@
   "errorOptions": {
     "stop": "停止执行",
     "continue": "继续下一步",
-    "retry": "重试"
+    "retry": "重试",
+    "fallback": "回退"
   },
   "toolbar": {
     "launchBrowser": "启动浏览器",
@@ -463,6 +464,7 @@
     "description": "描述",
     "category": "分类",
     "confirmDelete": "确定要删除此模板吗？",
-    "invalidFormat": "模板文件格式无效"
+    "invalidFormat": "模板文件格式无效",
+    "securityWarning": "该模板包含潜在风险操作: {actions}，使用前请检查内容。"
   }
 }
