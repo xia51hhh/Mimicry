@@ -390,6 +390,37 @@ export const useBrowserStore = defineStore('browser', () => {
     }
   }
 
+  const recordingPaused = ref(false);
+
+  async function pauseRecording(sessionId?: string) {
+    const sid = sessionId ?? activeSessionId.value;
+    try {
+      await invoke('recording_pause', { sessionId: sid });
+      recordingPaused.value = true;
+    } catch (e) {
+      console.error('Failed to pause recording:', e);
+    }
+  }
+
+  async function resumeRecording(sessionId?: string) {
+    const sid = sessionId ?? activeSessionId.value;
+    try {
+      await invoke('recording_resume', { sessionId: sid });
+      recordingPaused.value = false;
+    } catch (e) {
+      console.error('Failed to resume recording:', e);
+    }
+  }
+
+  async function setRecordingFilter(eventTypes: string[] | null, sessionId?: string) {
+    const sid = sessionId ?? activeSessionId.value;
+    try {
+      await invoke('recording_set_filter', { sessionId: sid, eventTypes });
+    } catch (e) {
+      console.error('Failed to set recording filter:', e);
+    }
+  }
+
   async function navigate(url: string, sessionId?: string) {
     const sid = sessionId ?? activeSessionId.value;
     try {
@@ -532,6 +563,10 @@ export const useBrowserStore = defineStore('browser', () => {
     startRecording,
     stopRecording,
     pollRecording,
+    pauseRecording,
+    resumeRecording,
+    setRecordingFilter,
+    recordingPaused,
     startRecordingPreview,
     stopRecordingPreview,
     installBrowser,

@@ -540,8 +540,49 @@ def recording_poll(session_id: str = "default"):
 )
 def recording_status(session_id: str = "default"):
     if session_id in _recorders:
-        return {"recording": _recorders[session_id].is_recording}
-    return {"recording": False}
+        rec = _recorders[session_id]
+        return {"recording": rec.is_recording, "paused": rec.is_paused}
+    return {"recording": False, "paused": False}
+
+
+@rpc_method(
+    "recording.pause",
+    description="Pause recording — browser events are discarded until resumed.",
+    param_descriptions={
+        "session_id": "Browser session ID whose recorder to pause. Defaults to 'default'.",
+    },
+)
+def recording_pause(session_id: str = "default"):
+    recorder = _get_recorder(session_id)
+    recorder.pause()
+    return {"recording": True, "paused": True}
+
+
+@rpc_method(
+    "recording.resume",
+    description="Resume a paused recording.",
+    param_descriptions={
+        "session_id": "Browser session ID whose recorder to resume. Defaults to 'default'.",
+    },
+)
+def recording_resume(session_id: str = "default"):
+    recorder = _get_recorder(session_id)
+    recorder.resume()
+    return {"recording": True, "paused": False}
+
+
+@rpc_method(
+    "recording.set_filter",
+    description="Set event type filter for recording. Pass null to capture all events.",
+    param_descriptions={
+        "session_id": "Browser session ID. Defaults to 'default'.",
+        "event_types": "List of event types to capture (e.g. ['click', 'type', 'scroll']). null for all.",
+    },
+)
+def recording_set_filter(session_id: str = "default", event_types: list | None = None):
+    recorder = _get_recorder(session_id)
+    recorder.set_event_filter(event_types)
+    return {"filter": list(recorder._event_filter) if recorder._event_filter else None}
 
 
 @rpc_method(

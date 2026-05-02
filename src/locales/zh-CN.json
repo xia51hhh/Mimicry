@@ -6,6 +6,7 @@
   "activity": {
     "workflow": "工作流",
     "browser": "浏览器",
+    "packages": "模板",
     "data": "数据",
     "schedule": "定时",
     "settings": "设置"
@@ -236,7 +237,20 @@
     "editor": "编辑器",
     "general": "常规",
     "browser": "浏览器引擎",
-    "about": "关于"
+    "about": "关于",
+    "execution": "执行",
+    "humanize": "拟人行为",
+    "humanizeDesc": "在操作间添加随机延迟以模拟人类行为",
+    "delayMultiplier": "延迟倍率",
+    "defaultTimeout": "默认超时",
+    "proxy": "代理",
+    "proxyEnabled": "启用代理",
+    "proxyServer": "代理服务器",
+    "proxyPlaceholder": "http://host:port 或 socks5://host:port",
+    "proxyBypass": "绕过列表",
+    "proxyBypassPlaceholder": "localhost,127.0.0.1",
+    "shortcuts": "快捷键",
+    "commandPalette": "命令面板"
   },
   "execution": {
     "startWorkflow": "开始执行工作流",
@@ -422,5 +436,31 @@
     "running": "执行中",
     "success": "成功",
     "error": "错误"
+  },
+  "blockCategory": {
+    "interaction": "交互",
+    "navigation": "导航",
+    "data": "数据",
+    "control": "控制",
+    "flow": "流程"
+  },
+  "blockPalette": {
+    "search": "搜索节点..."
+  },
+  "commandPalette": {
+    "placeholder": "搜索要添加的节点...",
+    "noResults": "没有匹配的节点"
+  },
+  "templates": {
+    "title": "模板",
+    "search": "搜索模板...",
+    "empty": "暂无模板。将工作流保存为模板开始使用。",
+    "saveAsCurrent": "将当前工作流保存为模板",
+    "import": "导入模板",
+    "export": "导出",
+    "name": "名称",
+    "description": "描述",
+    "category": "分类",
+    "confirmDelete": "确定要删除此模板吗？"
   }
 }

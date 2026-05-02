@@ -53,6 +53,46 @@ export const useSettingsStore = defineStore('settings', () => {
   // Apply on init
   applyTheme();
 
+  // Execution defaults
+  const humanize = ref(localStorage.getItem('mimicry-humanize') !== 'false');
+  const delayMultiplier = ref(parseFloat(localStorage.getItem('mimicry-delay-multiplier') || '1.0'));
+  const defaultTimeout = ref(parseInt(localStorage.getItem('mimicry-default-timeout') || '30000'));
+
+  function setHumanize(v: boolean) {
+    humanize.value = v;
+    localStorage.setItem('mimicry-humanize', String(v));
+  }
+
+  function setDelayMultiplier(v: number) {
+    delayMultiplier.value = Math.max(0, v);
+    localStorage.setItem('mimicry-delay-multiplier', String(delayMultiplier.value));
+  }
+
+  function setDefaultTimeout(v: number) {
+    defaultTimeout.value = Math.max(0, v);
+    localStorage.setItem('mimicry-default-timeout', String(defaultTimeout.value));
+  }
+
+  // Proxy settings
+  const proxyEnabled = ref(localStorage.getItem('mimicry-proxy-enabled') === 'true');
+  const proxyServer = ref(localStorage.getItem('mimicry-proxy-server') || '');
+  const proxyBypass = ref(localStorage.getItem('mimicry-proxy-bypass') || '');
+
+  function setProxyEnabled(v: boolean) {
+    proxyEnabled.value = v;
+    localStorage.setItem('mimicry-proxy-enabled', String(v));
+  }
+
+  function setProxyServer(v: string) {
+    proxyServer.value = v;
+    localStorage.setItem('mimicry-proxy-server', v);
+  }
+
+  function setProxyBypass(v: string) {
+    proxyBypass.value = v;
+    localStorage.setItem('mimicry-proxy-bypass', v);
+  }
+
   return {
     themeId,
     locale,
@@ -64,5 +104,19 @@ export const useSettingsStore = defineStore('settings', () => {
     setLocale,
     setAccentColor,
     applyTheme,
+    // Execution
+    humanize,
+    delayMultiplier,
+    defaultTimeout,
+    setHumanize,
+    setDelayMultiplier,
+    setDefaultTimeout,
+    // Proxy
+    proxyEnabled,
+    proxyServer,
+    proxyBypass,
+    setProxyEnabled,
+    setProxyServer,
+    setProxyBypass,
   };
 });

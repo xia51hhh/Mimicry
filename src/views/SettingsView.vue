@@ -13,6 +13,11 @@
     Download,
     RefreshCw,
     Info,
+    Zap,
+    Shield,
+    Clock,
+    Activity,
+    Timer,
   } from 'lucide-vue-next';
   import CamoufoxSetup from '../components/CamoufoxSetup.vue';
 
@@ -57,6 +62,22 @@
     browser.checkCamoufox();
     appVersion.value = await getVersion();
   });
+
+  const shortcuts = [
+    { key: 'Ctrl+Z', label: t('shortcut.undo') },
+    { key: 'Ctrl+Y', label: t('shortcut.redo') },
+    { key: 'Ctrl+S', label: t('shortcut.save') },
+    { key: 'Ctrl+B', label: t('shortcut.toggleSidebar') },
+    { key: 'Ctrl+J', label: t('shortcut.toggleBottom') },
+    { key: 'Ctrl+Alt+B', label: t('shortcut.toggleRight') },
+    { key: 'Delete', label: t('shortcut.deleteNode') },
+    { key: 'F9', label: t('shortcut.toggleBreakpoint') },
+    { key: 'Ctrl+G', label: t('shortcut.groupNodes') },
+    { key: '/', label: t('settings.commandPalette') },
+    { key: 'F5', label: t('toolbar.resume') },
+    { key: 'F6', label: t('toolbar.pause') },
+    { key: 'F10', label: t('toolbar.step') },
+  ];
 </script>
 
 <template>
@@ -194,6 +215,140 @@
               {{ t('camoufox.updateAvailable', { version: browser.camoufoxLatestVersion }) }}
             </span>
           </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Execution -->
+    <section class="settings-section">
+      <h2 class="section-title">{{ t('settings.execution') }}</h2>
+
+      <!-- Humanize -->
+      <div class="setting-row">
+        <div class="setting-info">
+          <Activity :size="16" class="setting-icon" />
+          <div>
+            <span class="setting-label">{{ t('settings.humanize') }}</span>
+            <p class="setting-desc">{{ t('settings.humanizeDesc') }}</p>
+          </div>
+        </div>
+        <div class="setting-control">
+          <label class="toggle-switch">
+            <input
+              type="checkbox"
+              :checked="settings.humanize"
+              @change="settings.setHumanize(($event.target as HTMLInputElement).checked)"
+            />
+            <span class="toggle-slider" />
+          </label>
+        </div>
+      </div>
+
+      <!-- Delay Multiplier -->
+      <div class="setting-row">
+        <div class="setting-info">
+          <Timer :size="16" class="setting-icon" />
+          <span class="setting-label">{{ t('settings.delayMultiplier') }}</span>
+        </div>
+        <div class="setting-control">
+          <input
+            type="number"
+            class="setting-number"
+            :value="settings.delayMultiplier"
+            min="0"
+            max="10"
+            step="0.1"
+            @change="settings.setDelayMultiplier(parseFloat(($event.target as HTMLInputElement).value))"
+          />
+        </div>
+      </div>
+
+      <!-- Default Timeout -->
+      <div class="setting-row">
+        <div class="setting-info">
+          <Clock :size="16" class="setting-icon" />
+          <span class="setting-label">{{ t('settings.defaultTimeout') }}</span>
+        </div>
+        <div class="setting-control">
+          <input
+            type="number"
+            class="setting-number"
+            :value="settings.defaultTimeout"
+            min="0"
+            step="1000"
+            @change="settings.setDefaultTimeout(parseInt(($event.target as HTMLInputElement).value))"
+          />
+          <span class="setting-unit">ms</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Proxy -->
+    <section class="settings-section">
+      <h2 class="section-title">{{ t('settings.proxy') }}</h2>
+
+      <!-- Proxy Enable -->
+      <div class="setting-row">
+        <div class="setting-info">
+          <Shield :size="16" class="setting-icon" />
+          <span class="setting-label">{{ t('settings.proxyEnabled') }}</span>
+        </div>
+        <div class="setting-control">
+          <label class="toggle-switch">
+            <input
+              type="checkbox"
+              :checked="settings.proxyEnabled"
+              @change="settings.setProxyEnabled(($event.target as HTMLInputElement).checked)"
+            />
+            <span class="toggle-slider" />
+          </label>
+        </div>
+      </div>
+
+      <!-- Proxy Server -->
+      <div class="setting-row">
+        <div class="setting-info">
+          <Globe :size="16" class="setting-icon" />
+          <span class="setting-label">{{ t('settings.proxyServer') }}</span>
+        </div>
+        <div class="setting-control">
+          <input
+            type="text"
+            class="setting-text"
+            :value="settings.proxyServer"
+            :placeholder="t('settings.proxyPlaceholder')"
+            :disabled="!settings.proxyEnabled"
+            @change="settings.setProxyServer(($event.target as HTMLInputElement).value)"
+          />
+        </div>
+      </div>
+
+      <!-- Proxy Bypass -->
+      <div class="setting-row">
+        <div class="setting-info">
+          <Zap :size="16" class="setting-icon" />
+          <span class="setting-label">{{ t('settings.proxyBypass') }}</span>
+        </div>
+        <div class="setting-control">
+          <input
+            type="text"
+            class="setting-text"
+            :value="settings.proxyBypass"
+            :placeholder="t('settings.proxyBypassPlaceholder')"
+            :disabled="!settings.proxyEnabled"
+            @change="settings.setProxyBypass(($event.target as HTMLInputElement).value)"
+          />
+        </div>
+      </div>
+    </section>
+
+    <!-- Keyboard Shortcuts -->
+    <section class="settings-section">
+      <h2 class="section-title">{{ t('settings.shortcuts') }}</h2>
+      <div class="shortcuts-list">
+        <div class="shortcut-row" v-for="sc in shortcuts" :key="sc.key">
+          <span class="shortcut-action">{{ sc.label }}</span>
+          <kbd class="shortcut-key">{{ sc.key }}</kbd>
         </div>
       </div>
     </section>
@@ -509,6 +664,123 @@
     font-size: 12px;
     color: var(--color-text-muted);
     margin-left: 8px;
+  }
+
+  .setting-desc {
+    font-size: 11px;
+    color: var(--color-text-muted);
+    margin-top: 2px;
+  }
+
+  .setting-number {
+    width: 80px;
+    padding: 4px 8px;
+    font-size: 13px;
+    background: var(--color-bg);
+    color: var(--color-text);
+    border: 1px solid var(--color-border);
+    border-radius: 4px;
+    outline: none;
+    text-align: right;
+  }
+
+  .setting-number:focus {
+    border-color: var(--color-primary);
+  }
+
+  .setting-unit {
+    font-size: 12px;
+    color: var(--color-text-muted);
+    margin-left: 4px;
+  }
+
+  .setting-text {
+    width: 220px;
+    padding: 4px 8px;
+    font-size: 13px;
+    background: var(--color-bg);
+    color: var(--color-text);
+    border: 1px solid var(--color-border);
+    border-radius: 4px;
+    outline: none;
+  }
+
+  .setting-text:focus {
+    border-color: var(--color-primary);
+  }
+
+  .setting-text:disabled {
+    opacity: 0.5;
+  }
+
+  .toggle-switch {
+    position: relative;
+    display: inline-block;
+    width: 36px;
+    height: 20px;
+  }
+
+  .toggle-switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+  }
+
+  .toggle-slider {
+    position: absolute;
+    cursor: pointer;
+    inset: 0;
+    background: var(--color-border);
+    border-radius: 10px;
+    transition: 0.2s;
+  }
+
+  .toggle-slider::before {
+    content: '';
+    position: absolute;
+    height: 14px;
+    width: 14px;
+    left: 3px;
+    bottom: 3px;
+    background: white;
+    border-radius: 50%;
+    transition: 0.2s;
+  }
+
+  .toggle-switch input:checked + .toggle-slider {
+    background: var(--color-primary);
+  }
+
+  .toggle-switch input:checked + .toggle-slider::before {
+    transform: translateX(16px);
+  }
+
+  .shortcuts-list {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .shortcut-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 0;
+  }
+
+  .shortcut-action {
+    font-size: 13px;
+    color: var(--color-text);
+  }
+
+  .shortcut-key {
+    font-size: 12px;
+    padding: 2px 8px;
+    background: var(--color-bg);
+    border: 1px solid var(--color-border);
+    border-radius: 4px;
+    font-family: monospace;
+    color: var(--color-text-muted);
   }
 
   .spinning {

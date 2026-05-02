@@ -412,6 +412,49 @@ pub async fn recording_poll(
 }
 
 #[tauri::command]
+pub async fn recording_pause(
+    sidecar: State<'_, Mutex<Sidecar>>,
+    session_id: Option<String>,
+) -> Result<serde_json::Value, AppError> {
+    let sid = session_id.unwrap_or_else(|| "default".into());
+    sidecar_call(
+        sidecar,
+        "recording.pause",
+        Some(serde_json::json!({"session_id": sid})),
+    )
+    .await
+}
+
+#[tauri::command]
+pub async fn recording_resume(
+    sidecar: State<'_, Mutex<Sidecar>>,
+    session_id: Option<String>,
+) -> Result<serde_json::Value, AppError> {
+    let sid = session_id.unwrap_or_else(|| "default".into());
+    sidecar_call(
+        sidecar,
+        "recording.resume",
+        Some(serde_json::json!({"session_id": sid})),
+    )
+    .await
+}
+
+#[tauri::command]
+pub async fn recording_set_filter(
+    sidecar: State<'_, Mutex<Sidecar>>,
+    session_id: Option<String>,
+    event_types: Option<Vec<String>>,
+) -> Result<serde_json::Value, AppError> {
+    let sid = session_id.unwrap_or_else(|| "default".into());
+    sidecar_call(
+        sidecar,
+        "recording.set_filter",
+        Some(serde_json::json!({"session_id": sid, "event_types": event_types})),
+    )
+    .await
+}
+
+#[tauri::command]
 pub async fn workflow_execute(
     sidecar: State<'_, Mutex<Sidecar>>,
     workflow: serde_json::Value,

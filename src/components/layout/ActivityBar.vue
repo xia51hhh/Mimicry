@@ -1,7 +1,7 @@
 <script setup lang="ts">
   import { useI18n } from 'vue-i18n';
   import { useRouter } from 'vue-router';
-  import { Workflow, Globe, Database, Clock, Settings } from 'lucide-vue-next';
+  import { Workflow, Globe, Database, Clock, Settings, Package } from 'lucide-vue-next';
   import { markRaw, type Component } from 'vue';
 
   const { t } = useI18n();
@@ -25,6 +25,7 @@
   const topItems: ActivityItem[] = [
     { id: 'workflow', icon: markRaw(Workflow), labelKey: 'activity.workflow', route: '/' },
     { id: 'browser', icon: markRaw(Globe), labelKey: 'activity.browser' },
+    { id: 'packages', icon: markRaw(Package), labelKey: 'activity.packages' },
     { id: 'data', icon: markRaw(Database), labelKey: 'activity.data' },
     { id: 'schedule', icon: markRaw(Clock), labelKey: 'activity.schedule' },
   ];

@@ -1,5 +1,6 @@
 """Workflow execution engine: runs workflow JSON via Camoufox."""
 from __future__ import annotations
+import concurrent.futures
 import csv
 import io
 import json
@@ -392,6 +393,8 @@ class WorkflowExecutor:
         retry_on_fail = settings.get("retryOnFail", False)
         retry_count = settings.get("retryCount", 1) if retry_on_fail else 0
         retry_interval = settings.get("retryInterval", 1000) / 1000.0
+        timeout_ms = settings.get("timeout", 0)
+        timeout_sec = timeout_ms / 1000.0 if timeout_ms > 0 else 0
 
         if settings.get("disabled", False):
             logger.debug(f"Skipping disabled node: {action}")
@@ -434,13 +437,10 @@ class WorkflowExecutor:
         for attempt in range(attempts):
             try:
                 self._emit_log("info", f"Executing: {action}", node.get("id"))
-                match ntype:
-                    case "action":
-                        self._execute_action(node)
-                    case "condition":
-                        self._execute_condition(node)
-                    case "loop":
-                        self._execute_loop(node)
+                if timeout_sec > 0:
+                    self._execute_with_timeout(node, ntype, timeout_sec)
+                else:
+                    self._dispatch_node(node, ntype)
                 self._emit_log("info", f"Completed: {action}", node.get("id"))
                 if ntype == "action":
                     self._human_delay(action)
@@ -457,7 +457,37 @@ class WorkflowExecutor:
         match on_error:
             case "continue":
                 logger.warning(f"Node {action} failed, continuing: {last_error}")
+            case "fallback":
+                fallback_nodes = node.get("data", {}).get("fallbackNodes", [])
+                if fallback_nodes:
+                    self._emit_log("info", f"Running fallback for {action}", node_id)
+                    self._execute_nodes(fallback_nodes)
+                else:
+                    logger.warning(f"Node {action} failed, no fallback nodes defined")
             case "stop" | _:
+                raise last_error
+
+    def _dispatch_node(self, node: dict, ntype: str):
+        """Dispatch execution based on node type."""
+        match ntype:
+            case "action":
+                self._execute_action(node)
+            case "condition":
+                self._execute_condition(node)
+            case "loop":
+                self._execute_loop(node)
+
+    def _execute_with_timeout(self, node: dict, ntype: str, timeout_sec: float):
+        """Execute a node with a timeout. Raises TimeoutError if exceeded."""
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+            future = pool.submit(self._dispatch_node, node, ntype)
+            try:
+                future.result(timeout=timeout_sec)
+            except concurrent.futures.TimeoutError:
+                action = node.get("action", "")
+                raise TimeoutError(
+                    f"Node '{action}' exceeded timeout of {timeout_sec:.1f}s"
+                ) from None
                 raise last_error
 
     def _execute_action(self, node: dict):

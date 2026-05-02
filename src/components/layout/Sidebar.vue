@@ -43,6 +43,7 @@
   } from 'lucide-vue-next';
   import { usePanel } from '../../composables/usePanel';
   import ProfileManager from '../ProfileManager.vue';
+  import TemplateManager from '../TemplateManager.vue';
 
   const { t } = useI18n();
 
@@ -215,6 +216,9 @@
 
       <!-- Browser Profiles Panel -->
       <ProfileManager v-else-if="activeId === 'browser'" />
+
+      <!-- Templates / Packages Panel -->
+      <TemplateManager v-else-if="activeId === 'packages'" />
     </div>
 
     <!-- Resize handle -->

@@ -136,6 +136,13 @@ export function useKeyboardShortcuts() {
       window.dispatchEvent(new CustomEvent('mimicry:group-selection'));
       return;
     }
+
+    // / — Command palette (only when not focused on input)
+    if (key === '/' && !ctrl && !(e.target instanceof HTMLInputElement) && !(e.target instanceof HTMLTextAreaElement)) {
+      e.preventDefault();
+      window.dispatchEvent(new CustomEvent('mimicry:command-palette'));
+      return;
+    }
   }
 
   function onBeforeUnload(e: BeforeUnloadEvent) {

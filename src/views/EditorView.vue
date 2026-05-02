@@ -16,6 +16,8 @@
   import PropertyPanel from '../components/editor/PropertyPanel.vue';
   import BottomPanel from '../components/editor/BottomPanel.vue';
   import ContextMenu from '../components/editor/ContextMenu.vue';
+  import BlockPalette from '../components/editor/BlockPalette.vue';
+  import CommandPalette from '../components/editor/CommandPalette.vue';
   import CamoufoxSetup from '../components/CamoufoxSetup.vue';
   import type { ContextMenuItem } from '../components/editor/ContextMenu.vue';
   import { useKeyboardShortcuts } from '../composables/useKeyboardShortcuts';
@@ -34,7 +36,6 @@
     onPaneClick,
     onNodeContextMenu,
     onPaneContextMenu,
-    onNodeDragStop,
     project,
     fitView,
     zoomIn,
@@ -45,6 +46,8 @@
 
   const showMinimap = ref(true);
   const showCamoufoxSetup = ref(false);
+  const showBlockPalette = ref(true);
+  const showCommandPalette = ref(false);
 
   onMounted(async () => {
     const result = await browser.checkCamoufox();
@@ -55,10 +58,12 @@
       browser.checkCamoufoxUpdate();
     }
     window.addEventListener('mimicry:group-selection', groupSelectedNodes);
+    window.addEventListener('mimicry:command-palette', openCommandPalette);
   });
 
   onUnmounted(() => {
     window.removeEventListener('mimicry:group-selection', groupSelectedNodes);
+    window.removeEventListener('mimicry:command-palette', openCommandPalette);
   });
 
   // Context menu state
@@ -118,6 +123,7 @@
 
   // When user drags from a handle and drops on empty canvas, create a new connected node
   onConnectEnd((event) => {
+    if (!event) return;
     // Only handle mouse events on empty canvas (not on a node/handle)
     const target = event.target as HTMLElement;
     if (!target?.closest('.vue-flow__pane')) return;
@@ -285,14 +291,14 @@
   }
 
   function groupSelectedNodes() {
-    const selected = store.nodes.filter((n) => n.selected && n.type !== 'group');
+    const selected = store.nodes.filter((n) => (n as unknown as Record<string, unknown>).selected && n.type !== 'group');
     if (selected.length < 2) return;
 
     const padding = 30;
     const minX = Math.min(...selected.map((n) => n.position.x)) - padding;
     const minY = Math.min(...selected.map((n) => n.position.y)) - padding;
-    const maxX = Math.max(...selected.map((n) => n.position.x + (n.width || 150))) + padding;
-    const maxY = Math.max(...selected.map((n) => n.position.y + (n.height || 50))) + padding;
+    const maxX = Math.max(...selected.map((n) => n.position.x + (Number((n as unknown as Record<string, unknown>).width) || 150))) + padding;
+    const maxY = Math.max(...selected.map((n) => n.position.y + (Number((n as unknown as Record<string, unknown>).height) || 50))) + padding;
 
     store.addNode(
       'group',
@@ -315,6 +321,23 @@
 
   function onDragOver(event: DragEvent) {
     if (event.dataTransfer) event.dataTransfer.dropEffect = 'move';
+  }
+
+  function onCommandSelect(type: string, action: string) {
+    showCommandPalette.value = false;
+    const center = project({ x: 400, y: 300 });
+    const dataMap: Record<string, Record<string, unknown>> = {
+      action: { action: action || 'Click', selector: '' },
+      condition: { condition: 'exists', selector: '' },
+      loop: { loopType: 'count', count: 5 },
+      group: { label: t('group.newGroup') },
+    };
+    const nodeId = store.addNode(type, center, dataMap[type] || {});
+    store.selectNode(nodeId);
+  }
+
+  function openCommandPalette() {
+    showCommandPalette.value = true;
   }
 
   function onDrop(event: DragEvent) {
@@ -347,7 +370,12 @@
 
 <template>
   <div class="flex h-full">
-    <!-- Left: Canvas + BottomPanel -->
+    <!-- Left: Block Palette -->
+    <div v-if="showBlockPalette" class="block-palette-sidebar">
+      <BlockPalette />
+    </div>
+
+    <!-- Center: Canvas + BottomPanel -->
     <div class="flex flex-1 flex-col overflow-hidden">
       <div
         class="flex-1 relative overflow-hidden"
@@ -418,10 +446,18 @@
       :show-minimap="showMinimap"
       :nodes="store.nodes"
       @toggle-minimap="showMinimap = !showMinimap"
+      @toggle-palette="showBlockPalette = !showBlockPalette"
       @zoom-in="zoomIn()"
       @zoom-out="zoomOut()"
       @fit-view="fitView()"
       @auto-layout="store.autoLayout('TB')"
+    />
+
+    <!-- Command Palette -->
+    <CommandPalette
+      :visible="showCommandPalette"
+      @select="onCommandSelect"
+      @close="showCommandPalette = false"
     />
 
     <!-- Camoufox Setup Dialog -->
@@ -430,6 +466,14 @@
 </template>
 
 <style scoped>
+  .block-palette-sidebar {
+    width: 200px;
+    border-right: 1px solid var(--color-border);
+    background: var(--color-surface);
+    flex-shrink: 0;
+    overflow: hidden;
+  }
+
   .quick-add-menu {
     position: fixed;
     z-index: 100;

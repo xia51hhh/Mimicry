@@ -64,20 +64,50 @@ class RecordingEngine:
     def __init__(self, controller):
         self._controller = controller
         self._recording = False
+        self._paused = False
         self._events: list[dict] = []
         self._last_poll_index = 0
         self.event_callback: callable | None = None
         self._active_page_id: int | None = None  # id(page) of last active page for switch detection
         self._page_tab_cache: dict[int, dict] = {}  # id(page) → TabInfo dict snapshot (survives unregister)
+        self._event_filter: set[str] | None = None  # None = accept all, set = whitelist
 
     @property
     def is_recording(self) -> bool:
         return self._recording
 
+    @property
+    def is_paused(self) -> bool:
+        return self._paused
+
+    def pause(self) -> None:
+        """Pause recording — events from browser are collected but discarded."""
+        if self._recording and not self._paused:
+            self._paused = True
+            logger.info("Recording paused")
+
+    def resume(self) -> None:
+        """Resume a paused recording."""
+        if self._recording and self._paused:
+            self._paused = False
+            logger.info("Recording resumed")
+
+    def set_event_filter(self, event_types: list[str] | None) -> None:
+        """Set which event types to capture. None = all, list = whitelist."""
+        self._event_filter = set(event_types) if event_types else None
+        logger.info(f"Recording event filter: {self._event_filter}")
+
+    def _should_capture(self, event_type: str) -> bool:
+        """Check if an event type should be captured based on filter."""
+        if self._event_filter is None:
+            return True
+        return event_type in self._event_filter
+
     def start(self) -> None:
         if not self._controller.connected:
             raise RuntimeError("Browser not connected")
         self._recording = True
+        self._paused = False
         self._events.clear()
         self._last_poll_index = 0
         self._page_tab_cache.clear()
@@ -87,6 +117,7 @@ class RecordingEngine:
 
     def stop(self) -> list[dict]:
         self._recording = False
+        self._paused = False
         # Final poll
         self._poll_events()
         events = list(self._events)
@@ -96,6 +127,10 @@ class RecordingEngine:
     def poll_new_events(self) -> list[dict]:
         """Poll for new events since last check."""
         if not self._recording:
+            return []
+        if self._paused:
+            # Still drain from browser to prevent memory leak, but discard
+            self._drain_browser_events()
             return []
         self._poll_events()
         new = self._events[self._last_poll_index:]
@@ -206,6 +241,20 @@ class RecordingEngine:
         except Exception:
             pass
 
+    def _drain_browser_events(self) -> None:
+        """Drain events from browser without storing (used during pause)."""
+        ctx = self._controller._context
+        if not ctx:
+            return
+        for page in ctx.pages:
+            try:
+                page.evaluate("""() => {
+                    const fn = window[Symbol.for('_me')];
+                    return fn ? fn() : [];
+                }""")
+            except Exception:
+                pass
+
     def _poll_events(self) -> None:
         """Pull NEW events from all browser pages and frames (incremental).
         Auto-inserts switch_tab events when active page changes."""
@@ -269,6 +318,10 @@ class RecordingEngine:
                 enhanced = _try_enhance_selector(self._controller._page, sel)
                 if enhanced:
                     evt["_selectorAnalysis"] = enhanced
+
+            # Apply event type filter
+            if not self._should_capture(evt.get("type", "")):
+                continue
 
             self._events.append(evt)
 

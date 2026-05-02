@@ -6,6 +6,7 @@
   "activity": {
     "workflow": "Workflow",
     "browser": "Browser",
+    "packages": "Templates",
     "data": "Data",
     "schedule": "Schedule",
     "settings": "Settings"
@@ -236,7 +237,20 @@
     "editor": "Editor",
     "general": "General",
     "browser": "Browser Engine",
-    "about": "About"
+    "about": "About",
+    "execution": "Execution",
+    "humanize": "Humanized Behavior",
+    "humanizeDesc": "Add random delays between actions to simulate human behavior",
+    "delayMultiplier": "Delay Multiplier",
+    "defaultTimeout": "Default Timeout",
+    "proxy": "Proxy",
+    "proxyEnabled": "Enable Proxy",
+    "proxyServer": "Proxy Server",
+    "proxyPlaceholder": "http://host:port or socks5://host:port",
+    "proxyBypass": "Bypass List",
+    "proxyBypassPlaceholder": "localhost,127.0.0.1",
+    "shortcuts": "Keyboard Shortcuts",
+    "commandPalette": "Command Palette"
   },
   "execution": {
     "startWorkflow": "Starting workflow execution",
@@ -422,5 +436,31 @@
     "running": "Running",
     "success": "Success",
     "error": "Error"
+  },
+  "blockCategory": {
+    "interaction": "Interaction",
+    "navigation": "Navigation",
+    "data": "Data",
+    "control": "Control",
+    "flow": "Flow"
+  },
+  "blockPalette": {
+    "search": "Search blocks..."
+  },
+  "commandPalette": {
+    "placeholder": "Search for a block to add...",
+    "noResults": "No matching blocks"
+  },
+  "templates": {
+    "title": "Templates",
+    "search": "Search templates...",
+    "empty": "No templates yet. Save a workflow as template to get started.",
+    "saveAsCurrent": "Save Current Workflow as Template",
+    "import": "Import Template",
+    "export": "Export",
+    "name": "Name",
+    "description": "Description",
+    "category": "Category",
+    "confirmDelete": "Are you sure you want to delete this template?"
   }
 }

@@ -113,6 +113,9 @@ pub fn run() {
             commands::browser::recording_start,
             commands::browser::recording_stop,
             commands::browser::recording_poll,
+            commands::browser::recording_pause,
+            commands::browser::recording_resume,
+            commands::browser::recording_set_filter,
             commands::browser::workflow_execute,
             commands::browser::workflow_stop_execution,
             commands::browser::workflow_execution_status,
@@ -160,6 +163,11 @@ pub fn run() {
             commands::profiles::profile_create,
             commands::profiles::profile_update,
             commands::profiles::profile_delete,
+            commands::templates::template_list,
+            commands::templates::template_get,
+            commands::templates::template_create,
+            commands::templates::template_delete,
+            commands::templates::template_save_from_workflow,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
