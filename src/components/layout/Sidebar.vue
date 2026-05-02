@@ -40,6 +40,13 @@
     Play,
     Waypoints,
     CornerDownRight,
+    MousePointer2,
+    Crosshair,
+    Eraser,
+    Paperclip,
+    Link2,
+    Clock,
+    XCircle,
   } from 'lucide-vue-next';
   import { usePanel } from '../../composables/usePanel';
   import ProfileManager from '../ProfileManager.vue';
@@ -100,11 +107,15 @@
       key: 'interaction',
       items: [
         { type: 'action', action: 'Click', icon: markRaw(MousePointerClick) },
+        { type: 'action', action: 'DblClick', icon: markRaw(MousePointer2) },
         { type: 'action', action: 'Type', icon: markRaw(Keyboard) },
         { type: 'action', action: 'Hover', icon: markRaw(Move) },
+        { type: 'action', action: 'Focus', icon: markRaw(Crosshair) },
+        { type: 'action', action: 'Clear', icon: markRaw(Eraser) },
         { type: 'action', action: 'Scroll', icon: markRaw(ScrollText) },
         { type: 'action', action: 'SelectOption', icon: markRaw(ListChecks) },
         { type: 'action', action: 'PressKey', icon: markRaw(Command) },
+        { type: 'action', action: 'UploadFile', icon: markRaw(Paperclip) },
       ],
     },
     {
@@ -112,6 +123,7 @@
       items: [
         { type: 'action', action: 'GetText', icon: markRaw(FileText) },
         { type: 'action', action: 'GetAttribute', icon: markRaw(Tag) },
+        { type: 'action', action: 'GetURL', icon: markRaw(Link2) },
         { type: 'action', action: 'Screenshot', icon: markRaw(Camera) },
         { type: 'action', action: 'ExtractTable', icon: markRaw(Table) },
         { type: 'action', action: 'SetVariable', icon: markRaw(Pin) },
@@ -125,11 +137,13 @@
       items: [
         { type: 'action', action: 'RunScript', icon: markRaw(Wrench) },
         { type: 'action', action: 'HttpRequest', icon: markRaw(Globe) },
+        { type: 'action', action: 'Wait', icon: markRaw(Clock) },
         { type: 'action', action: 'Delay', icon: markRaw(Timer) },
         { type: 'action', action: 'Log', icon: markRaw(ClipboardList) },
         { type: 'action', action: 'Comment', icon: markRaw(MessageSquare) },
         { type: 'action', action: 'ExecuteWorkflow', icon: markRaw(Play) },
         { type: 'action', action: 'Stop', icon: markRaw(StopCircle) },
+        { type: 'action', action: 'Fail', icon: markRaw(XCircle) },
         { type: 'action', action: 'LoopBreakpoint', icon: markRaw(CornerDownRight) },
         { type: 'action', action: 'WaitConnections', icon: markRaw(Waypoints) },
       ],
