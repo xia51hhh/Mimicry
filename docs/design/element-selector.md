@@ -1,8 +1,8 @@
 # 元素选择器设计
 
-> **状态**: Partial / Planned | **最后更新**: 2026-04-27
+> **状态**: Partial / Planned | **最后更新**: 2026-05-02
 
-> 现实边界：当前代码已有录制、选择器字段和 Playwright/Camoufox 基础操作；本文描述的智能分析面板、多策略评分、浏览器高亮选取和 selector self-healing 是目标设计，尚未完整落地。
+> 现实边界（5/2）：当前代码已有录制（`recorder.py` 自动捕获选择器候选 + 自动 SwitchTab 注入）、选择器字段（`selector` + `selectorFallbacks`）、Playwright/Camoufox 基础操作、**选择器自愈**（`sidecar/engine/executor.py::_resolve_selector` 在主选择器失败时自动遍历 `selectorFallbacks`，commit `55f52ff`）。本文描述的智能分析面板、多策略评分、浏览器高亮选取仍为目标设计，尚未完整落地。
 
 参考 [设计决策 ADR-002](./decisions.md#adr-002-元素选择器--多策略--自愈)。
 
@@ -210,9 +210,9 @@ async def check_uniqueness(page, selector: str) -> dict:
 
 ---
 
-## 选择器自愈机制（Planned）
+## 选择器自愈机制（Implemented — `_resolve_selector`）
 
-执行工作流时，如果主选择器无法匹配元素，自动尝试备选选择器：
+执行工作流时，主选择器无法匹配元素，自动尝试 `selectorFallbacks` 数组中的备选选择器（commit `55f52ff` 落地）：
 
 ```
 执行 Block

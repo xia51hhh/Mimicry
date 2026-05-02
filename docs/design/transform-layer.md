@@ -1,8 +1,8 @@
 # 工作流转化层架构设计 (Workflow Transform Layer)
 
-> **状态**: Implemented — 2026-04-28  
-> **分支**: `refactor/workflow-transform-layer`  
-> **关联**: [block-system.md](block-system.md) | [data-flow.md](data-flow.md) | [decisions.md](decisions.md)
+> **状态**: Implemented — 2026-05-02（5/1 layout 升级，分支偏移 commit `f064821`）
+> **关联**: [block-system.md](block-system.md) | [data-flow.md](data-flow.md) | [decisions.md ADR-008](decisions.md#adr-008-rust-工作流转化层)
+> **代码**: `src-tauri/src/transform/{mod,types,action_map,detect,compact,backend,layout,legacy}.rs` + `tests/transform_integration.rs`
 
 ---
 
