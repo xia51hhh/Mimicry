@@ -37,8 +37,6 @@
     onPaneContextMenu,
     project,
     fitView,
-    zoomIn,
-    zoomOut,
   } = useVueFlow();
 
   useKeyboardShortcuts();
@@ -435,15 +433,7 @@
     </div>
 
     <!-- Right: PropertyPanel (full height) -->
-    <PropertyPanel
-      :show-minimap="showMinimap"
-      :nodes="store.nodes"
-      @toggle-minimap="showMinimap = !showMinimap"
-      @zoom-in="zoomIn()"
-      @zoom-out="zoomOut()"
-      @fit-view="fitView()"
-      @auto-layout="store.autoLayout('TB')"
-    />
+    <PropertyPanel />
 
     <!-- Command Palette -->
     <CommandPalette

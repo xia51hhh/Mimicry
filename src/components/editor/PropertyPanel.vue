@@ -4,15 +4,13 @@
   import { useWorkflowStore } from '../../stores/workflow';
   import { useBrowserStore } from '../../stores/browser';
   import { usePanel, usePanelLayout } from '../../composables/usePanel';
-  import { ChevronDown, Crosshair, FlaskConical, Highlighter } from 'lucide-vue-next';
+  import { Crosshair, FlaskConical, Highlighter } from 'lucide-vue-next';
   import { invoke } from '@tauri-apps/api/core';
-  import type { Node } from '@vue-flow/core';
 
   const { t } = useI18n();
   const store = useWorkflowStore();
   const browser = useBrowserStore();
   const activeTab = ref<'settings' | 'data'>('settings');
-  const canvasToolsCollapsed = ref(false);
 
   const {
     size: panelWidth,
@@ -34,19 +32,6 @@
   watch(collapsed, (v) => {
     rightPanelCollapsed.value = v;
   });
-
-  defineProps<{
-    showMinimap?: boolean;
-    nodes?: Node[];
-  }>();
-
-  const emit = defineEmits<{
-    (e: 'toggle-minimap'): void;
-    (e: 'zoom-in'): void;
-    (e: 'zoom-out'): void;
-    (e: 'fit-view'): void;
-    (e: 'auto-layout'): void;
-  }>();
 
   const node = computed(() => store.selectedNode);
   const nodeType = computed(() => node.value?.type || '');
@@ -1016,61 +1001,6 @@
         <pre class="data-view">{{ JSON.stringify(node.data, null, 2) }}</pre>
       </div>
     </template>
-
-    <!-- Canvas Tools at bottom (matches BottomPanel height) -->
-    <div class="canvas-tools" :style="{ height: canvasToolsCollapsed ? '30px' : '200px' }">
-      <div
-        class="canvas-tools-header"
-        @click="canvasToolsCollapsed = !canvasToolsCollapsed"
-        style="cursor: pointer"
-      >
-        <div style="display: flex; align-items: center; gap: 4px">
-          <ChevronDown
-            :size="12"
-            :stroke-width="2"
-            :style="{
-              transform: canvasToolsCollapsed ? 'rotate(-90deg)' : 'rotate(0)',
-              transition: 'transform 0.2s',
-            }"
-          />
-          <span class="tools-label">{{ t('canvas.title') }}</span>
-        </div>
-        <div class="tools-actions" @click.stop>
-          <button class="tool-btn" :title="t('canvas.zoomIn')" @click="emit('zoom-in')">+</button>
-          <button class="tool-btn" :title="t('canvas.zoomOut')" @click="emit('zoom-out')">−</button>
-          <button class="tool-btn" :title="t('canvas.fitView')" @click="emit('fit-view')">⊞</button>
-          <button class="tool-btn" title="Auto Layout" @click="emit('auto-layout')">⊟</button>
-          <button
-            class="tool-btn"
-            :title="showMinimap ? t('canvas.hideMinimap') : t('canvas.showMinimap')"
-            @click="emit('toggle-minimap')"
-          >
-            {{ showMinimap ? '👁' : '👁‍🗨' }}
-          </button>
-        </div>
-      </div>
-      <div v-if="showMinimap && !canvasToolsCollapsed" class="minimap-placeholder">
-        <div class="minimap-content">
-          <div
-            v-for="n in nodes || []"
-            :key="n.id"
-            class="minimap-node"
-            :style="{
-              left: n.position.x / 10 + 'px',
-              top: n.position.y / 10 + 'px',
-              background:
-                n.type === 'action'
-                  ? 'var(--color-node-action)'
-                  : n.type === 'condition'
-                    ? 'var(--color-node-condition)'
-                    : n.type === 'loop'
-                      ? 'var(--color-node-loop)'
-                      : 'var(--color-node-group)',
-            }"
-          />
-        </div>
-      </div>
-    </div>
   </aside>
 </template>
 
@@ -1193,81 +1123,6 @@
     max-height: 400px;
     white-space: pre-wrap;
     word-break: break-all;
-  }
-
-  /* Canvas tools section */
-  .canvas-tools {
-    border-top: 1px solid var(--color-border);
-    flex-shrink: 0;
-    overflow: hidden;
-    display: flex;
-    flex-direction: column;
-    transition: height 0.2s ease;
-  }
-
-  .canvas-tools-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 6px 10px;
-  }
-
-  .tools-label {
-    font-size: 11px;
-    font-weight: 600;
-    color: var(--color-text-muted);
-    text-transform: uppercase;
-    letter-spacing: 0.3px;
-  }
-
-  .tools-actions {
-    display: flex;
-    gap: 2px;
-  }
-
-  .tool-btn {
-    width: 24px;
-    height: 24px;
-    border-radius: 4px;
-    border: 1px solid var(--color-border);
-    background: var(--color-surface);
-    color: var(--color-text-muted);
-    font-size: 12px;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: all 0.15s;
-  }
-
-  .tool-btn:hover {
-    background: var(--color-surface-hover);
-    color: var(--color-text);
-  }
-
-  .minimap-placeholder {
-    padding: 0 10px 10px;
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    min-height: 0;
-  }
-
-  .minimap-content {
-    position: relative;
-    flex: 1;
-    background: var(--color-bg);
-    border: 1px solid var(--color-border);
-    border-radius: 4px;
-    overflow: hidden;
-  }
-
-  .minimap-node {
-    position: absolute;
-    width: 16px;
-    height: 8px;
-    border-radius: 2px;
-    opacity: 0.8;
   }
 
   /* Selector tools */
