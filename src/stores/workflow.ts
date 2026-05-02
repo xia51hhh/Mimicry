@@ -162,6 +162,8 @@ export const useWorkflowStore = defineStore('workflow', () => {
 
     nodes.value = [...nodes.value, ...newNodes];
     edges.value = [...edges.value, ...newEdges];
+    // Auto-layout after import for proper arrangement
+    autoLayout('LR');
   }
 
   function toJSON() {
