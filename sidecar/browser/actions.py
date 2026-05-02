@@ -192,6 +192,17 @@ def browser_status(session_id: str = "default"):
 
 
 @rpc_method(
+    "browser.get_viewport",
+    description="Get the real visible viewport dimensions from the browser page.",
+    param_descriptions={
+        "session_id": "Browser session ID; defaults to 'default' for the primary session.",
+    },
+)
+def browser_get_viewport(session_id: str = "default"):
+    return _mgr.get(session_id).get_real_viewport()
+
+
+@rpc_method(
     "browser.dblclick",
     description="Double-click an element matched by a CSS selector. Use for opening items, selecting words, or any UI that responds to dblclick.",
     param_descriptions={

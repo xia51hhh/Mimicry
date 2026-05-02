@@ -17,15 +17,18 @@ Changes from upstream:
 - Logging uses loguru via Mimicry's logger.
 - Returns simple dicts instead of raising on detection failure (lets RPC caller
   decide whether to abort or fallback).
+- Refactored into CaptchaSolver three-phase base class (Detect→Solve→Apply).
 """
 from __future__ import annotations
 
 import time
-from typing import Literal, Optional
+from typing import Any, Literal, Optional
 
 from loguru import logger
 from playwright.sync_api import ElementHandle, Frame, Page
 from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
+
+from .base import CaptchaSolver
 
 
 # ---------------------------------------------------------------------------
@@ -341,3 +344,83 @@ def solve_cloudflare_by_click(
         f"Failed to solve cloudflare {challenge_type}: "
         "challenge still present and expected content not detected"
     )
+
+
+# ---------------------------------------------------------------------------
+# Three-phase solver class
+# ---------------------------------------------------------------------------
+
+class CloudflareSolver(CaptchaSolver):
+    """Cloudflare captcha solver implementing the Detect→Solve→Apply pipeline."""
+
+    def __init__(
+        self,
+        challenge_type: Literal["turnstile", "interstitial"] = "turnstile",
+        expected_content_selector: str | None = None,
+        solve_click_delay_s: int = 6,
+        wait_checkbox_attempts: int = 10,
+        wait_checkbox_delay_s: int = 6,
+        checkbox_click_attempts: int = 3,
+    ):
+        self.challenge_type = challenge_type
+        self.expected_content_selector = expected_content_selector
+        self.solve_click_delay_s = solve_click_delay_s
+        self.wait_checkbox_attempts = wait_checkbox_attempts
+        self.wait_checkbox_delay_s = wait_checkbox_delay_s
+        self.checkbox_click_attempts = checkbox_click_attempts
+
+    def detect(self, page: Page, **kwargs: Any) -> dict:
+        container = kwargs.get("container", page)
+        detected = detect_cloudflare_challenge(container, self.challenge_type)
+        if not detected and _detect_expected_content(page, container, self.expected_content_selector):
+            return {"detected": False, "reason": "expected_content_present"}
+        return {"detected": detected, "challenge_type": self.challenge_type}
+
+    def solve(self, page: Page, detection: dict, **kwargs: Any) -> dict:
+        container = kwargs.get("container", page)
+        cf_iframes = _search_shadow_root_iframes(
+            container,
+            src_filter="https://challenges.cloudflare.com/cdn-cgi/challenge-platform/",
+        )
+        if not cf_iframes:
+            return {"solved": False, "error": "iframes_not_found"}
+
+        checkbox_data = _get_ready_checkbox(
+            cf_iframes,
+            delay_s=self.wait_checkbox_delay_s,
+            attempts=self.wait_checkbox_attempts,
+        )
+        if not checkbox_data:
+            return {"solved": False, "error": "checkbox_not_ready"}
+
+        iframe, checkbox = checkbox_data
+        try:
+            _click_checkbox(checkbox, self.checkbox_click_attempts)
+        except CaptchaSolvingError as e:
+            return {"solved": False, "error": str(e)}
+
+        return {"solved": True, "iframe": iframe, "checkbox": checkbox}
+
+    def apply(self, page: Page, solution: dict, **kwargs: Any) -> dict:
+        container = kwargs.get("container", page)
+        iframe = solution.get("iframe")
+
+        if self.challenge_type == "interstitial":
+            try:
+                page.wait_for_load_state("networkidle", timeout=self.solve_click_delay_s * 1000)
+            except PlaywrightTimeoutError:
+                pass
+            resolved = not detect_cloudflare_challenge(container, "interstitial")
+        else:
+            success_elements = _search_shadow_root_elements(iframe, 'div[id="success"]') if iframe else []
+            success_el = next(iter(success_elements), None)
+            if success_el is None:
+                return {"applied": False, "error": "success_element_missing"}
+            try:
+                success_el.wait_for_element_state("visible", timeout=self.solve_click_delay_s * 1000)
+                resolved = True
+            except PlaywrightTimeoutError:
+                resolved = False
+
+        applied = resolved or _detect_expected_content(page, container, self.expected_content_selector)
+        return {"applied": applied, "challenge_type": self.challenge_type}

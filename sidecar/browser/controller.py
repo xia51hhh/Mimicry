@@ -617,18 +617,52 @@ class BrowserController:
         except Exception as e:
             logger.warning(f"Camoufox exit error: {e}")
 
-        # Force kill if process is still alive
+        # Three-level process cleanup: close → SIGTERM → SIGKILL
         if pid:
-            try:
-                os.kill(pid, 0)  # Check if alive
-                os.kill(pid, signal.SIGKILL)
-                logger.info(f"Force-killed browser process {pid}")
-            except ProcessLookupError:
-                pass
-            except Exception as e:
-                logger.warning(f"Failed to kill browser process {pid}: {e}")
+            self._force_kill_process(pid)
 
         logger.info("Browser closed")
+
+    @staticmethod
+    def _force_kill_process(pid: int) -> None:
+        import os, signal, time
+
+        def _is_alive(p: int) -> bool:
+            try:
+                os.kill(p, 0)
+                return True
+            except ProcessLookupError:
+                return False
+            except OSError:
+                return False
+
+        if not _is_alive(pid):
+            return
+
+        # Level 2: SIGTERM — ask nicely
+        try:
+            os.kill(pid, signal.SIGTERM)
+            logger.debug(f"Sent SIGTERM to browser process {pid}")
+        except ProcessLookupError:
+            return
+        except Exception as e:
+            logger.warning(f"SIGTERM failed for {pid}: {e}")
+
+        # Wait up to 3 seconds for graceful exit
+        for _ in range(30):
+            if not _is_alive(pid):
+                logger.debug(f"Browser process {pid} exited after SIGTERM")
+                return
+            time.sleep(0.1)
+
+        # Level 3: SIGKILL — force kill
+        try:
+            os.kill(pid, signal.SIGKILL)
+            logger.info(f"Force-killed browser process {pid} (SIGKILL)")
+        except ProcessLookupError:
+            pass
+        except Exception as e:
+            logger.warning(f"SIGKILL failed for {pid}: {e}")
 
     def navigate(self, url: str, wait_until: str = "networkidle"):
         if not url.startswith(("http://", "https://")):
@@ -640,18 +674,55 @@ class BrowserController:
             if wait_until != "load":
                 self._page.goto(url, wait_until="load")
 
-    def click(self, selector: str, force: bool = False):
-        self._page.click(selector, force=force)
+    def click(self, selector: str, force: bool = False, humanize: bool = True):
+        if not humanize:
+            self._page.click(selector, force=force)
+            return
+        # Safe click: offset toward center region, avoid exact center and edges
+        locator = self._page.locator(selector)
+        box = locator.bounding_box()
+        if box and box["width"] > 4 and box["height"] > 4:
+            # Click within inner 60% of the element (avoid edges)
+            margin_x = box["width"] * 0.2
+            margin_y = box["height"] * 0.2
+            offset_x = random.uniform(margin_x, box["width"] - margin_x) - box["width"] / 2
+            offset_y = random.uniform(margin_y, box["height"] - margin_y) - box["height"] / 2
+            # Clamp to viewport boundaries
+            vp = self.get_real_viewport()
+            target_x = box["x"] + box["width"] / 2 + offset_x
+            target_y = box["y"] + box["height"] / 2 + offset_y
+            target_x = max(0, min(target_x, vp["width"]))
+            target_y = max(0, min(target_y, vp["height"]))
+            # Recalculate offset relative to element center
+            offset_x = target_x - (box["x"] + box["width"] / 2)
+            offset_y = target_y - (box["y"] + box["height"] / 2)
+            locator.click(force=force, position={"x": box["width"] / 2 + offset_x, "y": box["height"] / 2 + offset_y})
+        else:
+            self._page.click(selector, force=force)
 
     def type_text(self, selector: str, text: str, humanize: bool = True):
         locator = self._page.locator(selector)
         if humanize:
             locator.click()
             locator.fill("")
-            for char in text:
-                locator.press(char, delay=random.randint(50, 180))
-                if random.random() < 0.05:
-                    time.sleep(random.uniform(0.3, 0.8))
+            # Variable speed typing with occasional corrections
+            base_delay = random.randint(40, 120)
+            for i, char in enumerate(text):
+                # Speed variation: sometimes fast burst, sometimes slow
+                delay = base_delay + random.randint(-20, 60)
+                locator.press(char, delay=max(20, delay))
+                # Occasional long pause (thinking)
+                if random.random() < 0.04:
+                    time.sleep(random.uniform(0.3, 1.0))
+                # Occasional typo + backspace correction (~2% chance)
+                if random.random() < 0.02 and i < len(text) - 1:
+                    wrong = chr(random.randint(97, 122))
+                    locator.press(wrong, delay=random.randint(30, 80))
+                    time.sleep(random.uniform(0.1, 0.3))
+                    locator.press("Backspace", delay=random.randint(30, 60))
+                # Paragraph pause at spaces
+                if char == " " and random.random() < 0.15:
+                    time.sleep(random.uniform(0.2, 0.6))
         else:
             locator.fill(text)
 
@@ -673,11 +744,50 @@ class BrowserController:
             "pages": len(ctx.pages) if ctx else 0,
         }
 
-    def dblclick(self, selector: str):
-        self._page.dblclick(selector)
+    def get_real_viewport(self) -> dict:
+        """Get the actual visible viewport dimensions from the browser page."""
+        if not self._page:
+            return {"width": 1920, "height": 1080}
+        try:
+            return self._page.evaluate("""() => ({
+                width: window.innerWidth || document.documentElement.clientWidth,
+                height: window.innerHeight || document.documentElement.clientHeight,
+                scrollX: window.scrollX || window.pageXOffset,
+                scrollY: window.scrollY || window.pageYOffset,
+                devicePixelRatio: window.devicePixelRatio || 1,
+            })""")
+        except Exception:
+            return {"width": 1920, "height": 1080}
 
-    def hover(self, selector: str):
-        self._page.hover(selector)
+    def dblclick(self, selector: str, humanize: bool = True):
+        if not humanize:
+            self._page.dblclick(selector)
+            return
+        locator = self._page.locator(selector)
+        box = locator.bounding_box()
+        if box and box["width"] > 4 and box["height"] > 4:
+            margin_x = box["width"] * 0.2
+            margin_y = box["height"] * 0.2
+            pos_x = random.uniform(margin_x, box["width"] - margin_x)
+            pos_y = random.uniform(margin_y, box["height"] - margin_y)
+            locator.dblclick(position={"x": pos_x, "y": pos_y})
+        else:
+            self._page.dblclick(selector)
+
+    def hover(self, selector: str, humanize: bool = True):
+        if not humanize:
+            self._page.hover(selector)
+            return
+        locator = self._page.locator(selector)
+        box = locator.bounding_box()
+        if box and box["width"] > 4 and box["height"] > 4:
+            margin_x = box["width"] * 0.25
+            margin_y = box["height"] * 0.25
+            pos_x = random.uniform(margin_x, box["width"] - margin_x)
+            pos_y = random.uniform(margin_y, box["height"] - margin_y)
+            locator.hover(position={"x": pos_x, "y": pos_y})
+        else:
+            self._page.hover(selector)
 
     def select_option(self, selector: str, value: str, humanize: bool = True):
         locator = self._page.locator(selector)
