@@ -15,6 +15,15 @@ def _load_recorder_js() -> str:
     return _RECORDER_JS
 
 
+def _try_enhance_selector(page, selector: str) -> dict:
+    """Try to enhance a selector using multi-strategy analysis. Returns enhancement dict or {}."""
+    try:
+        from browser.selector import quick_enhance_selector
+        return quick_enhance_selector(page, selector)
+    except Exception:
+        return {}
+
+
 
 
 
@@ -253,6 +262,14 @@ class RecordingEngine:
                 }
                 self._events.append(switch_event)
                 self._active_page_id = page_id
+
+            # Auto-enhance selectors using multi-strategy analysis
+            sel = evt.get("selector")
+            if sel and self._controller._page:
+                enhanced = _try_enhance_selector(self._controller._page, sel)
+                if enhanced:
+                    evt["_selectorAnalysis"] = enhanced
+
             self._events.append(evt)
 
     @staticmethod
@@ -277,6 +294,7 @@ class RecordingEngine:
         for event in events:
             etype = event.get("type")
             url = event.get("url", "")
+            analysis = event.get("_selectorAnalysis")
 
             # Auto-insert OPEN for new URLs
             if url and url not in seen_navigations:
@@ -348,10 +366,33 @@ class RecordingEngine:
                         node_data["title"] = ti.get("title", "")
                     nodes.append(_make_node("switch_tab", node_data))
 
-        # Attach selector quality score into data
+            # Attach selector analysis to the last generated node (if applicable)
+            if analysis and nodes:
+                last_data = nodes[-1].get("data", {})
+                if last_data.get("selector"):
+                    last_data["_selectorAnalysis"] = analysis
+
+        # Attach selector quality score and candidates into data
         for node in nodes:
             sel = node.get("data", {}).get("selector")
             if sel:
                 node["data"]["selectorScore"] = score_selector(sel)
+
+        # Apply best enhanced selectors from multi-strategy analysis
+        for node in nodes:
+            analysis = node.get("data", {}).pop("_selectorAnalysis", None)
+            if analysis and analysis.get("best_selector"):
+                old_sel = node["data"].get("selector", "")
+                best = analysis["best_selector"]
+                best_score = analysis.get("best_score", 0)
+                old_score = node["data"].get("selectorScore", 0)
+                # Use enhanced selector if it scores better
+                if best_score > old_score and best != old_sel:
+                    node["data"]["selector"] = best
+                    node["data"]["selectorScore"] = best_score
+                    node["data"]["selectorOriginal"] = old_sel
+                    node["data"]["selectorStrategy"] = analysis.get("best_strategy", "")
+                if analysis.get("candidates"):
+                    node["data"]["selectorCandidates"] = analysis["candidates"]
 
         return nodes

@@ -220,7 +220,8 @@
     "debugPaused": "已暂停",
     "debugCurrentNode": "当前节点",
     "debugBreakpoints": "断点",
-    "debugNoBreakpoints": "点击节点左侧红点添加断点"
+    "debugNoBreakpoints": "点击节点上的红点添加断点",
+    "selector": "选择器"
   },
   "settings": {
     "title": "设置",
@@ -398,7 +399,16 @@
     "noMatch": "无匹配",
     "unique": "唯一匹配 ✓",
     "multiMatch": "匹配 {count} 个",
-    "candidates": "推荐选择器"
+    "candidates": "推荐选择器",
+    "inputPlaceholder": "输入 CSS 选择器进行分析...",
+    "analyzing": "分析中...",
+    "colSelector": "选择器",
+    "colStrategy": "策略",
+    "colScore": "评分",
+    "colMatch": "匹配",
+    "highlight": "在浏览器中高亮",
+    "use": "使用此选择器",
+    "emptyHint": "输入选择器或从浏览器中拾取元素进行分析"
   },
   "tooltip": {
     "status": "状态",

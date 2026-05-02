@@ -220,7 +220,8 @@
     "debugPaused": "Paused",
     "debugCurrentNode": "Current",
     "debugBreakpoints": "Breakpoints",
-    "debugNoBreakpoints": "Click the red dot on a node to add a breakpoint"
+    "debugNoBreakpoints": "Click the red dot on a node to add a breakpoint",
+    "selector": "Selector"
   },
   "settings": {
     "title": "Settings",
@@ -398,7 +399,16 @@
     "noMatch": "No match",
     "unique": "Unique ✓",
     "multiMatch": "{count} matches",
-    "candidates": "Suggested Selectors"
+    "candidates": "Suggested Selectors",
+    "inputPlaceholder": "Enter a CSS selector to analyze...",
+    "analyzing": "Analyzing...",
+    "colSelector": "Selector",
+    "colStrategy": "Strategy",
+    "colScore": "Score",
+    "colMatch": "Match",
+    "highlight": "Highlight in browser",
+    "use": "Use this selector",
+    "emptyHint": "Enter a selector or pick an element from the browser to analyze"
   },
   "tooltip": {
     "status": "Status",

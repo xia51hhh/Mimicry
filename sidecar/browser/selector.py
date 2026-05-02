@@ -331,3 +331,61 @@ def analyze_element(page: Any, element_handle: Any) -> list[SelectorCandidate]:
     # 5. Sort by score descending
     results.sort(key=lambda c: c.score, reverse=True)
     return results
+
+
+def quick_enhance_selector(page: Any, selector: str) -> dict:
+    """Quickly analyze a recorded selector and return the best alternative.
+
+    This is a lightweight version of analyze_element designed for use
+    during recording. It finds the element by selector, gathers info,
+    generates candidates with uniqueness checks, and returns the best one.
+
+    Returns:
+        Dict with keys: best_selector, best_score, candidates (list of dicts),
+        or empty dict on failure.
+    """
+    try:
+        handle = page.query_selector(selector)
+        if not handle:
+            return {}
+
+        element_info = handle.evaluate(ANALYZE_ELEMENT_JS)
+        depth = element_info.get("depth", 5)
+        raw = generate_candidates(element_info)
+
+        if not raw:
+            return {}
+
+        # Check uniqueness for each candidate
+        scored: list[SelectorCandidate] = []
+        for cand in raw:
+            sel = cand["selector"]
+            if sel.startswith("text=") or sel.startswith("role="):
+                try:
+                    mc = page.locator(sel).count()
+                except Exception:
+                    mc = -1
+            else:
+                try:
+                    mc = page.evaluate(CHECK_SELECTOR_JS, sel)
+                except Exception:
+                    mc = -1
+            if mc < 0:
+                continue
+            scored.append(score_candidate(cand, mc, depth))
+
+        if not scored:
+            return {}
+
+        scored.sort(key=lambda c: c.score, reverse=True)
+        best = scored[0]
+
+        return {
+            "best_selector": best.selector,
+            "best_score": best.score,
+            "best_strategy": best.strategy,
+            "candidates": [c.to_dict() for c in scored[:5]],
+        }
+    except Exception as e:
+        logger.debug(f"quick_enhance_selector failed for '{selector}': {e}")
+        return {}
