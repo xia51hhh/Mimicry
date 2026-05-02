@@ -1,6 +1,8 @@
 # Monaco Editor 集成
 
-> **状态**: Draft | **最后更新**: 2026-04-17
+> **状态**: Partial | **最后更新**: 2026-05-02
+>
+> 现实边界（5/2）：`src/components/editor/JsonEditor.vue` 已集成 Monaco Editor v0.55.1，承载 canonical JSON 编辑；双向同步、JSON Schema 校验由 `src/utils/workflowSchema.ts` 提供，未实现的部分为分屏模式与高级补全。
 
 ---
 
