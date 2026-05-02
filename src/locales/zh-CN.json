@@ -189,7 +189,8 @@
     "toggleBottom": "切换底栏",
     "toggleRight": "切换右侧栏",
     "deleteNode": "删除节点",
-    "toggleBreakpoint": "切换断点"
+    "toggleBreakpoint": "切换断点",
+    "groupNodes": "分组选中节点"
   },
   "contextMenu": {
     "copy": "复制",
@@ -198,7 +199,8 @@
     "delete": "删除",
     "selectAll": "全选",
     "fitView": "适应视图",
-    "toggleBreakpoint": "切换断点"
+    "toggleBreakpoint": "切换断点",
+    "groupSelection": "分组选中节点"
   },
   "bottomPanel": {
     "json": "JSON",

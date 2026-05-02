@@ -127,6 +127,15 @@ export function useKeyboardShortcuts() {
       showToast(t('shortcut.deleteNode'), 'Delete');
       return;
     }
+
+    // Ctrl+G — Group selected nodes
+    if (ctrl && key === 'g') {
+      e.preventDefault();
+      showToast(t('shortcut.groupNodes'), 'Ctrl+G');
+      // Dispatch custom event for EditorView to handle
+      window.dispatchEvent(new CustomEvent('mimicry:group-selection'));
+      return;
+    }
   }
 
   function onBeforeUnload(e: BeforeUnloadEvent) {

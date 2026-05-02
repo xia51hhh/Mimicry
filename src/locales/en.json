@@ -189,7 +189,8 @@
     "toggleBottom": "Toggle Bottom",
     "toggleRight": "Toggle Right",
     "deleteNode": "Delete Node",
-    "toggleBreakpoint": "Toggle Breakpoint"
+    "toggleBreakpoint": "Toggle Breakpoint",
+    "groupNodes": "Group Selection"
   },
   "contextMenu": {
     "copy": "Copy",
@@ -198,7 +199,8 @@
     "delete": "Delete",
     "selectAll": "Select All",
     "fitView": "Fit View",
-    "toggleBreakpoint": "Toggle Breakpoint"
+    "toggleBreakpoint": "Toggle Breakpoint",
+    "groupSelection": "Group Selection"
   },
   "bottomPanel": {
     "json": "JSON",
