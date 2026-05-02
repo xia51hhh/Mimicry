@@ -16,7 +16,6 @@
   import PropertyPanel from '../components/editor/PropertyPanel.vue';
   import BottomPanel from '../components/editor/BottomPanel.vue';
   import ContextMenu from '../components/editor/ContextMenu.vue';
-  import BlockPalette from '../components/editor/BlockPalette.vue';
   import CommandPalette from '../components/editor/CommandPalette.vue';
   import CamoufoxSetup from '../components/CamoufoxSetup.vue';
   import type { ContextMenuItem } from '../components/editor/ContextMenu.vue';
@@ -46,7 +45,6 @@
 
   const showMinimap = ref(true);
   const showCamoufoxSetup = ref(false);
-  const showBlockPalette = ref(true);
   const showCommandPalette = ref(false);
 
   onMounted(async () => {
@@ -370,11 +368,6 @@
 
 <template>
   <div class="flex h-full">
-    <!-- Left: Block Palette -->
-    <div v-if="showBlockPalette" class="block-palette-sidebar">
-      <BlockPalette />
-    </div>
-
     <!-- Center: Canvas + BottomPanel -->
     <div class="flex flex-1 flex-col overflow-hidden">
       <div
@@ -446,7 +439,6 @@
       :show-minimap="showMinimap"
       :nodes="store.nodes"
       @toggle-minimap="showMinimap = !showMinimap"
-      @toggle-palette="showBlockPalette = !showBlockPalette"
       @zoom-in="zoomIn()"
       @zoom-out="zoomOut()"
       @fit-view="fitView()"
@@ -466,14 +458,6 @@
 </template>
 
 <style scoped>
-  .block-palette-sidebar {
-    width: 200px;
-    border-right: 1px solid var(--color-border);
-    background: var(--color-surface);
-    flex-shrink: 0;
-    overflow: hidden;
-  }
-
   .quick-add-menu {
     position: fixed;
     z-index: 100;

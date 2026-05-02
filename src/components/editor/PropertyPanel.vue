@@ -42,7 +42,6 @@
 
   const emit = defineEmits<{
     (e: 'toggle-minimap'): void;
-    (e: 'toggle-palette'): void;
     (e: 'zoom-in'): void;
     (e: 'zoom-out'): void;
     (e: 'fit-view'): void;
