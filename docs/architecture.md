@@ -88,10 +88,10 @@
 
 | 模块 | 路径 | 职责 |
 |---|---|---|
-| Commands | `commands/` | Tauri invoke 处理器：browser / profile / workflow / file_ops / system；调试命令（pause/unpause/step/breakpoint/state/inject）也在 `browser.rs` |
+| Commands | `commands/` | Tauri invoke 处理器：browser / profile / workflow / file_ops / system / **templates**；调试命令（pause/unpause/step/breakpoint/state/inject）也在 `browser.rs` |
 | Transform | `transform/` | 工作流 4 格式互转（canonical / legacy / compact / recording）+ 自动布局（dagre 驱动，分支偏移）。详见 [transform-layer.md](design/transform-layer.md) |
 | Workflow Validator | `workflow_validator.rs` | 37 条静态规则（W001-W014 + I001-I011），在 `workflow_execute` 前拦截；结果通过 IPC 回前端 `validation` store |
-| DB | `db/` | SQLite 数据访问。表：`workflows` / `settings` / `recent_files` / `profiles` |
+| DB | `db/` | SQLite 数据访问。表：`workflows` / `settings` / `recent_files` / `profiles` / **`templates`**（5/2 新增） |
 | IPC | `ipc/` | Sidecar 进程管理 + stdio 上的 JSON-RPC 2.0 client |
 | Logger | `logger.rs` | tracing 日志，按天滚动 |
 | Error | `error.rs` | 全局错误类型 |
@@ -101,9 +101,9 @@
 | 模块 | 路径 | 职责 |
 |---|---|---|
 | Views | `views/` | 页面级：`EditorView.vue`（Vue Flow 主画布）、`SettingsView.vue` |
-| Components | `components/` | `editor/`（5 件套：BottomPanel/ContextMenu/JsonEditor/PropertyPanel/RecordingPreview）、`layout/`（5 件套：ActivityBar/MainLayout/Sidebar/TabBar/Toolbar）、`nodes/`（4 件：Action/Condition/Loop/Group）、`ui/`（SetupDialog/ShortcutToast）、顶层 4 件（CamoufoxSetup/ProfileDialog/ProfileManager/UpdateNotifier） |
-| Stores | `stores/` | 7 个 Pinia store（setup 语法）：browser / execution（含调试状态）/ profiles / settings / validation（Problems 面板数据源）/ workflow（dirty 检测）/ workspace（多 tab 持久化） |
-| Composables | `composables/` | `useFileOps`、`useKeyboardShortcuts`（含 F9/F5/F10 调试快捷键）、`usePanel`、`useShortcutToast` |
+| Components | `components/` | `editor/`（7 件套：BottomPanel（含选择器分析面板）/ContextMenu/JsonEditor/PropertyPanel（含选择器多策略 UI）/RecordingPreview/**BlockPalette**/**CommandPalette**）、`layout/`（5 件套：ActivityBar/MainLayout/Sidebar（节点面板含 7 新增节点）/TabBar/Toolbar）、`nodes/`（4 件：Action/Condition/Loop/Group）、`ui/`（SetupDialog/ShortcutToast）、顶层 5 件（CamoufoxSetup/ProfileDialog/ProfileManager/UpdateNotifier/**TemplateManager**） |
+| Stores | `stores/` | 8 个 Pinia store（setup 语法）：browser / execution（含调试状态）/ profiles / settings / **templates**（5/2 新增）/ validation（Problems 面板数据源）/ workflow（dirty 检测）/ workspace（多 tab 持久化） |
+| Composables | `composables/` | `useFileOps`、`useKeyboardShortcuts`（含 F9/F5/F10 调试快捷键 + 双击快捷添加节点 + 拖拽创建连接 + Ctrl+G 节点分组）、`usePanel`、`useShortcutToast` |
 | Types | `types/` | `action-map.ts`（自动生成）、`ipc.ts`、`workflow.ts`（canonical 节点类型） |
 | Utils | `utils/` | `workflowSchema.ts` + `__tests__/` |
 | Locales | `locales/` | `en.json` / `zh-CN.json` — 所有用户可见字符串通过 `t()` |
@@ -119,11 +119,11 @@
 | Daemon | `daemon.py` | 392 行；UDS Socket `/tmp/mimicry-{uid}.sock`，浏览器宿主进程 |
 | MCP Server | `mcp_server.py` | 262 行；把 `@rpc_method` 注册自动映射成 MCP 工具 |
 | Dev CLI | `dev_cli.py` | 450 行；老开发工具（带 REPL / anti-detect 跑分），逐步收敛到 `cli.py` |
-| RPC Registry | `rpc/methods.py` | `@rpc_method` 装饰器；71 个 method（MCP 工具数 = 此数 - 测试方法过滤） |
+| RPC Registry | `rpc/methods.py` | `@rpc_method` 装饰器；81 个 method（含 templates / 选择器拾取 / network 捕获等，MCP 工具数 = 此数 - 测试方法过滤） |
 | RPC Protocol | `rpc/protocol.py` | 长度前缀帧（Daemon ↔ CLI 用） |
-| Browser | `browser/` | `actions.py`（共享 action 适配，所有 RPC method 的 LLM-facing description 在此）、`controller.py`（Playwright 包装含 network capture / console buffer / init_scripts）、`recorder.py`（poll-based 录制 + 自动插 SwitchTab）、`profile.py`（Profile 隔离）、`env_check.py` |
-| Engine | `engine/` | `executor.py`（JSON 解释执行）、`executor_state.py`（暂停/单步/bp/inject）、`condition_parser.py`、`action_map.py`（与 shared/ 同步） |
-| Captcha | `captcha/cloudflare.py` | Cloudflare Turnstile click solver（改编自 `techinz/playwright-captcha`） |
+| Browser | `browser/` | `actions.py`（共享 action 适配，所有 RPC method 的 LLM-facing description 在此）、`controller.py`（Playwright 包装含 network capture / console buffer / init_scripts / **三级进程清理**）、`recorder.py`（poll-based 录制 + 自动插 SwitchTab + 多策略选择器候选）、`profile.py`（Profile 隔离）、`env_check.py`、**`selector.py`**（多策略选择器评分引擎）、**`scripts/{picker.js, recorder.js}`**（浏览器侧拾取叠加层 + 录制脚本） |
+| Engine | `engine/` | `executor.py`（JSON 解释执行 + 选择器自愈 `_resolve_selector` + 执行超时）、`executor_state.py`（暂停/单步/bp/inject）、`condition_parser.py`、`action_map.py`（与 shared/ 同步） |
+| Captcha | `captcha/` | **`base.py`**（3 阶段抽象基类）+ `cloudflare.py`（Cloudflare Turnstile click solver，3 阶段：detect / interact / verify） |
 | LLM Skill | `SKILL.md` | LLM agent 的 CLI 操控教程 |
 | DSL（已弃用） | `dsl/` | ADR-001 后停止扩展，仅历史保留 |
 
