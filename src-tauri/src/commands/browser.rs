@@ -621,3 +621,96 @@ pub async fn workflow_state(
     )
     .await
 }
+
+// ---------------------------------------------------------------------------
+// Selector system
+// ---------------------------------------------------------------------------
+
+#[tauri::command]
+pub async fn selector_start_picking(
+    sidecar: State<'_, Mutex<Sidecar>>,
+    session_id: Option<String>,
+) -> Result<serde_json::Value, AppError> {
+    let sid = session_id.unwrap_or_else(|| "default".into());
+    sidecar_call(
+        sidecar,
+        "selector.start_picking",
+        Some(serde_json::json!({"session_id": sid})),
+    )
+    .await
+}
+
+#[tauri::command]
+pub async fn selector_stop_picking(
+    sidecar: State<'_, Mutex<Sidecar>>,
+    session_id: Option<String>,
+) -> Result<serde_json::Value, AppError> {
+    let sid = session_id.unwrap_or_else(|| "default".into());
+    sidecar_call(
+        sidecar,
+        "selector.stop_picking",
+        Some(serde_json::json!({"session_id": sid})),
+    )
+    .await
+}
+
+#[tauri::command]
+pub async fn selector_get_picked(
+    sidecar: State<'_, Mutex<Sidecar>>,
+    session_id: Option<String>,
+) -> Result<serde_json::Value, AppError> {
+    let sid = session_id.unwrap_or_else(|| "default".into());
+    sidecar_call(
+        sidecar,
+        "selector.get_picked",
+        Some(serde_json::json!({"session_id": sid})),
+    )
+    .await
+}
+
+#[tauri::command]
+pub async fn selector_analyze(
+    sidecar: State<'_, Mutex<Sidecar>>,
+    selector: String,
+    session_id: Option<String>,
+) -> Result<serde_json::Value, AppError> {
+    let sid = session_id.unwrap_or_else(|| "default".into());
+    sidecar_call(
+        sidecar,
+        "selector.analyze",
+        Some(serde_json::json!({"selector": selector, "session_id": sid})),
+    )
+    .await
+}
+
+#[tauri::command]
+pub async fn selector_test(
+    sidecar: State<'_, Mutex<Sidecar>>,
+    selector: String,
+    session_id: Option<String>,
+) -> Result<serde_json::Value, AppError> {
+    let sid = session_id.unwrap_or_else(|| "default".into());
+    sidecar_call(
+        sidecar,
+        "selector.test",
+        Some(serde_json::json!({"selector": selector, "session_id": sid})),
+    )
+    .await
+}
+
+#[tauri::command]
+pub async fn selector_highlight(
+    sidecar: State<'_, Mutex<Sidecar>>,
+    selector: String,
+    duration_ms: Option<u32>,
+    session_id: Option<String>,
+) -> Result<serde_json::Value, AppError> {
+    let sid = session_id.unwrap_or_else(|| "default".into());
+    let dur = duration_ms.unwrap_or(2000);
+    sidecar_call(
+        sidecar,
+        "selector.highlight",
+        Some(serde_json::json!({"selector": selector, "duration_ms": dur, "session_id": sid})),
+    )
+    .await
+}

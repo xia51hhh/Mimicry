@@ -391,6 +391,15 @@
     "target": "目标会话",
     "inherit": "默认 (工作流会话)"
   },
+  "selector": {
+    "pick": "从浏览器拾取元素",
+    "test": "测试选择器",
+    "analyze": "分析并推荐选择器",
+    "noMatch": "无匹配",
+    "unique": "唯一匹配 ✓",
+    "multiMatch": "匹配 {count} 个",
+    "candidates": "推荐选择器"
+  },
   "tooltip": {
     "status": "状态",
     "action": "操作",

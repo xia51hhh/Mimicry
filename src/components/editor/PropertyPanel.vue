@@ -4,7 +4,8 @@
   import { useWorkflowStore } from '../../stores/workflow';
   import { useBrowserStore } from '../../stores/browser';
   import { usePanel, usePanelLayout } from '../../composables/usePanel';
-  import { ChevronDown } from 'lucide-vue-next';
+  import { ChevronDown, Crosshair, FlaskConical, Highlighter } from 'lucide-vue-next';
+  import { invoke } from '@tauri-apps/api/core';
   import type { Node } from '@vue-flow/core';
 
   const { t } = useI18n();
@@ -164,6 +165,101 @@
     if (!node.value) return;
     updateField('sessionId', value || undefined);
   }
+
+  // --- Selector tools ---
+  const isPicking = ref(false);
+  const selectorTestResult = ref<{ matchCount: number; isUnique: boolean } | null>(null);
+  const selectorCandidates = ref<
+    Array<{
+      selector: string;
+      strategy: string;
+      score: number;
+      is_unique: boolean;
+      match_count: number;
+    }>
+  >([]);
+  const showCandidates = ref(false);
+
+  async function startPicking() {
+    if (!browser.connected) return;
+    try {
+      isPicking.value = true;
+      await invoke('selector_start_picking');
+      // Poll for result
+      const pollInterval = setInterval(async () => {
+        try {
+          const result = await invoke<{ picked: Record<string, unknown> | null }>(
+            'selector_get_picked',
+          );
+          if (result?.picked) {
+            clearInterval(pollInterval);
+            isPicking.value = false;
+            const picked = result.picked as { selector: string };
+            if (picked.selector && node.value) {
+              updateField('selector', picked.selector);
+              // Auto-analyze
+              analyzeSelectorCandidates(picked.selector);
+            }
+          }
+        } catch {
+          clearInterval(pollInterval);
+          isPicking.value = false;
+        }
+      }, 500);
+      // Timeout after 30s
+      setTimeout(() => {
+        clearInterval(pollInterval);
+        if (isPicking.value) {
+          isPicking.value = false;
+          invoke('selector_stop_picking').catch(() => {});
+        }
+      }, 30000);
+    } catch {
+      isPicking.value = false;
+    }
+  }
+
+  async function testSelector() {
+    const sel = editData.value.selector as string;
+    if (!sel || !browser.connected) return;
+    try {
+      const result = await invoke<{ matchCount: number; isUnique: boolean }>('selector_test', {
+        selector: sel,
+      });
+      selectorTestResult.value = result;
+      // Also highlight in browser
+      await invoke('selector_highlight', { selector: sel, durationMs: 2000 });
+    } catch {
+      selectorTestResult.value = { matchCount: -1, isUnique: false };
+    }
+  }
+
+  async function analyzeSelectorCandidates(sel?: string) {
+    const selector = sel || (editData.value.selector as string);
+    if (!selector || !browser.connected) return;
+    try {
+      const result = await invoke<{
+        candidates: Array<{
+          selector: string;
+          strategy: string;
+          score: number;
+          is_unique: boolean;
+          match_count: number;
+        }>;
+      }>('selector_analyze', { selector });
+      selectorCandidates.value = result?.candidates || [];
+      showCandidates.value = true;
+    } catch {
+      selectorCandidates.value = [];
+    }
+  }
+
+  function useCandidateSelector(sel: string) {
+    if (!node.value) return;
+    updateField('selector', sel);
+    showCandidates.value = false;
+    selectorTestResult.value = null;
+  }
 </script>
 
 <template>
@@ -247,13 +343,83 @@
 
           <div class="field-group">
             <label class="field-label">{{ t('propertyPanel.selector') }}</label>
-            <input
-              type="text"
-              class="field-input"
-              :placeholder="t('propertyPanel.selectorPlaceholder')"
-              :value="editData.selector"
-              @input="updateField('selector', ($event.target as HTMLInputElement).value)"
-            />
+            <div class="selector-input-row">
+              <input
+                type="text"
+                class="field-input selector-field"
+                :placeholder="t('propertyPanel.selectorPlaceholder')"
+                :value="editData.selector"
+                @input="updateField('selector', ($event.target as HTMLInputElement).value)"
+              />
+              <button
+                v-if="browser.connected"
+                class="selector-btn"
+                :class="{ active: isPicking }"
+                :title="t('selector.pick')"
+                @click="startPicking"
+              >
+                <Crosshair :size="14" />
+              </button>
+              <button
+                v-if="browser.connected && editData.selector"
+                class="selector-btn"
+                :title="t('selector.test')"
+                @click="testSelector"
+              >
+                <FlaskConical :size="14" />
+              </button>
+              <button
+                v-if="browser.connected && editData.selector"
+                class="selector-btn"
+                :title="t('selector.analyze')"
+                @click="analyzeSelectorCandidates()"
+              >
+                <Highlighter :size="14" />
+              </button>
+            </div>
+            <!-- Test result badge -->
+            <div v-if="selectorTestResult" class="selector-test-result">
+              <span
+                :class="[
+                  'test-badge',
+                  selectorTestResult.isUnique
+                    ? 'badge-ok'
+                    : selectorTestResult.matchCount === 0
+                      ? 'badge-none'
+                      : 'badge-warn',
+                ]"
+              >
+                {{
+                  selectorTestResult.matchCount === 0
+                    ? t('selector.noMatch')
+                    : selectorTestResult.isUnique
+                      ? t('selector.unique')
+                      : t('selector.multiMatch', { count: selectorTestResult.matchCount })
+                }}
+              </span>
+            </div>
+            <!-- Candidate selectors -->
+            <div v-if="showCandidates && selectorCandidates.length" class="selector-candidates">
+              <div class="candidates-header">
+                <span class="text-xs font-medium">{{ t('selector.candidates') }}</span>
+                <button class="text-xs text-[var(--color-text-muted)]" @click="showCandidates = false">✕</button>
+              </div>
+              <div
+                v-for="(c, i) in selectorCandidates.slice(0, 6)"
+                :key="i"
+                class="candidate-item"
+                @click="useCandidateSelector(c.selector)"
+              >
+                <div class="candidate-selector">{{ c.selector }}</div>
+                <div class="candidate-meta">
+                  <span class="strategy-tag">{{ c.strategy }}</span>
+                  <span class="score-tag" :class="c.score >= 80 ? 'score-high' : c.score >= 50 ? 'score-mid' : 'score-low'">
+                    {{ Math.round(c.score) }}
+                  </span>
+                  <span v-if="c.is_unique" class="unique-tag">✓</span>
+                </div>
+              </div>
+            </div>
           </div>
 
           <div
@@ -1102,5 +1268,152 @@
     height: 8px;
     border-radius: 2px;
     opacity: 0.8;
+  }
+
+  /* Selector tools */
+  .selector-input-row {
+    display: flex;
+    gap: 4px;
+    align-items: center;
+  }
+
+  .selector-field {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .selector-btn {
+    width: 28px;
+    height: 28px;
+    border-radius: 4px;
+    border: 1px solid var(--color-border);
+    background: var(--color-surface);
+    color: var(--color-text-muted);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    transition: all 0.15s;
+  }
+
+  .selector-btn:hover {
+    background: var(--color-surface-hover);
+    color: var(--color-text);
+  }
+
+  .selector-btn.active {
+    background: var(--color-accent);
+    color: white;
+    border-color: var(--color-accent);
+  }
+
+  .selector-test-result {
+    margin-top: 4px;
+  }
+
+  .test-badge {
+    font-size: 11px;
+    padding: 1px 6px;
+    border-radius: 3px;
+    font-weight: 500;
+  }
+
+  .badge-ok {
+    background: rgba(34, 197, 94, 0.15);
+    color: #22c55e;
+  }
+
+  .badge-warn {
+    background: rgba(245, 158, 11, 0.15);
+    color: #f59e0b;
+  }
+
+  .badge-none {
+    background: rgba(239, 68, 68, 0.15);
+    color: #ef4444;
+  }
+
+  .selector-candidates {
+    margin-top: 6px;
+    border: 1px solid var(--color-border);
+    border-radius: 4px;
+    overflow: hidden;
+  }
+
+  .candidates-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 4px 8px;
+    background: var(--color-surface);
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .candidate-item {
+    padding: 4px 8px;
+    cursor: pointer;
+    border-bottom: 1px solid var(--color-border);
+    transition: background 0.1s;
+  }
+
+  .candidate-item:last-child {
+    border-bottom: none;
+  }
+
+  .candidate-item:hover {
+    background: var(--color-surface-hover);
+  }
+
+  .candidate-selector {
+    font-size: 11px;
+    font-family: var(--font-mono, monospace);
+    color: var(--color-text);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .candidate-meta {
+    display: flex;
+    gap: 4px;
+    margin-top: 2px;
+    align-items: center;
+  }
+
+  .strategy-tag {
+    font-size: 10px;
+    padding: 0 4px;
+    border-radius: 2px;
+    background: rgba(99, 102, 241, 0.15);
+    color: #818cf8;
+  }
+
+  .score-tag {
+    font-size: 10px;
+    padding: 0 4px;
+    border-radius: 2px;
+    font-weight: 600;
+  }
+
+  .score-high {
+    background: rgba(34, 197, 94, 0.15);
+    color: #22c55e;
+  }
+
+  .score-mid {
+    background: rgba(245, 158, 11, 0.15);
+    color: #f59e0b;
+  }
+
+  .score-low {
+    background: rgba(239, 68, 68, 0.15);
+    color: #ef4444;
+  }
+
+  .unique-tag {
+    font-size: 10px;
+    color: #22c55e;
+    font-weight: 600;
   }
 </style>

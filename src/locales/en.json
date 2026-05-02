@@ -391,6 +391,15 @@
     "target": "Target Session",
     "inherit": "Default (workflow session)"
   },
+  "selector": {
+    "pick": "Pick element from browser",
+    "test": "Test selector",
+    "analyze": "Analyze & suggest selectors",
+    "noMatch": "No match",
+    "unique": "Unique ✓",
+    "multiMatch": "{count} matches",
+    "candidates": "Suggested Selectors"
+  },
   "tooltip": {
     "status": "Status",
     "action": "Action",

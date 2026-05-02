@@ -1043,3 +1043,138 @@ def captcha_solve_cloudflare(
         checkbox_click_attempts=checkbox_click_attempts,
         solve_click_delay_s=solve_click_delay_s,
     )
+
+
+# ---------------------------------------------------------------------------
+# Selector system
+# ---------------------------------------------------------------------------
+
+_PICKER_JS: str | None = None
+
+
+def _load_picker_js() -> str:
+    global _PICKER_JS
+    if _PICKER_JS is None:
+        from pathlib import Path
+        _PICKER_JS = (Path(__file__).parent / "scripts" / "picker.js").read_text(encoding="utf-8")
+    return _PICKER_JS
+
+
+@rpc_method(
+    "selector.start_picking",
+    description="Start element picker mode in the browser. The page gets a visual overlay; the user hovers and clicks to select an element. Call selector.get_picked to retrieve the result.",
+    param_descriptions={
+        "session_id": "Browser session ID; defaults to 'default'.",
+    },
+)
+def selector_start_picking(session_id: str = "default"):
+    ctrl = _mgr.get(session_id)
+    page = ctrl._page
+    if page is None:
+        raise RuntimeError("No active page")
+    page.evaluate(_load_picker_js())
+    page.evaluate("() => window[Symbol.for('_mp_start')]()")
+    return {"picking": True}
+
+
+@rpc_method(
+    "selector.stop_picking",
+    description="Stop element picker mode and remove the overlay.",
+    param_descriptions={
+        "session_id": "Browser session ID; defaults to 'default'.",
+    },
+)
+def selector_stop_picking(session_id: str = "default"):
+    ctrl = _mgr.get(session_id)
+    page = ctrl._page
+    if page is None:
+        raise RuntimeError("No active page")
+    try:
+        page.evaluate("() => { const fn = window[Symbol.for('_mp_stop')]; return fn ? fn() : false; }")
+    except Exception:
+        pass
+    return {"picking": False}
+
+
+@rpc_method(
+    "selector.get_picked",
+    description="Get the result from element picker. Returns the picked element info or null if nothing was picked yet.",
+    param_descriptions={
+        "session_id": "Browser session ID; defaults to 'default'.",
+    },
+)
+def selector_get_picked(session_id: str = "default"):
+    ctrl = _mgr.get(session_id)
+    page = ctrl._page
+    if page is None:
+        raise RuntimeError("No active page")
+    result = page.evaluate("() => { const fn = window[Symbol.for('_mp_result')]; return fn ? fn() : null; }")
+    return {"picked": result}
+
+
+@rpc_method(
+    "selector.analyze",
+    description="Analyze an element matched by a CSS selector and return ranked candidate selectors with scores.",
+    param_descriptions={
+        "selector": "CSS selector of the element to analyze.",
+        "session_id": "Browser session ID; defaults to 'default'.",
+    },
+)
+def selector_analyze(selector: str, session_id: str = "default"):
+    from browser.selector import analyze_element
+    ctrl = _mgr.get(session_id)
+    page = ctrl._page
+    if page is None:
+        raise RuntimeError("No active page")
+    handle = page.query_selector(selector)
+    if handle is None:
+        return {"candidates": [], "error": "Element not found"}
+    candidates = analyze_element(page, handle)
+    return {"candidates": [c.to_dict() for c in candidates]}
+
+
+@rpc_method(
+    "selector.test",
+    description="Test a selector against the current page and return how many elements it matches.",
+    param_descriptions={
+        "selector": "CSS/XPath/Playwright selector to test.",
+        "session_id": "Browser session ID; defaults to 'default'.",
+    },
+)
+def selector_test(selector: str, session_id: str = "default"):
+    ctrl = _mgr.get(session_id)
+    page = ctrl._page
+    if page is None:
+        raise RuntimeError("No active page")
+    try:
+        count = page.locator(selector).count()
+        return {"selector": selector, "matchCount": count, "isUnique": count == 1}
+    except Exception as e:
+        return {"selector": selector, "matchCount": -1, "isUnique": False, "error": str(e)}
+
+
+@rpc_method(
+    "selector.highlight",
+    description="Temporarily highlight all elements matching a selector in the browser with a colored border.",
+    param_descriptions={
+        "selector": "CSS selector to highlight.",
+        "duration_ms": "How long to keep the highlight (default 2000ms).",
+        "session_id": "Browser session ID; defaults to 'default'.",
+    },
+)
+def selector_highlight(selector: str, duration_ms: int = 2000, session_id: str = "default"):
+    ctrl = _mgr.get(session_id)
+    page = ctrl._page
+    if page is None:
+        raise RuntimeError("No active page")
+    count = page.evaluate("""({selector, duration}) => {
+        const els = document.querySelectorAll(selector);
+        els.forEach(el => {
+            const orig = el.style.outline;
+            el.style.outline = '2px solid #f59e0b';
+            el.style.outlineOffset = '2px';
+            setTimeout(() => { el.style.outline = orig; el.style.outlineOffset = ''; }, duration);
+        });
+        return els.length;
+    }""", {"selector": selector, "duration": duration_ms})
+    return {"selector": selector, "highlighted": count}
