@@ -1,10 +1,12 @@
 # 数据流设计
 
-> **状态**: Planned / Partial | **最后更新**: 2026-04-28
+> **状态**: Planned / Partial | **最后更新**: 2026-05-02
 
-> 现实边界：当前代码已支持 workflow JSON、canonical node 导入导出、顺序执行、条件/循环嵌套和变量类 action；本文描述的边驱动数据传递、节点 IO、完整表达式上下文和 graph traversal 仍属于目标设计。
+> 现实边界（5/2）：当前代码已支持 workflow JSON、canonical node 导入导出、顺序执行、条件/循环嵌套、变量类 action、`sessionId` 路由（多 session）、Workflow Validator 静态拦截。本文描述的边驱动数据传递、节点 IO、完整表达式上下文（`$prev/$browser/$env`）和 graph traversal 仍属于目标设计。
 >
-> **工作流格式转化**: Rust 转化层已实现 4 种格式互转（Canonical ↔ Compact ↔ Backend ↔ Legacy），详见 [transform-layer.md](transform-layer.md)。
+> **工作流格式转化**：Rust 转化层已实现 4 种格式互转（Canonical ↔ Compact ↔ Backend ↔ Legacy），详见 [transform-layer.md](transform-layer.md)。
+>
+> **静态校验**：执行前由 `workflow_validator.rs`（37 条规则）拦截结构性错误，详见 [decisions.md ADR-007](decisions.md#adr-007-工作流静态校验器37-条规则)（如无该条目，参考 `src-tauri/src/workflow_validator.rs`）。
 
 ---
 
@@ -261,10 +263,10 @@ variables: Map<string, unknown>
     {
       "id": "node_1",
       "kind": "action",
-      "action": "Manual",
+      "action": "Comment",
       "position": { "x": 100, "y": 200 },
-      "data": {},
-      "settings": { "onError": "inherit", "note": "手动启动" }
+      "data": { "comment": "工作流入口" },
+      "settings": { "onError": "inherit", "note": "起始节点" }
     },
     {
       "id": "node_2",
