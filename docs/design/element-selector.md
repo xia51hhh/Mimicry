@@ -1,8 +1,8 @@
 # 元素选择器设计
 
-> **状态**: Partial / Planned | **最后更新**: 2026-05-02
+> **状态**: Implemented | **最后更新**: 2026-05-02
 
-> 现实边界（5/2）：当前代码已有录制（`recorder.py` 自动捕获选择器候选 + 自动 SwitchTab 注入）、选择器字段（`selector` + `selectorFallbacks`）、Playwright/Camoufox 基础操作、**选择器自愈**（`sidecar/engine/executor.py::_resolve_selector` 在主选择器失败时自动遍历 `selectorFallbacks`，commit `55f52ff`）。本文描述的智能分析面板、多策略评分、浏览器高亮选取仍为目标设计，尚未完整落地。
+> 现实边界（5/2）：**多策略选择器系统已完整落地**。后端 `sidecar/browser/selector.py`（评分引擎）+ `scripts/picker.js`（浏览器拾取叠加层）+ RPC 接口（`browser.pick_start/stop/analyze`）+ 前端 PropertyPanel 选择器分析 UI + BottomPanel 独立分析面板（commits `23dc99c` `5f27cde`）。录制器 `recorder.py` 自动产出多候选 + 选择器自愈 `_resolve_selector` 在主选择器失败时降级（commit `55f52ff`）。
 
 参考 [设计决策 ADR-002](./decisions.md#adr-002-元素选择器--多策略--自愈)。
 
