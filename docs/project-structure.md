@@ -2,7 +2,7 @@
 
 > 仓库内每个目录与重要文件的清单。与 `docs/architecture.md`（讲模块职责）和 `README.md`（一屏项目树）配套使用。
 >
-> 最近一次盘点：2026-05-01。目录有变动时请同步更新本文件。
+> 最近一次盘点：2026-05-02。目录有变动时请同步更新本文件。
 
 ---
 
@@ -106,32 +106,21 @@ Mimicry/
 | `spec/frontend/` | 前端规范：`component-guidelines.md`、`directory-structure.md`、`hook-guidelines.md`、`quality-guidelines.md`、`state-management.md`、`type-safety.md`，以及 `index.md`。 |
 | `spec/guides/` | 跨包思维指南：`code-reuse-thinking-guide.md`、`cross-layer-thinking-guide.md`、`parallel-task-thinking-guide.md`，以及 `index.md`。 |
 | `tasks/` | 每个任务一个 `MM-DD-name/` 目录，含 `prd.md`、`implement.jsonl`、`check.jsonl`、`task.json`，可选 `research/`、`info.md`。当前顶层 17 个活动目录（见下表）。 |
-| `tasks/archive/2026-04/` | 已归档的 4 月任务（目前 2 个）：`04-27-block-schema-unification`、`04-28-04-28-block-execution-fix`。 |
-| `tasks/archive/2026-05/` | 已归档的 5 月任务（目前 3 个）：`04-30-04-30-research-external-projects`、`05-01-ci-mcp-captcha`、`05-01-readme-clippy-style`。 |
+| `tasks/archive/2026-04/` | 已归档的 4 月任务（2 个）：`04-27-block-schema-unification`、`04-28-04-28-block-execution-fix`。 |
+| `tasks/archive/2026-05/` | 已归档的 5 月任务（19 个）：5/1 当天集中归档了 12 个完成任务（含 `04-27-docs-reality-alignment` / `04-27-readme-positioning` / `04-27-sidecar-rpc-spec` / `04-27-profile-isolation-mvp` / `04-28-tab-identification-system` / `04-28-block-anti-detection-overhaul` / `04-28-workflow-branch-tab-validator` / `04-28-workflow-interchange-layer` / `05-01-mcp-cli-camoufox-gap-analysis` / `05-01-mcp-gap-followup` / `05-01-parallel-protocol-peer` / `05-01-parallel-worktrees-protocol` / `05-01-project-structure-cleanup` / `05-01-readme-clippy-style` / `05-01-ci-mcp-captcha` / `04-30-04-30-research-external-projects` / `04-27-browser-config` / `04-27-ci-pipeline-fix` / `00-bootstrap-guidelines`）。 |
 | `workspace/` | 各开发者的会话日志目录。`index.md`（跨开发者索引）+ `<开发者名>/journal-N.md`。当前有 `zwx19990307/`。 |
 | `worktrees/` | 默认空，由 `task.py worktree create` 在并行任务时填充（每个目录是独立的 git 检出）。已 gitignored。（注意：`peer-demo` worktree 已注册，文件位于 `.trellis/worktrees/peer-demo/`。） |
 
-### 当前 `.trellis/tasks/` 下活动任务目录
+### 当前 `.trellis/tasks/` 下活动任务目录（2026-05-02）
 
 ```
-00-bootstrap-guidelines                  （已 completed，未归档）
-04-27-browser-config                     （已 completed，未归档）
-04-27-ci-pipeline-fix                    （已 completed，未归档）
-04-27-docs-reality-alignment             （已 completed，未归档）
-04-27-profile-isolation-mvp              （已 completed，未归档）
-04-27-readme-positioning                 （已 completed，未归档）
-04-27-sidecar-rpc-spec                   （已 completed，未归档）
-04-28-block-anti-detection-overhaul      （已 completed，未归档）
-04-28-block-doc-update                   （planned）
-04-28-i18n-log-normalization             （planned）
-04-28-log-panel-enhancement              （planned）
-04-28-tab-identification-system          （已 completed，未归档）
-04-28-workflow-branch-tab-validator      （status="done"——非标准词汇）
-04-28-workflow-interchange-layer         （in_progress）
-05-01-parallel-protocol-peer             （in_progress）
-05-01-parallel-worktrees-protocol        （in_progress）
-05-01-project-structure-cleanup          （planning）
+04-28-block-doc-update                   （planned；docs/block-api.md canonical 升级）
+04-28-i18n-log-normalization             （planned；日志中英混合规范化）
+04-28-log-panel-enhancement              （planned；BottomPanel 复制日志按钮）
+05-02-docs-refresh-audit                 （in_progress；本任务）
 ```
+
+> 5/1 当天通过 `archive` 命令把已完成的任务批量归档到 `archive/2026-05/`。当前活动队列只剩 4 个任务。
 
 ---
 
@@ -256,21 +245,19 @@ Vite/Tauri 直接 serve 的静态资源。
 
 | 文件 / 目录 | 用途 |
 |---|---|
-| `main.py` | 入口分发器。按 flag 选择模式：默认 stdio JSON-RPC、`--mcp`、`--daemon`。 |
-| `cli.py` | CLI 客户端（488 行，当前主路径）。通过 UDS 跟 `daemon.py` 通信。约 25 个子命令。 |
-| `cli_legacy.py` | 旧版 CLI 实现（155 行）。当前仓库内零调用方。 |
-| `daemon.py` | CLI 模式的 UDS daemon 后端。 |
-| `dev_cli.py` | "旧版" 开发 CLI（451 行）——绕过 Tauri 直接操控 sidecar 组件。带 REPL、`anti-detect` 跑分、`blocks-test`。`docs/dev-cli.md` 标为旧版。 |
-| `mcp_server.py` | MCP stdio 服务器。把 RPC 注册表自动映射成 52 个 MCP 工具。 |
+| `main.py` | 入口分发器（50 行）。按 flag 选择模式：默认 stdio JSON-RPC、`--mcp`、`--daemon`。 |
+| `cli.py` | CLI 客户端（525 行，当前主路径）。通过 UDS 跟 `daemon.py` 通信。约 25 个子命令。`--mcp` 启动 MCP server。 |
+| `daemon.py` | CLI 模式的 UDS daemon 后端（392 行）。Socket 路径 `/tmp/mimicry-{uid}.sock`。 |
+| `dev_cli.py` | 老开发 CLI（450 行）——绕过 Tauri 直接操控 sidecar 组件。带 REPL、`anti-detect` 跑分、`blocks-test`。被 `cli.py` 取代，逐步收敛中。 |
+| `mcp_server.py` | MCP stdio 服务器（262 行）。把 `@rpc_method` 注册表自动映射为 MCP 工具（当前注册 71 个 method，扣除 `test.*` 过滤后即 MCP 工具数）。 |
 | `fetch_browser.py` | Camoufox fetch 包装器。注入 `GITHUB_TOKEN` 鉴权头（避开速率限制），并把进度以 JSON 行输出给 Tauri UI。 |
 | `SKILL.md` | 给 LLM agent 的 skill 文档：怎么通过 Mimicry CLI 驱动真实浏览器。 |
 | `pyproject.toml` | sidecar Python 包元数据。 |
 | `requirements.txt` | 运行时依赖。 |
 | `requirements-dev.txt` | 开发/测试依赖（pytest 等）。 |
 | `mimicry-sidecar.spec` | PyInstaller 单文件打包 spec。 |
-| `daemon.log` | 运行时日志（gitignored，留在磁盘上）。 |
-| `mimicry-sidecar.log` | 运行时日志（gitignored，留在磁盘上）。 |
-| `screenshot.png` | 手动跑残留的截图（gitignored，留在磁盘上）。 |
+| `daemon.log` | 运行时日志（gitignored）。 |
+| `mimicry-sidecar.log` | 运行时日志（gitignored）。 |
 | `__pycache__/` | Python 字节码缓存（gitignored）。 |
 | `.pytest_cache/` | pytest 状态（gitignored）。 |
 
@@ -334,41 +321,24 @@ DSL 伪代码层。**已被 ADR-001 淘汰**（工作流是 JSON 节点图，不
 
 ### `sidecar/tests/`
 
-pytest 测试 + 一堆开发脚本和 demo 跑分混在一起。真正的测试是 pytest 自动发现的（`test_*.py`）；其他是历史遗留。
+pytest 测试。开发期残留的 `_*.py` 调研脚本、`screenshots/`、`e2e_*.txt`、`demo_*.json` 等已在 5/1 仓库清理（commit `15efc28`）中删除。
 
-pytest 测试：
 | 文件 | 测试内容 |
 |---|---|
 | `test_action_map.py` | Action map 一致性。 |
 | `test_anti_detect.py` | 反检测引擎冒烟。 |
 | `test_blocks_e2e.py` | Block 端到端执行。 |
-| `test_captcha_cloudflare.py` | Cloudflare click solver。 |
+| `test_captcha_cloudflare.py` | Cloudflare Turnstile click solver。 |
 | `test_cli.py` | CLI 接口。 |
 | `test_condition_parser.py` | 布尔表达式解析器。 |
 | `test_dsl.py` | 已弃用的 `dsl/` 模块的测试。 |
 | `test_env_check.py` | 环境检查。 |
-| `test_executor.py` | 工作流执行器（最大的测试文件，31 KB）。 |
+| `test_executor.py` | 工作流执行器（最大测试文件）。 |
+| `test_executor_init_scripts.py` | Launch flush + init_scripts 注入回归。 |
 | `test_google_search.py` | Google 搜索 e2e（重型）。 |
+| `test_mcp_descriptions.py` | MCP method 描述完整性 + isError 协议。 |
 | `test_rpc.py` | RPC 方法注册表。 |
 | `conftest.py` | pytest fixtures。 |
-
-开发脚本 / demo 跑分（不被 pytest 收集）：
-| 文件 | 用途 |
-|---|---|
-| `_bing_analysis.py` | Bing 指纹分析脚本。 |
-| `_check_webdriver.py` | webdriver 探测。 |
-| `_gen_demos.py` | Demo 工作流 JSON 生成器。 |
-| `_run_antidetect.py` | 反检测站点跑分器。 |
-| `_test_incolumitas.py` | incolumitas.com 指纹检查（虽然名字带 test，但不被 pytest 收集）。 |
-| `demo_bing_github.json` | Demo 工作流：Bing → GitHub repo。 |
-| `demo_duckduckgo_github.json` | Demo 工作流：DDG → GitHub repo。 |
-| `demo_google_github.json` | Demo 工作流：Google → GitHub repo。 |
-| `demo_direct_search.py` | 直接搜索 demo runner。 |
-| `demo_search_github.py` | 搜索后跳 GitHub demo runner。 |
-| `e2e_bing_bilibili.json` | 录制的 Bing → Bilibili 工作流。 |
-| `e2e_stdout.txt` | 上一次 e2e 跑分捕获的 stdout。 |
-| `e2e_stderr.txt` | 上一次 e2e 跑分捕获的 stderr。 |
-| `screenshots/` | 反检测/captcha 测试跑出来的 45 张截图。 |
 
 ---
 
@@ -498,9 +468,7 @@ pytest 测试：
 | `src-tauri/mimicry.db` | CWD = `src-tauri/` 时写错位置的开发 SQLite DB。 |
 | `sidecar/__pycache__/`、`sidecar/<子模块>/__pycache__/`（×9） | Python 字节码。 |
 | `.pytest_cache/`、`sidecar/.pytest_cache/` | pytest 状态。 |
-| `sidecar/daemon.log`、`sidecar/mimicry-sidecar.log`、`sidecar/screenshot.png` | sidecar 运行时残留。 |
-| `sidecar/tests/screenshots/`（45 张图） | 测试跑分截图。 |
-| `sidecar/tests/e2e_stdout.txt`、`e2e_stderr.txt` | 捕获的 e2e 输出。 |
+| `sidecar/daemon.log`、`sidecar/mimicry-sidecar.log` | sidecar 运行时残留。 |
 | `key/private`、`key/public` | Tauri 自动更新密钥。 |
 | `examples/external/` | 调研用的外部项目克隆。 |
 | `.trellis/worktrees/` | Trellis 并行开发 worktree（每个目录是独立 git 检出）。 |
