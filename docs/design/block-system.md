@@ -1,8 +1,8 @@
 # Block 体系设计
 
-> **状态**: Partial | **最后更新**: 2026-04-28
+> **状态**: Partial | **最后更新**: 2026-05-02
 
-> 现实边界：canonical node schema 已开始围绕 `kind + action + data + settings` 落地，前端导入/导出和 Python executor 已支持 canonical / legacy 兼容；完整 graph execution、Package IO 和 selector self-healing 仍是后续任务。
+> 现实边界（5/2）：canonical node schema 围绕 `kind + action + data + settings` 已落地三层（前端 / Rust transform / sidecar executor）；导入/导出、`init_scripts` workflow 级注入、network capture / console buffer 已实现；完整 graph execution（边驱动多输入合并）、Package IO、Loop+Breakpoint 配对的运行时语义仍为后续任务。
 
 ---
 
@@ -23,19 +23,22 @@ Block 分类
 
 ### 1. 触发与控制（Trigger & Control）
 
-| Block | 类型标识 | 功能说明 |
-|-------|---------|---------|
-| Manual Trigger | `trigger/Manual` | 手动触发工作流入口 |
-| Schedule Trigger | `trigger/Schedule` | 定时/Cron 触发 |
-| Condition | `control/Condition` | 条件分支（if/else），支持多条件 + fallback |
-| Loop Data | `control/LoopData` | 遍历数据集合（变量/JSON 数组/表格） |
-| Loop Elements | `control/LoopElements` | 遍历页面匹配元素 |
-| Repeat | `control/Repeat` | 固定次数重复 |
-| While Loop | `control/WhileLoop` | 条件循环 |
-| Loop Breakpoint | `control/LoopBreakpoint` | 循环作用域终点标记 |
-| Delay | `control/Delay` | 延时等待（毫秒） |
-| Wait Connections | `control/WaitConnections` | 等待所有分支完成（汇合节点） |
-| Stop | `control/Stop` | 停止工作流执行 |
+| Block | 类型标识 | 功能说明 | 状态 |
+|-------|---------|---------|---|
+| Manual Trigger | `trigger/Manual` | 手动触发工作流入口 | Planned（暂用 Comment 节点占位） |
+| Schedule Trigger | `trigger/Schedule` | 定时/Cron 触发 | Planned |
+| Condition | `kind=condition` | 条件分支（if/else），支持多条件 + fallback | Implemented |
+| LoopElements | `kind=loop, loopType=elements` | 遍历页面匹配元素 | Implemented |
+| LoopElements (items) | `kind=loop, loopType=items` | 遍历数据数组（Loop Data 同义） | Implemented |
+| Repeat | `kind=loop, loopType=count` | 固定次数重复 | Implemented |
+| WhileLoop | `kind=loop, loopType=while` | 条件循环 | Implemented |
+| LoopBreakpoint | `action/LoopBreakpoint` | 跳出当前循环（执行 raise `_LoopBreak`） | Implemented |
+| Delay | `action/Delay` | 延时等待（毫秒/秒） | Implemented |
+| WaitConnections | `action/WaitConnections` | 并行模式同步点（顺序模式 no-op） | Implemented |
+| Stop | `action/Stop` | 停止工作流执行 | Implemented |
+| Fail | `action/Fail` | 抛错（参与 onError 链） | Implemented |
+
+> 注：上表 `Loop Data / Loop Elements / Repeat / While Loop` 在 action map 中均归到 `LoopElements + LoopBreakpoint` 两个 action，区分由 `kind=loop` 节点的 `data.loopType ∈ {items, elements, count, while}` 决定。详见 [block-api.md](../block-api.md)。
 
 ### 2. 浏览器操作（Browser）
 
@@ -75,10 +78,12 @@ Block 分类
 | Get URL | `data/GetURL` | 获取当前页面 URL |
 | Screenshot | `data/Screenshot` | 截图（页面/元素） |
 | Extract Table | `data/ExtractTable` | 提取表格数据 |
+| Element Exists | `data/ElementExists` | 元素存在性判定 → bool |
 | Set Variable | `data/SetVariable` | 设置变量值 |
-| Transform | `data/Transform` | 数据转换（映射/过滤/排序） |
+| Transform | `data/Transform` | 数据转换（map/filter/sort/flatten/unique） |
 | Export | `data/Export` | 导出数据（JSON/CSV） |
-| Cookie | `data/Cookie` | 读写 Cookie |
+| Cookie | `data/Cookie` | 读写 Cookie（get/set/delete） |
+| Handle Download | `data/HandleDownload` | 拦截下载并落盘 |
 
 ### 5. 高级（Advanced）
 

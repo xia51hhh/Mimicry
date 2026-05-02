@@ -1,6 +1,6 @@
 # LLM 交互式驱动与自动化开发指南
 
-> **状态**: Implemented | **最后更新**: 2026-04-30
+> **状态**: Implemented | **最后更新**: 2026-05-02
 
 本指南记录了基于 LLM Agent（如 Claude / Copilot 结合终端）驱动 Mimicry 进行交互式调试与工作流生成的最佳实践与排错流程。
 
@@ -41,20 +41,22 @@ python cli.py type "input" "hello"
 ```
 
 ### 2.2 MCP Server 模式
-通过 Model Context Protocol 向 LLM Client (Cursor 等) 暴露包含同样控制链路的 54 个子工具。可以在 `.vscode/mcp.json` / Cursor 中引入该 MCP Server。
+通过 Model Context Protocol 向 LLM Client (Cursor / Claude Desktop 等) 暴露同一控制链路上的 MCP 工具——RPC 注册表（71 个 `@rpc_method`）扣除 `test.*` 过滤后**约 70 个 MCP 工具**自动暴露。可在 `.vscode/mcp.json` / Cursor 配置中接入：
 ```json
 {
   "servers": {
     "mimicry": {
       "type": "stdio",
       "command": "/path/to/venv/bin/python",
-      "args": ["main.py", "--mcp"],
+      "args": ["cli.py", "--mcp"],
       "cwd": "${workspaceFolder}/sidecar"
     }
   }
 }
 ```
-**关键 MCP Tools**：`browser_launch`, `browser_navigate`, `browser_evaluate`, `browser_click`, `browser_type`, `browser_screenshot`。
+> 也可用 `main.py --mcp` 或直接 `mcp_server.py`，三者均路由到同一 `mcp_server.run_mcp()`。
+
+**关键 MCP Tools**：`browser_launch`, `browser_navigate`, `browser_evaluate`, `browser_click`, `browser_type`, `browser_screenshot`, `workflow_execute`, `recording_start/stop/poll`, `network_start_capture` 等。MCP server 会用 `isError` 协议（commit `f08887c`）规范化错误返回，并自动从 `@rpc_method` 描述生成 schema。
 
 ---
 
