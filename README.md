@@ -38,7 +38,7 @@ Built with **Tauri v2 + Vue 3 + Rust + Python**.
 - **Visual workflow editor** with [Vue Flow](https://vueflow.dev/) canvas — drag actions, conditions, loops, and groups
 - **Anti-detect browser** powered by Camoufox (Firefox fork with C++ engine-level fingerprint patches)
 - **Three-mode sidecar, one action surface** — drive the browser from Tauri (stdio JSON-RPC), CLI daemon, or as an MCP server for LLM agents
-- **52 MCP tools** auto-mapped from the RPC registry, ready for Cursor / Claude Desktop / Cline / Windsurf
+- **70+ MCP tools** auto-mapped from the RPC registry, ready for Cursor / Claude Desktop / Cline / Windsurf
 - **Record & replay** — capture real browser interactions with smart selector generation, import them as workflow nodes
 - **Profile isolation** — per-profile `user_data_dir`, proxy, OS target, and browser config; cookies and storage persist across sessions
 - **Cloudflare captcha solving** — built-in click solver for Turnstile and Interstitial challenges
@@ -100,7 +100,7 @@ Mimicry doubles as an MCP server. Point any MCP-compatible client at the sidecar
 }
 ```
 
-You now have 52 browser tools (`browser_launch`, `browser_navigate`, `browser_click`, `captcha_solve_cloudflare`, …) plus their full parameter docs in the LLM's context. Ask the assistant to "open a stealth browser, search for X, take a screenshot" and it will.
+You now have 70+ browser tools (`browser_launch`, `browser_navigate`, `browser_click`, `captcha_solve_cloudflare`, …) plus their full parameter docs in the LLM's context. Ask the assistant to "open a stealth browser, search for X, take a screenshot" and it will.
 
 Prefer a CLI? The sidecar also runs as a daemon with a thin client:
 
@@ -192,22 +192,24 @@ Workflows are JSON node graphs. No DSL, no proprietary format.
     {
       "id": "n1",
       "kind": "action",
-      "action": "open",
+      "action": "Navigate",
+      "position": { "x": 0, "y": 0 },
       "data": { "url": "https://example.com" },
-      "settings": { "timeout": 30000 }
+      "settings": { "onError": "stop" }
     },
     {
       "id": "n2",
       "kind": "action",
-      "action": "click",
+      "action": "Click",
+      "position": { "x": 200, "y": 0 },
       "data": { "selector": "a[href='/login']" }
     }
   ],
-  "edges": [{ "source": "n1", "target": "n2" }]
+  "edges": [{ "id": "e1", "source": "n1", "target": "n2" }]
 }
 ```
 
-The full schema (kinds, actions, settings, runtime routing, condition / loop / group semantics) is documented in [`docs/design/block-system.md`](docs/design/block-system.md) and [`.trellis/spec/cross-layer/block-schema.md`](.trellis/spec/cross-layer/block-schema.md).
+The full schema (kinds, actions, settings, runtime routing, condition / loop / group semantics) is documented in [`docs/block-api.md`](docs/block-api.md) and [`docs/design/block-system.md`](docs/design/block-system.md).
 
 ## Project Structure
 
