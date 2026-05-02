@@ -461,6 +461,7 @@
     "name": "Name",
     "description": "Description",
     "category": "Category",
-    "confirmDelete": "Are you sure you want to delete this template?"
+    "confirmDelete": "Are you sure you want to delete this template?",
+    "invalidFormat": "Invalid template file format"
   }
 }

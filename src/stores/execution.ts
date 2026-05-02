@@ -5,6 +5,7 @@ import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { errorMessage, extractDiagnostics, SidecarEvent } from '../types/ipc';
 import { useBrowserStore } from './browser';
 import { useValidationStore } from './validation';
+import { useSettingsStore } from './settings';
 
 interface ExecutionStatusResult {
   running: boolean;
@@ -189,11 +190,12 @@ export const useExecutionStore = defineStore('execution', () => {
     // Send canonical format directly — Rust transform layer handles conversion
     try {
       const browserStore = useBrowserStore();
+      const settingsStore = useSettingsStore();
       const result = await invoke<ExecutionResult>('workflow_execute', {
         workflow: workflowJson,
         sessionId: browserStore.activeSessionId,
-        humanize: humanize.value,
-        delayMultiplier: delayMultiplier.value,
+        humanize: settingsStore.humanize,
+        delayMultiplier: settingsStore.delayMultiplier,
       });
       running.value = false;
       stopPolling();

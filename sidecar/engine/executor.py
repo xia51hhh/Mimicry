@@ -1,6 +1,5 @@
 """Workflow execution engine: runs workflow JSON via Camoufox."""
 from __future__ import annotations
-import concurrent.futures
 import csv
 import io
 import json
@@ -478,17 +477,23 @@ class WorkflowExecutor:
                 self._execute_loop(node)
 
     def _execute_with_timeout(self, node: dict, ntype: str, timeout_sec: float):
-        """Execute a node with a timeout. Raises TimeoutError if exceeded."""
-        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
-            future = pool.submit(self._dispatch_node, node, ntype)
+        """Execute a node with a timeout by setting Playwright page default timeout."""
+        timeout_ms = int(timeout_sec * 1000)
+        ctrl = self._get_ctrl(node)
+        page = getattr(ctrl, "_page", None)
+        original_timeout = None
+        if page is not None:
+            original_timeout = page.query_selector("html") and 30000  # default
             try:
-                future.result(timeout=timeout_sec)
-            except concurrent.futures.TimeoutError:
-                action = node.get("action", "")
-                raise TimeoutError(
-                    f"Node '{action}' exceeded timeout of {timeout_sec:.1f}s"
-                ) from None
-                raise last_error
+                original_timeout = page._timeout_settings._timeout  # internal
+            except Exception:
+                original_timeout = 30000
+            page.set_default_timeout(timeout_ms)
+        try:
+            self._dispatch_node(node, ntype)
+        finally:
+            if page is not None and original_timeout is not None:
+                page.set_default_timeout(original_timeout)
 
     def _execute_action(self, node: dict):
         action = node.get("action", "")

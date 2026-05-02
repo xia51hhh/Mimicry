@@ -8,6 +8,7 @@
   const { t } = useI18n();
   const store = useTemplateStore();
   const workflow = useWorkflowStore();
+  const importError = ref('');
 
   const searchQuery = ref('');
   const showSaveDialog = ref(false);
@@ -91,6 +92,7 @@
   }
 
   async function importTemplate() {
+    importError.value = '';
     const input = document.createElement('input');
     input.type = 'file';
     input.accept = '.json';
@@ -100,19 +102,31 @@
       const text = await file.text();
       try {
         const data = JSON.parse(text);
-        if (!data.name || !data.nodes) {
-          throw new Error('Invalid template format');
+        if (
+          typeof data.name !== 'string' ||
+          !data.name.trim() ||
+          !Array.isArray(data.nodes)
+        ) {
+          importError.value = t('templates.invalidFormat');
+          return;
+        }
+        // Validate node structure
+        for (const node of data.nodes) {
+          if (typeof node !== 'object' || node === null || !node.type) {
+            importError.value = t('templates.invalidFormat');
+            return;
+          }
         }
         await store.createTemplate(
           data.name,
-          data.description || '',
-          data.category || 'custom',
+          typeof data.description === 'string' ? data.description : '',
+          typeof data.category === 'string' ? data.category : 'custom',
           data.nodes,
-          data.edges || [],
-          data.tags || [],
+          Array.isArray(data.edges) ? data.edges : [],
+          Array.isArray(data.tags) ? data.tags : [],
         );
       } catch {
-        // Invalid file — silently ignore
+        importError.value = t('templates.invalidFormat');
       }
     };
     input.click();
@@ -141,6 +155,10 @@
         class="search-input"
         :placeholder="t('templates.search')"
       />
+    </div>
+
+    <div v-if="importError" class="import-error" @click="importError = ''">
+      {{ importError }}
     </div>
 
     <div class="template-list">
@@ -246,6 +264,14 @@
   .sidebar-search {
     padding: 8px 12px;
     position: relative;
+  }
+
+  .import-error {
+    padding: 6px 12px;
+    font-size: 11px;
+    color: var(--color-error);
+    background: color-mix(in srgb, var(--color-error) 10%, transparent);
+    cursor: pointer;
   }
 
   .search-icon {

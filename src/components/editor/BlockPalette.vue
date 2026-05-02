@@ -68,7 +68,7 @@
     if (!q) return blocks;
     return blocks.filter(
       (b) =>
-        t(`blocks.${b.action}` || b.type).toLowerCase().includes(q) ||
+        (b.action ? t(`blocks.${b.action}`) : t(`nodeTypes.${b.type}`)).toLowerCase().includes(q) ||
         b.action.toLowerCase().includes(q) ||
         b.type.toLowerCase().includes(q),
     );

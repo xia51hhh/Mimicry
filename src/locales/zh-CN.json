@@ -461,6 +461,7 @@
     "name": "名称",
     "description": "描述",
     "category": "分类",
-    "confirmDelete": "确定要删除此模板吗？"
+    "confirmDelete": "确定要删除此模板吗？",
+    "invalidFormat": "模板文件格式无效"
   }
 }
