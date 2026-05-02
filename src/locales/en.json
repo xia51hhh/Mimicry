@@ -274,6 +274,7 @@
     "checkUpdate": "Check for Updates",
     "currentVersion": "Current Version",
     "upToDate": "You're up to date",
+    "checkFailed": "Check failed",
     "checking": "Checking..."
   },
   "canvas": {

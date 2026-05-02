@@ -483,7 +483,6 @@ class WorkflowExecutor:
         page = getattr(ctrl, "_page", None)
         original_timeout = None
         if page is not None:
-            original_timeout = page.query_selector("html") and 30000  # default
             try:
                 original_timeout = page._timeout_settings._timeout  # internal
             except Exception:

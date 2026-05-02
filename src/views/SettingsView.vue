@@ -39,7 +39,7 @@
       const found = await checkForUpdate?.(true);
       if (!found) updateResult.value = t('update.upToDate');
     } catch {
-      updateResult.value = '检查失败';
+      updateResult.value = t('update.checkFailed');
     } finally {
       updateChecking.value = false;
     }

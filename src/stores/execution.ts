@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia';
-import { ref, shallowRef } from 'vue';
+import { ref, shallowRef, computed } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { errorMessage, extractDiagnostics, SidecarEvent } from '../types/ipc';
@@ -49,9 +49,16 @@ export const useExecutionStore = defineStore('execution', () => {
   const completedNodeIds = ref<Set<string>>(new Set());
   const failedNodeIds = ref<Set<string>>(new Set());
 
-  // Anti-detection delay settings
-  const humanize = ref(true);
-  const delayMultiplier = ref(1.0);
+  // Anti-detection delay settings (proxied to settings store for single source of truth)
+  const settingsStore = useSettingsStore();
+  const humanize = computed({
+    get: () => settingsStore.humanize,
+    set: (v: boolean) => { settingsStore.humanize = v; },
+  });
+  const delayMultiplier = computed({
+    get: () => settingsStore.delayMultiplier,
+    set: (v: number) => { settingsStore.delayMultiplier = v; },
+  });
 
   // Debug state
   const breakpointIds = ref<Set<string>>(new Set());
@@ -190,12 +197,11 @@ export const useExecutionStore = defineStore('execution', () => {
     // Send canonical format directly — Rust transform layer handles conversion
     try {
       const browserStore = useBrowserStore();
-      const settingsStore = useSettingsStore();
       const result = await invoke<ExecutionResult>('workflow_execute', {
         workflow: workflowJson,
         sessionId: browserStore.activeSessionId,
-        humanize: settingsStore.humanize,
-        delayMultiplier: settingsStore.delayMultiplier,
+        humanize: humanize.value,
+        delayMultiplier: delayMultiplier.value,
       });
       running.value = false;
       stopPolling();
