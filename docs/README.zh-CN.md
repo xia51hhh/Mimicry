@@ -192,22 +192,24 @@ flowchart LR
     {
       "id": "n1",
       "kind": "action",
-      "action": "open",
+      "action": "Navigate",
+      "position": { "x": 0, "y": 0 },
       "data": { "url": "https://example.com" },
-      "settings": { "timeout": 30000 }
+      "settings": { "onError": "stop" }
     },
     {
       "id": "n2",
       "kind": "action",
-      "action": "click",
+      "action": "Click",
+      "position": { "x": 200, "y": 0 },
       "data": { "selector": "a[href='/login']" }
     }
   ],
-  "edges": [{ "source": "n1", "target": "n2" }]
+  "edges": [{ "id": "e1", "source": "n1", "target": "n2" }]
 }
 ```
 
-完整 schema（kind、action、settings、运行时路由、condition / loop / group 语义）参见 [`docs/design/block-system.md`](design/block-system.md) 与 [`.trellis/spec/cross-layer/block-schema.md`](../.trellis/spec/cross-layer/block-schema.md)。
+完整 schema（kind、action、settings、runtime 路由、condition / loop / group 语义）参见 [`docs/block-api.md`](block-api.md) 与 [`docs/design/block-system.md`](design/block-system.md)。
 
 ## 项目结构
 
