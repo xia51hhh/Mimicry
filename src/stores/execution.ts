@@ -202,6 +202,7 @@ export const useExecutionStore = defineStore('execution', () => {
         sessionId: browserStore.activeSessionId,
         humanize: humanize.value,
         delayMultiplier: delayMultiplier.value,
+        defaultTimeout: settingsStore.defaultTimeout,
       });
       running.value = false;
       stopPolling();

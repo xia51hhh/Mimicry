@@ -10,7 +10,6 @@ export default [
     files: ["src/**/*.{vue,ts,js}"],
     languageOptions: {
       globals: {
-        Blob: "readonly",
         clearInterval: "readonly",
         clearTimeout: "readonly",
         console: "readonly",

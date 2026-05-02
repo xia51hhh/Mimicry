@@ -461,6 +461,7 @@ pub async fn workflow_execute(
     session_id: Option<String>,
     humanize: Option<bool>,
     delay_multiplier: Option<f64>,
+    default_timeout: Option<u64>,
 ) -> Result<serde_json::Value, AppError> {
     // Pre-execution validation: block on Error-level diagnostics
     let diags = crate::workflow_validator::validate(&workflow);
@@ -481,7 +482,8 @@ pub async fn workflow_execute(
     let backend = crate::transform::canonical_to_backend(&canonical, &sid)?;
     let backend_json = serde_json::to_value(&backend)?;
 
-    sidecar_call(sidecar, "workflow.execute", Some(serde_json::json!({"workflow": backend_json, "session_id": sid, "humanize": h, "delay_multiplier": dm}))).await
+    let dt = default_timeout.unwrap_or(30000);
+    sidecar_call(sidecar, "workflow.execute", Some(serde_json::json!({"workflow": backend_json, "session_id": sid, "humanize": h, "delay_multiplier": dm, "default_timeout": dt}))).await
 }
 
 #[tauri::command]

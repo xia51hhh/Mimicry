@@ -30,4 +30,9 @@ export default defineConfig(async () => ({
       ignored: ["**/src-tauri/**"],
     },
   },
+
+  // Test configuration
+  test: {
+    exclude: ['**/node_modules/**', '**/examples/**', '**/src-tauri/**'],
+  },
 }));

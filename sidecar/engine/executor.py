@@ -108,12 +108,14 @@ class WorkflowExecutor:
                  session_manager: SessionManager | None = None,
                  default_session_id: str = "default",
                  humanize: bool = True,
-                 delay_multiplier: float = 1.0):
+                 delay_multiplier: float = 1.0,
+                 default_timeout: int = 30000):
         self._controller = controller
         self._session_manager = session_manager
         self._default_session_id = default_session_id
         self._humanize = humanize
         self._delay_multiplier = max(0.0, delay_multiplier)
+        self._default_timeout = default_timeout
         self._ctx = ExecutionContext()
         self._state = ExecutorState()
         self.progress_callback: callable | None = None
@@ -393,7 +395,7 @@ class WorkflowExecutor:
         retry_count = settings.get("retryCount", 1) if retry_on_fail else 0
         retry_interval = settings.get("retryInterval", 1000) / 1000.0
         timeout_ms = settings.get("timeout", 0)
-        timeout_sec = timeout_ms / 1000.0 if timeout_ms > 0 else 0
+        timeout_sec = timeout_ms / 1000.0 if timeout_ms > 0 else self._default_timeout / 1000.0
 
         if settings.get("disabled", False):
             logger.debug(f"Skipping disabled node: {action}")

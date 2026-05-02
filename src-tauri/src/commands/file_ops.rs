@@ -149,3 +149,11 @@ pub async fn file_write_text(path: String, content: String) -> Result<(), AppErr
         .map_err(|e| AppError::Sidecar(format!("Failed to write file: {e}")))?;
     Ok(())
 }
+
+/// Read plain text from a file.
+#[tauri::command]
+pub async fn file_read_text(path: String) -> Result<String, AppError> {
+    tokio::fs::read_to_string(&path)
+        .await
+        .map_err(|e| AppError::Sidecar(format!("Failed to read file: {e}")))
+}

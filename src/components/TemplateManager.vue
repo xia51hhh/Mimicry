@@ -1,6 +1,8 @@
 <script setup lang="ts">
   import { onMounted, ref, computed } from 'vue';
   import { useI18n } from 'vue-i18n';
+  import { invoke } from '@tauri-apps/api/core';
+  import { save, open } from '@tauri-apps/plugin-dialog';
   import { useTemplateStore, type Template } from '../stores/templates';
   import { useWorkflowStore } from '../stores/workflow';
   import { Plus, Trash2, Download, Upload, FileText, Search, AlertTriangle } from 'lucide-vue-next';
@@ -83,62 +85,58 @@
       null,
       2,
     );
-    const blob = new Blob([data], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${template.name}.mimicry-template.json`;
-    a.click();
-    URL.revokeObjectURL(url);
+    const path = await save({
+      filters: [{ name: 'Mimicry Template', extensions: ['mimicry-template.json'] }],
+      defaultPath: `${template.name}.mimicry-template.json`,
+    });
+    if (!path) return;
+    await invoke('file_write_text', { path, content: data });
   }
 
   async function importTemplate() {
     importError.value = '';
     importWarning.value = '';
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = '.json';
-    input.onchange = async () => {
-      const file = input.files?.[0];
-      if (!file) return;
-      const text = await file.text();
-      try {
-        const data = JSON.parse(text);
-        if (
-          typeof data.name !== 'string' ||
-          !data.name.trim() ||
-          !Array.isArray(data.nodes)
-        ) {
+    const path = await open({
+      filters: [{ name: 'JSON', extensions: ['json'] }],
+      multiple: false,
+    });
+    if (!path) return;
+    try {
+      const text = await invoke<string>('file_read_text', { path });
+      const data = JSON.parse(text);
+      if (
+        typeof data.name !== 'string' ||
+        !data.name.trim() ||
+        !Array.isArray(data.nodes)
+      ) {
+        importError.value = t('templates.invalidFormat');
+        return;
+      }
+      // Validate node structure
+      for (const node of data.nodes) {
+        if (typeof node !== 'object' || node === null || !node.type) {
           importError.value = t('templates.invalidFormat');
           return;
         }
-        // Validate node structure
-        for (const node of data.nodes) {
-          if (typeof node !== 'object' || node === null || !node.type) {
-            importError.value = t('templates.invalidFormat');
-            return;
-          }
-        }
-        await store.createTemplate(
-          data.name,
-          typeof data.description === 'string' ? data.description : '',
-          typeof data.category === 'string' ? data.category : 'custom',
-          data.nodes,
-          Array.isArray(data.edges) ? data.edges : [],
-          Array.isArray(data.tags) ? data.tags : [],
-        );
-        const riskyActions = ['RunScript', 'HttpRequest'];
-        const found = data.nodes
-          .filter((n: { action?: string }) => n.action && riskyActions.includes(n.action))
-          .map((n: { action: string }) => n.action);
-        if (found.length > 0) {
-          importWarning.value = t('templates.securityWarning', { actions: [...new Set(found)].join(', ') });
-        }
-      } catch {
-        importError.value = t('templates.invalidFormat');
       }
-    };
-    input.click();
+      await store.createTemplate(
+        data.name,
+        typeof data.description === 'string' ? data.description : '',
+        typeof data.category === 'string' ? data.category : 'custom',
+        data.nodes,
+        Array.isArray(data.edges) ? data.edges : [],
+        Array.isArray(data.tags) ? data.tags : [],
+      );
+      const riskyActions = ['RunScript', 'HttpRequest'];
+      const found = data.nodes
+        .filter((n: { action?: string }) => n.action && riskyActions.includes(n.action))
+        .map((n: { action: string }) => n.action);
+      if (found.length > 0) {
+        importWarning.value = t('templates.securityWarning', { actions: [...new Set(found)].join(', ') });
+      }
+    } catch {
+      importError.value = t('templates.invalidFormat');
+    }
   }
 </script>
 

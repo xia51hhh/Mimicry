@@ -596,7 +596,8 @@ def recording_set_filter(session_id: str = "default", event_types: list | None =
     },
 )
 def workflow_execute(workflow: dict | None = None, session_id: str = "default",
-                     humanize: bool = True, delay_multiplier: float = 1.0):
+                     humanize: bool = True, delay_multiplier: float = 1.0,
+                     default_timeout: int = 30000):
     if not workflow:
         return {"success": False, "error": "No workflow provided"}
     # Create a fresh executor each time with the caller's humanize settings
@@ -606,6 +607,7 @@ def workflow_execute(workflow: dict | None = None, session_id: str = "default",
             default_session_id=session_id,
             humanize=humanize,
             delay_multiplier=delay_multiplier,
+            default_timeout=default_timeout,
         )
         _executors[session_id] = executor
 

@@ -157,6 +157,7 @@ pub fn run() {
             commands::file_ops::recent_files_remove,
             commands::file_ops::recent_files_clear,
             commands::file_ops::file_write_text,
+            commands::file_ops::file_read_text,
             commands::system::system_info,
             commands::profiles::profile_list,
             commands::profiles::profile_get,
